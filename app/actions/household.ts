@@ -88,7 +88,7 @@ export async function getInviteDetails(token: string) {
   if (new Date(data.expires_at) < new Date()) return null
 
   return {
-    householdName: (data.households as { name: string } | null)?.name ?? 'Your household',
+    householdName: (data.households as unknown as { name: string } | null)?.name ?? 'Your household',
     token,
   }
 }
