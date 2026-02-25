@@ -2,12 +2,11 @@
 
 import { useTransition } from 'react'
 import { createBudgetRequest, updateBudgetRequest } from '@/app/actions/requests'
-import type { BudgetRequest } from '@/lib/types'
-import { PRIORITY_CATEGORIES } from '@/lib/types'
+import type { BudgetRequest, PriorityCategoryRecord } from '@/lib/types'
 
 export default function RequestFormModal({
-  editItem, onClose,
-}: { editItem: BudgetRequest | null; onClose: () => void }) {
+  editItem, onClose, categories,
+}: { editItem: BudgetRequest | null; onClose: () => void; categories: PriorityCategoryRecord[] }) {
   const [isPending, startTransition] = useTransition()
   const inputClass = 'w-full bg-white border border-line rounded-[12px] px-4 py-2.5 text-sm focus:outline-none focus:border-blue transition-colors'
 
@@ -40,8 +39,8 @@ export default function RequestFormModal({
           </div>
           <div>
             <label className="block text-sm font-bold text-ink mb-1">Priority</label>
-            <select name="priority_category" defaultValue={editItem?.priority_category || 'P7: UpNext'} className={inputClass}>
-              {PRIORITY_CATEGORIES.map((p) => <option key={p} value={p}>{p}</option>)}
+            <select name="priority_category" defaultValue={editItem?.priority_category || (categories[0]?.name ?? '')} className={inputClass}>
+              {categories.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
             </select>
           </div>
           <div>

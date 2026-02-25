@@ -14,22 +14,21 @@ export function formatDate(date: string | null | undefined): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-export function getPriorityClass(category: string | null | undefined): string {
-  if (!category) return ''
-  const match = category.match(/P\d/)
-  return match ? match[0].toLowerCase() : ''
+export const COLOR_KEY_MAP: Record<string, string> = {
+  green: 'bg-green text-white',
+  blue: 'bg-blue text-white',
+  orange: 'bg-orange text-white',
+  muted: 'bg-muted text-white',
+  rosy: 'bg-rosy text-white',
+  blush: 'bg-blush text-muted',
+  purple: 'bg-purple text-white',
+  teal: 'bg-teal text-white',
 }
 
-export function getPriorityColor(category: string | null | undefined): string {
-  const map: Record<string, string> = {
-    'P0: Lifeline': 'bg-green text-white',
-    'P1: Essentials': 'bg-blue text-white',
-    'P3: Debt': 'bg-orange text-white',
-    'P4: Business | Education': 'bg-muted text-white',
-    'P5: Lifestyle': 'bg-rosy text-white',
-    'P7: UpNext': 'bg-blush text-muted',
-  }
-  return category ? map[category] || 'bg-line text-ink' : 'bg-line text-ink'
+export const COLOR_KEYS = Object.keys(COLOR_KEY_MAP)
+
+export function getPriorityColor(colorKey: string | null | undefined): string {
+  return colorKey ? COLOR_KEY_MAP[colorKey] || 'bg-line text-ink' : 'bg-line text-ink'
 }
 
 export function getStatusColor(status: string): string {

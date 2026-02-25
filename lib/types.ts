@@ -132,6 +132,25 @@ export interface BudgetRequest {
   updated_at: string
 }
 
+export interface Account {
+  id: string
+  household_id: string
+  name: string
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export interface PriorityCategoryRecord {
+  id: string
+  household_id: string
+  name: string
+  color_key: string
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
 export interface DeductionOverrides {
   tithe_percentage?: number
   savings_percentage?: number
@@ -143,23 +162,5 @@ export interface DeductionOverrides {
 export type Frequency = 'Monthly' | 'Weekly' | 'Annually' | 'One-Time'
 export type InvoiceStatus = 'projected' | 'sent' | 'received'
 export type RequestStatus = 'requested' | 'approved' | 'purchased'
-export type PriorityCategory =
-  | 'P0: Lifeline'
-  | 'P1: Essentials'
-  | 'P3: Debt'
-  | 'P4: Business | Education'
-  | 'P5: Lifestyle'
-  | 'P7: UpNext'
-
-export const PRIORITY_CATEGORIES: PriorityCategory[] = [
-  'P0: Lifeline',
-  'P1: Essentials',
-  'P3: Debt',
-  'P4: Business | Education',
-  'P5: Lifestyle',
-  'P7: UpNext',
-]
 
 export const FREQUENCIES: Frequency[] = ['Monthly', 'Weekly', 'Annually', 'One-Time']
-
-export const ACCOUNTS = ['Opt X', 'Owners Comp', 'Personal Savings']

@@ -2,15 +2,19 @@
 
 import { useTransition } from 'react'
 import { createBaseBudgetItem, updateBaseBudgetItem } from '@/app/actions/base-budget'
-import type { BaseBudgetItem } from '@/lib/types'
-import { PRIORITY_CATEGORIES, FREQUENCIES, ACCOUNTS } from '@/lib/types'
+import type { BaseBudgetItem, Account, PriorityCategoryRecord } from '@/lib/types'
+import { FREQUENCIES } from '@/lib/types'
 
 export default function ExpenseFormModal({
   editItem,
   onClose,
+  accounts,
+  categories,
 }: {
   editItem: BaseBudgetItem | null
   onClose: () => void
+  accounts: Account[]
+  categories: PriorityCategoryRecord[]
 }) {
   const [isPending, startTransition] = useTransition()
 
@@ -59,7 +63,7 @@ export default function ExpenseFormModal({
             <label className="block text-sm font-bold text-ink mb-1">Account</label>
             <select name="account" defaultValue={editItem?.account || ''} className={inputClass}>
               <option value="">Select Account</option>
-              {ACCOUNTS.map((a) => <option key={a} value={a}>{a}</option>)}
+              {accounts.map((a) => <option key={a.id} value={a.name}>{a.name}</option>)}
             </select>
           </div>
 
@@ -67,7 +71,7 @@ export default function ExpenseFormModal({
             <label className="block text-sm font-bold text-ink mb-1">Priority</label>
             <select name="priority_category" defaultValue={editItem?.priority_category || ''} className={inputClass}>
               <option value="">Select Priority</option>
-              {PRIORITY_CATEGORIES.map((p) => <option key={p} value={p}>{p}</option>)}
+              {categories.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
             </select>
           </div>
 

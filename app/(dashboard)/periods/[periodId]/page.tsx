@@ -1,4 +1,5 @@
 import { getPeriodDetail } from '@/app/actions/periods'
+import { getPriorityCategories } from '@/app/actions/settings'
 import PeriodDetailClient from '@/components/period-detail/PeriodDetailClient'
 
 export default async function PeriodDetailPage({
@@ -7,7 +8,10 @@ export default async function PeriodDetailPage({
   params: Promise<{ periodId: string }>
 }) {
   const { periodId } = await params
-  const detail = await getPeriodDetail(periodId)
+  const [detail, categories] = await Promise.all([
+    getPeriodDetail(periodId),
+    getPriorityCategories(),
+  ])
 
   return (
     <div className="space-y-8">
@@ -22,6 +26,7 @@ export default async function PeriodDetailPage({
         manualIncome={detail.manualIncome}
         allReceivedInvoices={detail.allReceivedInvoices}
         settings={detail.settings}
+        categories={categories ?? []}
       />
     </div>
   )

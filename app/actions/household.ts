@@ -153,6 +153,8 @@ export async function exportAllData() {
     { data: budgetRequests },
     { data: periodLinkedInvoices },
     { data: periodManualIncome },
+    { data: accounts },
+    { data: priorityCategories },
   ] = await Promise.all([
     supabase.from('settings').select('*').eq('household_id', householdId),
     supabase.from('base_budget_items').select('*').eq('household_id', householdId).order('sort_order'),
@@ -162,6 +164,8 @@ export async function exportAllData() {
     supabase.from('budget_requests').select('*').eq('household_id', householdId),
     supabase.from('period_linked_invoices').select('*'),
     supabase.from('period_manual_income').select('*').eq('household_id', householdId),
+    supabase.from('accounts').select('*').eq('household_id', householdId).order('sort_order'),
+    supabase.from('priority_categories').select('*').eq('household_id', householdId).order('sort_order'),
   ])
 
   return {
@@ -173,6 +177,8 @@ export async function exportAllData() {
     budgetRequests,
     periodLinkedInvoices,
     periodManualIncome,
+    accounts,
+    priorityCategories,
     exportedAt: new Date().toISOString(),
   }
 }
@@ -410,6 +416,55 @@ export async function importData(jsonString: string) {
           }
         }
       }
+    }
+  }
+
+  // Import accounts
+  if (parsed.accounts) {
+    const rawAccounts = parsed.accounts as Record<string, unknown>[]
+
+    if (Array.isArray(rawAccounts) && rawAccounts.length > 0) {
+      await supabase
+        .from('accounts')
+        .delete()
+        .eq('household_id', householdId)
+
+      const accounts = rawAccounts.map((raw, index) => {
+        const acct = convertKeysToSnakeCase(raw)
+        return {
+          household_id: householdId,
+          name: (acct.name as string) || '',
+          sort_order: (acct.sort_order as number) ?? index,
+        }
+      })
+
+      const { error } = await supabase.from('accounts').insert(accounts)
+      if (error) throw new Error(`Failed to import accounts: ${error.message}`)
+    }
+  }
+
+  // Import priority categories
+  if (parsed.priorityCategories || parsed.priority_categories) {
+    const rawCategories = (parsed.priorityCategories || parsed.priority_categories) as Record<string, unknown>[]
+
+    if (Array.isArray(rawCategories) && rawCategories.length > 0) {
+      await supabase
+        .from('priority_categories')
+        .delete()
+        .eq('household_id', householdId)
+
+      const categories = rawCategories.map((raw, index) => {
+        const cat = convertKeysToSnakeCase(raw)
+        return {
+          household_id: householdId,
+          name: (cat.name as string) || '',
+          color_key: (cat.color_key as string) || 'blue',
+          sort_order: (cat.sort_order as number) ?? index,
+        }
+      })
+
+      const { error } = await supabase.from('priority_categories').insert(categories)
+      if (error) throw new Error(`Failed to import priority categories: ${error.message}`)
     }
   }
 }

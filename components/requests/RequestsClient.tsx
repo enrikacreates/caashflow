@@ -3,13 +3,21 @@
 import { useState, useTransition } from 'react'
 import { deleteBudgetRequest } from '@/app/actions/requests'
 import { formatCurrency, getPriorityColor, getStatusColor } from '@/lib/utils'
-import type { BudgetRequest } from '@/lib/types'
+import type { BudgetRequest, PriorityCategoryRecord } from '@/lib/types'
 import RequestFormModal from './RequestFormModal'
 
-export default function RequestsClient({ requests }: { requests: BudgetRequest[] }) {
+interface Props {
+  requests: BudgetRequest[]
+  categories: PriorityCategoryRecord[]
+}
+
+export default function RequestsClient({ requests, categories }: Props) {
   const [isPending, startTransition] = useTransition()
   const [modalOpen, setModalOpen] = useState(false)
   const [editItem, setEditItem] = useState<BudgetRequest | null>(null)
+
+  // Build a lookup map: category name → color_key
+  const categoryColorMap = new Map(categories.map(c => [c.name, c.color_key]))
 
   const handleDelete = (id: string, name: string) => {
     if (!confirm(`Delete "${name}"?`)) return
@@ -40,7 +48,7 @@ export default function RequestsClient({ requests }: { requests: BudgetRequest[]
                   {req.status}
                 </span>
               </div>
-              <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold uppercase mb-3 ${getPriorityColor(req.priority_category)}`}>
+              <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold uppercase mb-3 ${getPriorityColor(categoryColorMap.get(req.priority_category))}`}>
                 {req.priority_category}
               </span>
               {req.amount > 0 && (
@@ -66,7 +74,7 @@ export default function RequestsClient({ requests }: { requests: BudgetRequest[]
       )}
 
       {modalOpen && (
-        <RequestFormModal editItem={editItem} onClose={() => { setModalOpen(false); setEditItem(null) }} />
+        <RequestFormModal editItem={editItem} onClose={() => { setModalOpen(false); setEditItem(null) }} categories={categories} />
       )}
     </>
   )

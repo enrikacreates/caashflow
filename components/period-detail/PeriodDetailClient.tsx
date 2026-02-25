@@ -20,6 +20,7 @@ import type {
   PeriodManualIncome,
   Settings,
   DeductionOverrides,
+  PriorityCategoryRecord,
 } from '@/lib/types'
 
 type SortKey = 'name' | 'default_amount' | 'priority_category' | 'account' | 'due_day' | 'frequency'
@@ -39,6 +40,7 @@ interface Props {
   manualIncome: PeriodManualIncome[]
   allReceivedInvoices: Invoice[]
   settings: Settings
+  categories: PriorityCategoryRecord[]
 }
 
 export default function PeriodDetailClient({
@@ -48,9 +50,12 @@ export default function PeriodDetailClient({
   manualIncome,
   allReceivedInvoices,
   settings,
+  categories,
 }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  // Build a lookup map: category name → color_key
+  const categoryColorMap = new Map(categories.map(c => [c.name, c.color_key]))
   const [sortKey, setSortKey] = useState<SortKey>('priority_category')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [showInvoiceSelector, setShowInvoiceSelector] = useState(false)
@@ -422,6 +427,7 @@ export default function PeriodDetailClient({
                     onCheckboxChange={handleCheckboxChange}
                     onDebouncedUpdate={debouncedUpdate}
                     inputClass={inputClass}
+                    categoryColorMap={categoryColorMap}
                   />
                 ))}
               </tbody>
@@ -458,12 +464,14 @@ function ExpenseRow({
   onCheckboxChange,
   onDebouncedUpdate,
   inputClass,
+  categoryColorMap,
 }: {
   expense: PeriodExpense
   isPending: boolean
   onCheckboxChange: (id: string, field: string, value: boolean) => void
   onDebouncedUpdate: (id: string, field: string, value: boolean | number | string | null) => void
   inputClass: string
+  categoryColorMap: Map<string, string>
 }) {
   const effectiveAmount = getEffectiveAmount(expense)
   const hasOverride = expense.amount_override !== null && expense.amount_override !== undefined
@@ -539,7 +547,7 @@ function ExpenseRow({
       {/* Priority */}
       <td className="px-3 py-2">
         {expense.priority_category && (
-          <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase whitespace-nowrap ${getPriorityColor(expense.priority_category)}`}>
+          <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase whitespace-nowrap ${getPriorityColor(categoryColorMap.get(expense.priority_category))}`}>
             {expense.priority_category}
           </span>
         )}

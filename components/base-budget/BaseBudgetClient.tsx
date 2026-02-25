@@ -3,19 +3,28 @@
 import { useState, useTransition } from 'react'
 import { deleteBaseBudgetItem, resetBaseBudgetToDefaults } from '@/app/actions/base-budget'
 import { formatCurrency, getPriorityColor } from '@/lib/utils'
-import type { BaseBudgetItem, Frequency } from '@/lib/types'
+import type { BaseBudgetItem, Frequency, Account, PriorityCategoryRecord } from '@/lib/types'
 import ExpenseFormModal from './ExpenseFormModal'
 
 const FREQUENCY_ORDER: Frequency[] = ['Monthly', 'Weekly', 'Annually', 'One-Time']
 
 type SortKey = 'name' | 'default_amount' | 'due_day' | 'account' | 'priority_category'
 
-export default function BaseBudgetClient({ items }: { items: BaseBudgetItem[] }) {
+interface Props {
+  items: BaseBudgetItem[]
+  accounts: Account[]
+  categories: PriorityCategoryRecord[]
+}
+
+export default function BaseBudgetClient({ items, accounts, categories }: Props) {
   const [isPending, startTransition] = useTransition()
   const [modalOpen, setModalOpen] = useState(false)
   const [editItem, setEditItem] = useState<BaseBudgetItem | null>(null)
   const [sortKey, setSortKey] = useState<SortKey | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+
+  // Build a lookup map: category name → color_key
+  const categoryColorMap = new Map(categories.map(c => [c.name, c.color_key]))
 
   const grouped = FREQUENCY_ORDER.map((freq) => ({
     frequency: freq,
@@ -101,7 +110,7 @@ export default function BaseBudgetClient({ items }: { items: BaseBudgetItem[] })
                       <td className="px-4 py-3 text-sm text-muted">{item.due_day || '—'}</td>
                       <td className="px-4 py-3 text-sm text-muted">{item.account || '—'}</td>
                       <td className="px-4 py-3">
-                        <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold uppercase ${getPriorityColor(item.priority_category)}`}>
+                        <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold uppercase ${getPriorityColor(categoryColorMap.get(item.priority_category || ''))}`}>
                           {item.priority_category || '—'}
                         </span>
                       </td>
@@ -127,6 +136,8 @@ export default function BaseBudgetClient({ items }: { items: BaseBudgetItem[] })
         <ExpenseFormModal
           editItem={editItem}
           onClose={() => { setModalOpen(false); setEditItem(null) }}
+          accounts={accounts}
+          categories={categories}
         />
       )}
     </>
