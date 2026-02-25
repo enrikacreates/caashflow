@@ -1,0 +1,34 @@
+-- ============================================================
+-- SEED: Link Joshua to Enrika's household
+-- ============================================================
+-- INSTRUCTIONS:
+-- 1. First, run schema.sql
+-- 2. Sign up BOTH accounts in the app (Enrika first, then Joshua)
+--    The trigger auto-creates a household for each user
+-- 3. Then run THIS script to merge Joshua into Enrika's household
+--
+-- After both users have signed up, run:
+--
+-- Step 1: Find the user IDs
+-- SELECT id, email FROM auth.users;
+--
+-- Step 2: Find Enrika's household (the one we'll keep)
+-- SELECT hm.household_id, h.name
+-- FROM household_members hm
+-- JOIN households h ON h.id = hm.household_id
+-- JOIN auth.users u ON u.id = hm.user_id
+-- WHERE u.email = 'ENRIKA_EMAIL_HERE';
+--
+-- Step 3: Move Joshua into Enrika's household
+-- Replace the UUIDs below with actual values from steps 1 & 2
+--
+-- UPDATE household_members
+-- SET household_id = 'ENRIKA_HOUSEHOLD_UUID'
+-- WHERE user_id = 'JOSHUA_USER_UUID';
+--
+-- Step 4: Delete Joshua's empty auto-created household
+-- DELETE FROM households WHERE id = 'JOSHUA_OLD_HOUSEHOLD_UUID';
+--
+-- Step 5: Rename the household
+-- UPDATE households SET name = 'Greathouse Household'
+-- WHERE id = 'ENRIKA_HOUSEHOLD_UUID';
