@@ -48,13 +48,22 @@ Budget management system for modern creative/entrepreneurial families. App #1 in
 - `middleware.ts` should be renamed to `proxy.ts` (Next.js 16 deprecation warning)
 - Accounts and priority categories are hardcoded in `lib/constants.ts` — should be DB-driven
 
+## Deployment
+- **Production URL:** caashflow.app (hosted on Vercel)
+- **Vercel project:** `caashflow` / team `enrika-greathouses-projects`
+- **`.vercel/project.json`** links to `prj_lv9DD8tX3roHPJ0BnTlEwOyZMtv7` / `team_34AYhElACT1dHoEJEsadEdqy`
+- **Deploy command (no git remote):** `npx vercel deploy --prod` from project root
+- **Deploy command (with GitHub connected):** `git push origin main` — auto-deploys on push to main
+- **GitHub status:** Not connected yet — see Vercel dashboard "Connect Git Repository"
+- **DNS status:** Vercel recommends switching Namecheap A record → CNAME `cname.vercel-dns.com`
+
 ## Roadmap (see full plan at `.claude/plans/roadmap.md`)
 ### NOW
 1. ⭐ Household Member Invite + Budget Scope (personal vs household)
 2. Fix duplicate server actions + rename middleware
 3. ✅ Dynamic Accounts & Priority Categories (CRUD)
-4. ✅ Debt Paydown (progress tracking, payoff date, confetti)
-5. Savings Goals
+4. ✅ Debt Demo (progress tracking, payoff date, confetti)
+5. ✅ Savings Goals (purchase + fund types, linked budget items, confetti)
 6. Budget Period Status (incomplete/complete/closed/archived)
 7. Budget Request → Period Linking
 
