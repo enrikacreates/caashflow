@@ -4,6 +4,7 @@ import { useState, useTransition, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   updateExpenseField,
+  markExpensePaid,
   updateDeductionOverrides,
   linkInvoiceToPeriod,
   unlinkInvoiceFromPeriod,
@@ -11,6 +12,7 @@ import {
   removeManualIncome,
   recalculatePeriodIncome,
 } from '@/app/actions/period-expenses'
+import { smallConfetti } from '@/lib/confetti'
 import { formatCurrency, getEffectiveAmount, getPriorityColor } from '@/lib/utils'
 import { calculateDeductions, calculatePayNowTotal, calculateAccountBreakdown, getEffectivePercentage } from '@/lib/calculations'
 import type {
@@ -112,6 +114,16 @@ export default function PeriodDetailClient({
   )
 
   const handleCheckboxChange = (expenseId: string, field: string, value: boolean) => {
+    if (field === 'paid' && value === true) {
+      const expense = expenses.find((e) => e.id === expenseId)
+      if (expense?.debt_id) {
+        startTransition(async () => {
+          const { exceedsMinimum } = await markExpensePaid(expenseId)
+          if (exceedsMinimum) await smallConfetti()
+        })
+        return
+      }
+    }
     startTransition(() => updateExpenseField(expenseId, field, value))
   }
 

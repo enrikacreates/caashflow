@@ -11,6 +11,7 @@ const NAV_ITEMS = [
     { name: 'Base Budget', href: '/base-budget', icon: '\u{1F4CB}' },
   ]},
   { label: 'Planning', items: [
+    { name: 'Debt Paydown', href: '/debts', icon: '\u{1F4B3}' },
     { name: 'Budget Requests', href: '/requests', icon: '\u{1F6D2}' },
     { name: 'Cash Flow', href: '/cashflow', icon: '\u{1F4B0}' },
   ]},

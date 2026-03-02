@@ -65,6 +65,7 @@ export async function createBudgetPeriod(formData: FormData) {
       pay_url: item.pay_url,
       notes: item.notes,
       tags: item.tags || [],
+      debt_id: item.debt_id ?? null,
       pay_now: false,
       transferred: false,
       paid: false,

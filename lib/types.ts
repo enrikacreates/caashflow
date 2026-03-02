@@ -48,6 +48,7 @@ export interface BaseBudgetItem {
   pay_url: string | null
   notes: string | null
   tags: string[]
+  debt_id: string | null
   sort_order: number
   created_at: string
   updated_at: string
@@ -85,6 +86,7 @@ export interface PeriodExpense {
   amount_override: number | null
   override_notes: string | null
   is_partial: boolean
+  debt_id: string | null
   sort_order: number
   created_at: string
   updated_at: string
@@ -146,6 +148,23 @@ export interface PriorityCategoryRecord {
   household_id: string
   name: string
   color_key: string
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export interface Debt {
+  id: string
+  household_id: string
+  name: string
+  original_balance: number
+  current_balance: number
+  interest_rate: number | null
+  minimum_payment: number | null
+  due_day: number | null
+  notes: string | null
+  is_paid_off: boolean
+  paid_off_at: string | null
   sort_order: number
   created_at: string
   updated_at: string

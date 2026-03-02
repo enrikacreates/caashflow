@@ -4,6 +4,61 @@ import { createClient } from '@/lib/supabase/server'
 import { getUserHouseholdId } from '@/lib/supabase/helpers'
 import { revalidatePath } from 'next/cache'
 
+export async function markExpensePaid(expenseId: string): Promise<{ exceedsMinimum: boolean }> {
+  const supabase = await createClient()
+  const householdId = await getUserHouseholdId()
+
+  // Fetch the expense to check for a linked debt
+  const { data: expense, error: fetchError } = await supabase
+    .from('period_expenses')
+    .select('debt_id, amount_override, default_amount, period_id')
+    .eq('id', expenseId)
+    .eq('household_id', householdId)
+    .single()
+
+  if (fetchError || !expense) throw new Error('Expense not found')
+
+  // Mark as paid
+  const { error: updateError } = await supabase
+    .from('period_expenses')
+    .update({ paid: true, updated_at: new Date().toISOString() })
+    .eq('id', expenseId)
+    .eq('household_id', householdId)
+
+  if (updateError) throw new Error(`Failed to mark expense paid: ${updateError.message}`)
+
+  let exceedsMinimum = false
+
+  if (expense.debt_id) {
+    const paymentAmount = expense.amount_override ?? expense.default_amount
+
+    const { data: debt, error: debtFetchError } = await supabase
+      .from('debts')
+      .select('current_balance, minimum_payment')
+      .eq('id', expense.debt_id)
+      .eq('household_id', householdId)
+      .single()
+
+    if (!debtFetchError && debt) {
+      const newBalance = Math.max(0, debt.current_balance - paymentAmount)
+      exceedsMinimum =
+        debt.minimum_payment !== null && paymentAmount > debt.minimum_payment
+
+      await supabase
+        .from('debts')
+        .update({ current_balance: newBalance, updated_at: new Date().toISOString() })
+        .eq('id', expense.debt_id)
+        .eq('household_id', householdId)
+
+      revalidatePath('/debts')
+    }
+  }
+
+  revalidatePath(`/periods/${expense.period_id}`)
+  revalidatePath('/periods')
+  return { exceedsMinimum }
+}
+
 export async function updateExpenseField(
   expenseId: string,
   field: string,
