@@ -4,14 +4,18 @@ import { createClient } from '@/lib/supabase/server'
 import { getUserHouseholdId } from '@/lib/supabase/helpers'
 import { revalidatePath } from 'next/cache'
 
-export async function markExpensePaid(expenseId: string): Promise<{ exceedsMinimum: boolean }> {
+export async function markExpensePaid(expenseId: string): Promise<{
+  exceedsMinimum: boolean
+  savingsExceedsMonthly: boolean
+  savingsAchieved: boolean
+}> {
   const supabase = await createClient()
   const householdId = await getUserHouseholdId()
 
-  // Fetch the expense to check for a linked debt
+  // Fetch the expense to check for linked debt or savings goal
   const { data: expense, error: fetchError } = await supabase
     .from('period_expenses')
-    .select('debt_id, amount_override, default_amount, period_id')
+    .select('debt_id, savings_goal_id, amount_override, default_amount, period_id')
     .eq('id', expenseId)
     .eq('household_id', householdId)
     .single()
@@ -28,10 +32,12 @@ export async function markExpensePaid(expenseId: string): Promise<{ exceedsMinim
   if (updateError) throw new Error(`Failed to mark expense paid: ${updateError.message}`)
 
   let exceedsMinimum = false
+  let savingsExceedsMonthly = false
+  let savingsAchieved = false
+
+  const paymentAmount = expense.amount_override ?? expense.default_amount
 
   if (expense.debt_id) {
-    const paymentAmount = expense.amount_override ?? expense.default_amount
-
     const { data: debt, error: debtFetchError } = await supabase
       .from('debts')
       .select('current_balance, minimum_payment')
@@ -54,9 +60,33 @@ export async function markExpensePaid(expenseId: string): Promise<{ exceedsMinim
     }
   }
 
+  if (expense.savings_goal_id) {
+    const { data: goal, error: goalFetchError } = await supabase
+      .from('savings_goals')
+      .select('current_amount, target_amount, monthly_contribution')
+      .eq('id', expense.savings_goal_id)
+      .eq('household_id', householdId)
+      .single()
+
+    if (!goalFetchError && goal) {
+      const newAmount = goal.current_amount + paymentAmount
+      savingsExceedsMonthly =
+        goal.monthly_contribution !== null && paymentAmount > goal.monthly_contribution
+      savingsAchieved = newAmount >= goal.target_amount
+
+      await supabase
+        .from('savings_goals')
+        .update({ current_amount: newAmount, updated_at: new Date().toISOString() })
+        .eq('id', expense.savings_goal_id)
+        .eq('household_id', householdId)
+
+      revalidatePath('/savings')
+    }
+  }
+
   revalidatePath(`/periods/${expense.period_id}`)
   revalidatePath('/periods')
-  return { exceedsMinimum }
+  return { exceedsMinimum, savingsExceedsMonthly, savingsAchieved }
 }
 
 export async function updateExpenseField(

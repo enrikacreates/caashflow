@@ -49,6 +49,7 @@ export interface BaseBudgetItem {
   notes: string | null
   tags: string[]
   debt_id: string | null
+  savings_goal_id: string | null
   sort_order: number
   created_at: string
   updated_at: string
@@ -87,6 +88,7 @@ export interface PeriodExpense {
   override_notes: string | null
   is_partial: boolean
   debt_id: string | null
+  savings_goal_id: string | null
   sort_order: number
   created_at: string
   updated_at: string
@@ -165,6 +167,23 @@ export interface Debt {
   notes: string | null
   is_paid_off: boolean
   paid_off_at: string | null
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export interface SavingsGoal {
+  id: string
+  household_id: string
+  name: string
+  goal_type: 'purchase' | 'fund'
+  target_amount: number
+  current_amount: number
+  monthly_contribution: number | null
+  target_date: string | null
+  notes: string | null
+  is_achieved: boolean
+  achieved_at: string | null
   sort_order: number
   created_at: string
   updated_at: string

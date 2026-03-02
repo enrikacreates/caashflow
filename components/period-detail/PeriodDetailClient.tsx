@@ -12,7 +12,7 @@ import {
   removeManualIncome,
   recalculatePeriodIncome,
 } from '@/app/actions/period-expenses'
-import { smallConfetti } from '@/lib/confetti'
+import { smallConfetti, bigConfetti } from '@/lib/confetti'
 import { formatCurrency, getEffectiveAmount, getPriorityColor } from '@/lib/utils'
 import { calculateDeductions, calculatePayNowTotal, calculateAccountBreakdown, getEffectivePercentage } from '@/lib/calculations'
 import type {
@@ -116,10 +116,15 @@ export default function PeriodDetailClient({
   const handleCheckboxChange = (expenseId: string, field: string, value: boolean) => {
     if (field === 'paid' && value === true) {
       const expense = expenses.find((e) => e.id === expenseId)
-      if (expense?.debt_id) {
+      if (expense?.debt_id || expense?.savings_goal_id) {
         startTransition(async () => {
-          const { exceedsMinimum } = await markExpensePaid(expenseId)
-          if (exceedsMinimum) await smallConfetti()
+          const { exceedsMinimum, savingsExceedsMonthly, savingsAchieved } =
+            await markExpensePaid(expenseId)
+          if (savingsAchieved) {
+            await bigConfetti()
+          } else if (exceedsMinimum || savingsExceedsMonthly) {
+            await smallConfetti()
+          }
         })
         return
       }
