@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { deleteBaseBudgetItem, resetBaseBudgetToDefaults } from '@/app/actions/base-budget'
 import { formatCurrency, getPriorityColor } from '@/lib/utils'
 import type { BaseBudgetItem, Frequency, Account, PriorityCategoryRecord } from '@/lib/types'
@@ -22,6 +23,22 @@ export default function BaseBudgetClient({ items, accounts, categories }: Props)
   const [editItem, setEditItem] = useState<BaseBudgetItem | null>(null)
   const [sortKey, setSortKey] = useState<SortKey | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  const searchParams = useSearchParams()
+  const router = useRouter()
+
+  // Deep-link: ?edit=<itemId> auto-opens the edit modal
+  useEffect(() => {
+    const editId = searchParams.get('edit')
+    if (editId) {
+      const item = items.find((i) => i.id === editId)
+      if (item) {
+        setEditItem(item)
+        setModalOpen(true)
+      }
+      // Clear the query param so refreshing doesn't re-open
+      router.replace('/base-budget', { scroll: false })
+    }
+  }, [searchParams, items, router])
 
   // Build a lookup map: category name → color_key
   const categoryColorMap = new Map(categories.map(c => [c.name, c.color_key]))
