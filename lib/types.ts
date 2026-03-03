@@ -86,7 +86,7 @@ export interface PeriodExpense {
   cleared: boolean
   amount_override: number | null
   override_notes: string | null
-  is_partial: boolean
+  paid_amount: number
   debt_id: string | null
   savings_goal_id: string | null
   sort_order: number

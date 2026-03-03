@@ -73,7 +73,7 @@ export async function createBudgetPeriod(formData: FormData) {
       cleared: false,
       amount_override: null,
       override_notes: null,
-      is_partial: false,
+      paid_amount: 0,
       sort_order: item.sort_order ?? index,
     }))
 

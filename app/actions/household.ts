@@ -382,7 +382,7 @@ export async function importData(jsonString: string) {
                 cleared: Boolean(exp.cleared),
                 amount_override: (exp.amount_override as number) ?? null,
                 override_notes: (exp.override_notes as string) || null,
-                is_partial: Boolean(exp.is_partial),
+                paid_amount: (exp.paid_amount as number) ?? 0,
                 sort_order: (exp.sort_order as number) ?? index,
               }
             })

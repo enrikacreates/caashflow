@@ -15,17 +15,19 @@ export async function markExpensePaid(expenseId: string): Promise<{
   // Fetch the expense to check for linked debt or savings goal
   const { data: expense, error: fetchError } = await supabase
     .from('period_expenses')
-    .select('debt_id, savings_goal_id, amount_override, default_amount, period_id')
+    .select('debt_id, savings_goal_id, amount_override, default_amount, paid_amount, period_id')
     .eq('id', expenseId)
     .eq('household_id', householdId)
     .single()
 
   if (fetchError || !expense) throw new Error('Expense not found')
 
-  // Mark as paid
+  const effectiveAmount = expense.amount_override ?? expense.default_amount
+
+  // Mark as paid and set paid_amount to full effective amount
   const { error: updateError } = await supabase
     .from('period_expenses')
-    .update({ paid: true, updated_at: new Date().toISOString() })
+    .update({ paid: true, paid_amount: effectiveAmount, updated_at: new Date().toISOString() })
     .eq('id', expenseId)
     .eq('household_id', householdId)
 
@@ -35,9 +37,11 @@ export async function markExpensePaid(expenseId: string): Promise<{
   let savingsExceedsMonthly = false
   let savingsAchieved = false
 
-  const paymentAmount = expense.amount_override ?? expense.default_amount
+  // Delta = what's newly being paid (avoid double-counting on re-check)
+  const paymentDelta = effectiveAmount - (expense.paid_amount ?? 0)
+  const paymentAmount = effectiveAmount
 
-  if (expense.debt_id) {
+  if (expense.debt_id && paymentDelta > 0) {
     const { data: debt, error: debtFetchError } = await supabase
       .from('debts')
       .select('current_balance, minimum_payment')
@@ -46,7 +50,7 @@ export async function markExpensePaid(expenseId: string): Promise<{
       .single()
 
     if (!debtFetchError && debt) {
-      const newBalance = Math.max(0, debt.current_balance - paymentAmount)
+      const newBalance = Math.max(0, debt.current_balance - paymentDelta)
       exceedsMinimum =
         debt.minimum_payment !== null && paymentAmount > debt.minimum_payment
 
@@ -60,7 +64,7 @@ export async function markExpensePaid(expenseId: string): Promise<{
     }
   }
 
-  if (expense.savings_goal_id) {
+  if (expense.savings_goal_id && paymentDelta > 0) {
     const { data: goal, error: goalFetchError } = await supabase
       .from('savings_goals')
       .select('current_amount, target_amount, monthly_contribution')
@@ -69,7 +73,7 @@ export async function markExpensePaid(expenseId: string): Promise<{
       .single()
 
     if (!goalFetchError && goal) {
-      const newAmount = goal.current_amount + paymentAmount
+      const newAmount = goal.current_amount + paymentDelta
       savingsExceedsMonthly =
         goal.monthly_contribution !== null && paymentAmount > goal.monthly_contribution
       savingsAchieved = newAmount >= goal.target_amount

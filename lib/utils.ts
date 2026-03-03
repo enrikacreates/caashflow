@@ -51,6 +51,19 @@ export function cn(...classes: (string | false | null | undefined)[]): string {
 export function getEffectiveAmount(expense: {
   amount_override: number | null
   default_amount: number
+  paid_amount?: number
+}): number {
+  // paid_amount > 0 is the final word — it's what you're actually paying
+  if (expense.paid_amount && expense.paid_amount > 0) return expense.paid_amount
+  return expense.amount_override !== null && expense.amount_override !== undefined
+    ? expense.amount_override
+    : expense.default_amount
+}
+
+/** The "owed" amount before paid_amount override (amount_override ?? default_amount) */
+export function getOwedAmount(expense: {
+  amount_override: number | null
+  default_amount: number
 }): number {
   return expense.amount_override !== null && expense.amount_override !== undefined
     ? expense.amount_override

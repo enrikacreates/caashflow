@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useTransition, useCallback, useRef } from 'react'
+import { useState, useTransition, useCallback, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import {
   updateExpenseField,
   markExpensePaid,
@@ -13,7 +14,7 @@ import {
   recalculatePeriodIncome,
 } from '@/app/actions/period-expenses'
 import { smallConfetti, bigConfetti } from '@/lib/confetti'
-import { formatCurrency, getEffectiveAmount, getPriorityColor } from '@/lib/utils'
+import { formatCurrency, getEffectiveAmount, getOwedAmount, getPriorityColor } from '@/lib/utils'
 import { calculateDeductions, calculatePayNowTotal, calculateAccountBreakdown } from '@/lib/calculations'
 import type { DeductionMode } from '@/lib/calculations'
 import SavingsAllocationSection from '@/components/period-detail/SavingsAllocationSection'
@@ -73,6 +74,19 @@ export default function PeriodDetailClient({
   const [showInvoiceSelector, setShowInvoiceSelector] = useState(false)
   const [showManualIncomeForm, setShowManualIncomeForm] = useState(false)
   const debounceTimers = useRef<Record<string, NodeJS.Timeout>>({})
+  const summaryCardsRef = useRef<HTMLDivElement>(null)
+  const [showStickyBar, setShowStickyBar] = useState(false)
+
+  useEffect(() => {
+    const el = summaryCardsRef.current
+    if (!el) return
+    const observer = new IntersectionObserver(
+      ([entry]) => setShowStickyBar(!entry.isIntersecting),
+      { threshold: 0 }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
 
   // ─── Calculations ────────────────────────────────────────────
   const deductions = calculateDeductions(
@@ -211,7 +225,7 @@ export default function PeriodDetailClient({
   return (
     <div className="space-y-8">
       {/* ─── Summary Cards ─────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div ref={summaryCardsRef} className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="bg-white border border-line rounded-[20px] p-5">
           <div className="text-xs font-bold uppercase text-muted mb-1">Total Income</div>
           <div className="text-lg font-bold text-ink">{formatCurrency(period.income_amount)}</div>
@@ -231,6 +245,22 @@ export default function PeriodDetailClient({
           </div>
         </div>
       </div>
+
+      {/* ─── Sticky Summary Bar (visible when scrolled past cards) ── */}
+      {showStickyBar && (
+        <div className="sticky top-0 z-40 -mx-6 px-6 -mt-4">
+          <div className="bg-white/90 backdrop-blur-sm border border-line rounded-b-2xl shadow-sm px-4 py-2 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4 text-xs">
+              <span className="text-muted">Income <span className="font-bold text-ink">{formatCurrency(period.income_amount)}</span></span>
+              <span className="text-muted hidden sm:inline">After Ded. <span className="font-bold text-ink">{formatCurrency(deductions.incomeAfterDeductions)}</span></span>
+              <span className="text-muted">Pay Now <span className="font-bold text-ink">{formatCurrency(payNowTotal)}</span></span>
+            </div>
+            <div className={`text-sm font-black ${amountLeft >= 0 ? 'text-green' : 'text-orange'}`}>
+              {formatCurrency(amountLeft)} left
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ─── Income Section ────────────────────────────────── */}
       <div className="bg-white border border-line rounded-[20px] p-6">
@@ -486,7 +516,7 @@ export default function PeriodDetailClient({
                   <th className={thClass} onClick={() => handleSort('default_amount')}>
                     Amount<SortIcon col="default_amount" />
                   </th>
-                  <th className="text-center px-3 py-2 text-xs font-bold text-muted uppercase">Partial</th>
+                  <th className="text-center px-3 py-2 text-xs font-bold text-muted uppercase">Pay Amt</th>
                   <th className={thClass} onClick={() => handleSort('account')}>
                     Account<SortIcon col="account" />
                   </th>
@@ -556,6 +586,7 @@ function ExpenseRow({
   inputClass: string
   categoryColorMap: Map<string, string>
 }) {
+  const owedAmount = getOwedAmount(expense)
   const effectiveAmount = getEffectiveAmount(expense)
   const hasOverride = expense.amount_override !== null && expense.amount_override !== undefined
 
@@ -574,7 +605,16 @@ function ExpenseRow({
 
       {/* Name */}
       <td className="px-3 py-2">
-        <div className="font-medium text-ink">{expense.name}</div>
+        {expense.base_item_id ? (
+          <Link
+            href={`/base-budget?edit=${expense.base_item_id}`}
+            className="font-medium text-ink hover:text-blue hover:underline transition-colors"
+          >
+            {expense.name}
+          </Link>
+        ) : (
+          <div className="font-medium text-ink">{expense.name}</div>
+        )}
         {expense.auto_pay && (
           <span className="text-[10px] bg-green/10 text-green px-1.5 py-0.5 rounded font-bold">AUTO</span>
         )}
@@ -613,15 +653,36 @@ function ExpenseRow({
         )}
       </td>
 
-      {/* Partial */}
-      <td className="text-center px-3 py-2">
-        <input
-          type="checkbox"
-          checked={expense.is_partial}
-          onChange={(e) => onCheckboxChange(expense.id, 'is_partial', e.target.checked)}
-          disabled={isPending}
-          className="rounded"
-        />
+      {/* Pay Amt — what you're actually paying this period (overrides Amount for budget calc) */}
+      <td className="px-3 py-2">
+        <div className="min-w-0">
+          <input
+            type="number"
+            step="0.01"
+            placeholder="—"
+            defaultValue={expense.paid_amount > 0 ? expense.paid_amount : ''}
+            onChange={(e) => {
+              const val = e.target.value === '' ? 0 : parseFloat(e.target.value)
+              onDebouncedUpdate(expense.id, 'paid_amount', val)
+              // Auto-check paid when pay amount covers the full owed amount
+              if (val >= owedAmount && !expense.paid) {
+                onCheckboxChange(expense.id, 'paid', true)
+              }
+            }}
+            className={`w-20 text-right text-xs ${inputClass} ${
+              expense.paid_amount > 0 && expense.paid_amount < owedAmount
+                ? 'border-orange bg-orange/5'
+                : expense.paid_amount >= owedAmount
+                  ? 'border-green bg-green/5'
+                  : ''
+            }`}
+          />
+          {expense.paid_amount > 0 && expense.paid_amount < owedAmount && (
+            <div className="text-[10px] text-orange font-bold mt-0.5 whitespace-nowrap">
+              {formatCurrency(owedAmount - expense.paid_amount)} remaining
+            </div>
+          )}
+        </div>
       </td>
 
       {/* Account */}

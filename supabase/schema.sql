@@ -82,7 +82,7 @@ CREATE TABLE period_expenses (
   cleared           BOOLEAN NOT NULL DEFAULT false,
   amount_override   NUMERIC(10,2),
   override_notes    TEXT,
-  is_partial        BOOLEAN NOT NULL DEFAULT false,
+  paid_amount       NUMERIC(12,2) NOT NULL DEFAULT 0,
   sort_order        INTEGER NOT NULL DEFAULT 0,
   created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
