@@ -156,6 +156,42 @@ export async function getPeriodDetail(periodId: string) {
 
   if (settingsError) throw new Error(`Failed to fetch settings: ${settingsError.message}`)
 
+  // Fetch active (non-achieved) savings goals
+  const { data: savingsGoals } = await supabase
+    .from('savings_goals')
+    .select('*')
+    .eq('household_id', householdId)
+    .eq('is_achieved', false)
+    .order('sort_order', { ascending: true })
+    .order('created_at', { ascending: true })
+
+  // Fetch this period's savings allocations
+  const { data: savingsAllocations } = await supabase
+    .from('period_savings_allocations')
+    .select('*')
+    .eq('period_id', periodId)
+    .eq('household_id', householdId)
+
+  // Fetch last period's allocations for ghost values
+  let lastPeriodAllocations: typeof savingsAllocations = []
+  const { data: otherPeriods } = await supabase
+    .from('budget_periods')
+    .select('id')
+    .eq('household_id', householdId)
+    .neq('id', periodId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+
+  if (otherPeriods && otherPeriods.length > 0) {
+    const { data: lastAllocs } = await supabase
+      .from('period_savings_allocations')
+      .select('*')
+      .eq('period_id', otherPeriods[0].id)
+      .eq('household_id', householdId)
+
+    lastPeriodAllocations = lastAllocs || []
+  }
+
   return {
     period,
     expenses: expenses || [],
@@ -163,5 +199,8 @@ export async function getPeriodDetail(periodId: string) {
     manualIncome: manualIncome || [],
     allReceivedInvoices: allReceivedInvoices || [],
     settings,
+    savingsGoals: savingsGoals || [],
+    savingsAllocations: savingsAllocations || [],
+    lastPeriodAllocations: lastPeriodAllocations || [],
   }
 }

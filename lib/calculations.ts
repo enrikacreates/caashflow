@@ -1,4 +1,4 @@
-import type { Settings, DeductionOverrides, PeriodExpense } from './types'
+import type { Settings, DeductionOverrides, PeriodExpense, PeriodSavingsAllocation } from './types'
 import { getEffectiveAmount } from './utils'
 
 export function getEffectivePercentage(
@@ -12,22 +12,63 @@ export function getEffectivePercentage(
   return settings[settingsKey] as number
 }
 
+export type DeductionMode = '%' | '$'
+
+export interface EffectiveDeduction {
+  amount: number
+  mode: DeductionMode
+  value: number // the raw input value (percentage or dollar amount)
+  percentage: number // always the effective percentage for display
+}
+
+/**
+ * Resolve a single deduction. Dollar-amount override takes precedence over
+ * percentage override, which takes precedence over the household settings default.
+ */
+export function getEffectiveDeduction(
+  income: number,
+  overrides: DeductionOverrides | null | undefined,
+  settings: Settings,
+  percentKey: keyof DeductionOverrides,
+  amountKey: keyof DeductionOverrides
+): EffectiveDeduction {
+  // 1. Check for dollar-amount override first
+  const dollarOverride = overrides?.[amountKey]
+  if (dollarOverride !== null && dollarOverride !== undefined) {
+    return {
+      amount: dollarOverride,
+      mode: '$',
+      value: dollarOverride,
+      percentage: income > 0 ? (dollarOverride / income) * 100 : 0,
+    }
+  }
+
+  // 2. Check percentage override, then fall back to settings
+  const pct = getEffectivePercentage(overrides, settings, percentKey)
+  return {
+    amount: income * (pct / 100),
+    mode: '%',
+    value: pct,
+    percentage: pct,
+  }
+}
+
 export function calculateDeductions(
   income: number,
   settings: Settings,
   overrides?: DeductionOverrides | null
 ) {
-  const titheP = getEffectivePercentage(overrides, settings, 'tithe_percentage')
-  const savingsP = getEffectivePercentage(overrides, settings, 'savings_percentage')
-  const taxP = getEffectivePercentage(overrides, settings, 'tax_percentage')
-  const profitP = getEffectivePercentage(overrides, settings, 'profit_percentage')
-  const funMoneyP = getEffectivePercentage(overrides, settings, 'fun_money_percentage')
+  const titheD = getEffectiveDeduction(income, overrides, settings, 'tithe_percentage', 'tithe_amount')
+  const savingsD = getEffectiveDeduction(income, overrides, settings, 'savings_percentage', 'savings_amount')
+  const taxD = getEffectiveDeduction(income, overrides, settings, 'tax_percentage', 'tax_amount')
+  const profitD = getEffectiveDeduction(income, overrides, settings, 'profit_percentage', 'profit_amount')
+  const funMoneyD = getEffectiveDeduction(income, overrides, settings, 'fun_money_percentage', 'fun_money_amount')
 
-  const tithe = income * (titheP / 100)
-  const savings = income * (savingsP / 100)
-  const taxes = income * (taxP / 100)
-  const profit = income * (profitP / 100)
-  const funMoney = income * (funMoneyP / 100)
+  const tithe = titheD.amount
+  const savings = savingsD.amount
+  const taxes = taxD.amount
+  const profit = profitD.amount
+  const funMoney = funMoneyD.amount
 
   return {
     tithe,
@@ -37,8 +78,22 @@ export function calculateDeductions(
     funMoney,
     total: tithe + savings + taxes + profit + funMoney,
     incomeAfterDeductions: income - tithe - savings - taxes - profit - funMoney,
-    percentages: { titheP, savingsP, taxP, profitP, funMoneyP },
+    percentages: {
+      titheP: titheD.percentage,
+      savingsP: savingsD.percentage,
+      taxP: taxD.percentage,
+      profitP: profitD.percentage,
+      funMoneyP: funMoneyD.percentage,
+    },
+    details: { titheD, savingsD, taxD, profitD, funMoneyD },
   }
+}
+
+export function calculateAllocationTotals(allocations: PeriodSavingsAllocation[]) {
+  const totalAllocated = allocations.reduce((sum, a) => sum + a.amount, 0)
+  const totalContributed = allocations.reduce((sum, a) => sum + a.contributed, 0)
+  const hasPendingDeltas = allocations.some((a) => a.amount !== a.contributed)
+  return { totalAllocated, totalContributed, hasPendingDeltas }
 }
 
 export function calculatePayNowTotal(expenses: PeriodExpense[]): number {

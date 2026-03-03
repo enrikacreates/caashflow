@@ -133,10 +133,30 @@ export async function updateDeductionOverrides(
   const supabase = await createClient()
   const householdId = await getUserHouseholdId()
 
+  // Fetch current overrides so we merge instead of replace
+  const { data: period, error: fetchError } = await supabase
+    .from('budget_periods')
+    .select('deduction_overrides')
+    .eq('id', periodId)
+    .eq('household_id', householdId)
+    .single()
+
+  if (fetchError) throw new Error(`Failed to fetch period overrides: ${fetchError.message}`)
+
+  const current = (period?.deduction_overrides as Record<string, number | null>) || {}
+  const merged = { ...current, ...overrides }
+
+  // Remove null keys (null = reset to default)
+  for (const key of Object.keys(merged)) {
+    if (merged[key] === null || merged[key] === undefined) {
+      delete merged[key]
+    }
+  }
+
   const { error } = await supabase
     .from('budget_periods')
     .update({
-      deduction_overrides: overrides,
+      deduction_overrides: merged,
       updated_at: new Date().toISOString(),
     })
     .eq('id', periodId)

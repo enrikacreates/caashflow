@@ -14,7 +14,9 @@ import {
 } from '@/app/actions/period-expenses'
 import { smallConfetti, bigConfetti } from '@/lib/confetti'
 import { formatCurrency, getEffectiveAmount, getPriorityColor } from '@/lib/utils'
-import { calculateDeductions, calculatePayNowTotal, calculateAccountBreakdown, getEffectivePercentage } from '@/lib/calculations'
+import { calculateDeductions, calculatePayNowTotal, calculateAccountBreakdown } from '@/lib/calculations'
+import type { DeductionMode } from '@/lib/calculations'
+import SavingsAllocationSection from '@/components/period-detail/SavingsAllocationSection'
 import type {
   BudgetPeriod,
   PeriodExpense,
@@ -23,6 +25,8 @@ import type {
   Settings,
   DeductionOverrides,
   PriorityCategoryRecord,
+  SavingsGoal,
+  PeriodSavingsAllocation,
 } from '@/lib/types'
 
 type SortKey = 'name' | 'default_amount' | 'priority_category' | 'account' | 'due_day' | 'frequency'
@@ -43,6 +47,9 @@ interface Props {
   allReceivedInvoices: Invoice[]
   settings: Settings
   categories: PriorityCategoryRecord[]
+  savingsGoals: SavingsGoal[]
+  savingsAllocations: PeriodSavingsAllocation[]
+  lastPeriodAllocations: PeriodSavingsAllocation[]
 }
 
 export default function PeriodDetailClient({
@@ -53,6 +60,9 @@ export default function PeriodDetailClient({
   allReceivedInvoices,
   settings,
   categories,
+  savingsGoals,
+  savingsAllocations,
+  lastPeriodAllocations,
 }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -175,6 +185,24 @@ export default function PeriodDetailClient({
     debounceTimers.current[timerKey] = setTimeout(() => {
       startTransition(() => updateDeductionOverrides(period.id, { [key]: parsed }))
     }, 500)
+  }
+
+  const handleDeductionModeToggle = (
+    pctKey: string,
+    amtKey: string,
+    detail: { amount: number; mode: DeductionMode; percentage: number },
+    newMode: DeductionMode
+  ) => {
+    if (detail.mode === newMode) return
+    const updates: Record<string, number | null> = {}
+    if (newMode === '$') {
+      updates[amtKey] = Math.round(detail.amount * 100) / 100
+      updates[pctKey] = null
+    } else {
+      updates[pctKey] = Math.round(detail.percentage * 10) / 10
+      updates[amtKey] = null
+    }
+    startTransition(() => updateDeductionOverrides(period.id, updates))
   }
 
   const inputClass = 'bg-white border border-line rounded-[8px] px-2 py-1 text-sm focus:outline-none focus:border-blue transition-colors'
@@ -340,34 +368,60 @@ export default function PeriodDetailClient({
         <h2 className="text-xl font-black font-display text-ink mb-4">Deductions</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mb-4">
           {[
-            { key: 'tithe_percentage', label: 'Tithe', amount: deductions.tithe },
-            { key: 'savings_percentage', label: 'Savings', amount: deductions.savings },
-            { key: 'tax_percentage', label: 'Tax', amount: deductions.taxes },
-            { key: 'profit_percentage', label: 'Profit', amount: deductions.profit },
-            { key: 'fun_money_percentage', label: 'Fun Money', amount: deductions.funMoney },
-          ].map(({ key, label, amount }) => {
-            const effectiveP = getEffectivePercentage(
-              period.deduction_overrides,
-              settings,
-              key as keyof DeductionOverrides
-            )
-            const hasOverride = period.deduction_overrides?.[key as keyof DeductionOverrides] !== undefined
+            { pctKey: 'tithe_percentage', amtKey: 'tithe_amount', label: 'Tithe', detail: deductions.details.titheD },
+            { pctKey: 'savings_percentage', amtKey: 'savings_amount', label: 'Savings', detail: deductions.details.savingsD },
+            { pctKey: 'tax_percentage', amtKey: 'tax_amount', label: 'Tax', detail: deductions.details.taxD },
+            { pctKey: 'profit_percentage', amtKey: 'profit_amount', label: 'Profit', detail: deductions.details.profitD },
+            { pctKey: 'fun_money_percentage', amtKey: 'fun_money_amount', label: 'Fun Money', detail: deductions.details.funMoneyD },
+          ].map(({ pctKey, amtKey, label, detail }) => {
+            const hasOverride =
+              period.deduction_overrides?.[pctKey as keyof DeductionOverrides] !== undefined ||
+              period.deduction_overrides?.[amtKey as keyof DeductionOverrides] !== undefined
             return (
-              <div key={key} className="text-center">
+              <div key={pctKey} className="text-center">
                 <div className="text-xs font-bold text-muted uppercase mb-1">{label}</div>
+                {/* % | $ toggle */}
+                <div className="flex justify-center mb-1">
+                  <div className="flex rounded-[6px] border border-line overflow-hidden">
+                    <button
+                      onClick={() => handleDeductionModeToggle(pctKey, amtKey, detail, '%')}
+                      className={`px-1.5 py-0.5 text-[10px] font-bold transition-colors ${
+                        detail.mode === '%' ? 'bg-ink text-white' : 'text-muted hover:text-ink'
+                      }`}
+                    >
+                      %
+                    </button>
+                    <button
+                      onClick={() => handleDeductionModeToggle(pctKey, amtKey, detail, '$')}
+                      className={`px-1.5 py-0.5 text-[10px] font-bold transition-colors ${
+                        detail.mode === '$' ? 'bg-ink text-white' : 'text-muted hover:text-ink'
+                      }`}
+                    >
+                      $
+                    </button>
+                  </div>
+                </div>
                 <div className="flex items-center justify-center gap-1 mb-1">
                   <input
                     type="number"
-                    step="0.1"
-                    defaultValue={effectiveP}
-                    onChange={(e) => handleDeductionChange(key, e.target.value)}
-                    className={`w-16 text-center text-sm font-bold rounded-[8px] border px-2 py-1 focus:outline-none focus:border-blue ${
+                    step={detail.mode === '%' ? '0.1' : '0.01'}
+                    key={`${pctKey}-${detail.mode}`}
+                    defaultValue={detail.value}
+                    onChange={(e) => handleDeductionChange(
+                      detail.mode === '%' ? pctKey : amtKey,
+                      e.target.value
+                    )}
+                    className={`w-20 text-center text-sm font-bold rounded-[8px] border px-2 py-1 focus:outline-none focus:border-blue ${
                       hasOverride ? 'border-blue bg-blue/5' : 'border-line'
                     }`}
                   />
-                  <span className="text-xs text-muted">%</span>
+                  <span className="text-xs text-muted">{detail.mode === '%' ? '%' : '$'}</span>
                 </div>
-                <div className="text-sm font-bold text-ink">{formatCurrency(amount)}</div>
+                {detail.mode === '%' ? (
+                  <div className="text-sm font-bold text-ink">{formatCurrency(detail.amount)}</div>
+                ) : (
+                  <div className="text-[10px] text-muted">= {detail.percentage.toFixed(1)}%</div>
+                )}
               </div>
             )
           })}
@@ -383,6 +437,18 @@ export default function PeriodDetailClient({
           </div>
         </div>
       </div>
+
+      {/* ─── Savings Allocation ────────────────────────────── */}
+      {savingsGoals.length > 0 && (
+        <SavingsAllocationSection
+          periodId={period.id}
+          savingsPool={deductions.savings}
+          leftoverBudget={amountLeft}
+          savingsGoals={savingsGoals}
+          savingsAllocations={savingsAllocations}
+          lastPeriodAllocations={lastPeriodAllocations}
+        />
+      )}
 
       {/* ─── Account Transfer Summary ──────────────────────── */}
       {Object.keys(accountBreakdown).length > 0 && (

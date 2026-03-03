@@ -1,43 +1,44 @@
 # Caashflow Roadmap
 
-_Last updated: 2026-03-02 (Debt Paydown shipped)_
+_Last updated: 2026-03-02 (Savings Allocation + % | $ Toggle in progress)_
 
 ---
 
 ## NOW
 
-### 1. ⭐ Household Member Invite + Budget Scope
-**Status:** Not started
+### 1. ✅ Household Member Invite + Budget Scope
+**Status:** Complete
 - Invite members to a household via email
 - Roles: owner vs member
 - Budget scope: personal vs household visibility
-- Requires: invite flow (email link or code), RLS considerations per role
 
-### 2. Fix Duplicate Server Actions + Rename Middleware
-**Status:** Not started
-- Consolidate `app/actions/periods.ts` and `app/actions/period-expenses.ts` — keep `period-expenses.ts` (has proper `household_id` validation)
-- Rename `middleware.ts` → `proxy.ts` per Next.js 16 convention
+### 2. ✅ Fix Duplicate Server Actions + Rename Middleware
+**Status:** Complete
+- Consolidated server actions
+- Renamed middleware per Next.js 16 convention
 
 ### 3. ✅ Dynamic Accounts & Priority Categories
 **Status:** Complete (landed in commit `eeb5697`)
 - Accounts and priority categories moved from `lib/constants.ts` to DB
 - CRUD UI in settings
 
-### 4. ✅ Debt Paydown
-**Status:** Complete
+### 4. ✅ Debt Demo
+**Status:** Complete (renamed from "Debt Paydown" — demolition wordplay 🔨)
 - Track debts (name, starting balance, current balance, interest rate)
 - Progress bar toward $0, estimated payoff date
 - Big confetti on paid off, small confetti for payments exceeding minimum
 - `debts` table + RLS, full CRUD, `logPayment` + `markPaidOff` actions
 - Paid off section collapses at bottom
 
-### 5. Savings Goals
-**Status:** Not started
-- Track savings goals (name, target amount, current amount, target date)
-- Show progress toward goal
-- Multiple goals per household
-- New DB table: `savings_goals`
-- Scope: per household
+### 5. ✅ Savings Goals
+**Status:** Complete (landed in commit `5b7598c`)
+- Two goal types: **Purchase** (🎯 blue accent, deadline-driven) and **Fund** (🌱 green accent, ongoing)
+- Progress tracking, inline contributions, monthly contribution goals
+- Fund overflow: animated pulse glow when current > target, shows "+$X over"
+- Big confetti on goal achieved, small confetti on exceeds monthly contribution
+- Linked budget items: auto-contribute when period expense marked paid
+- `savings_goals` table + RLS, full CRUD
+- `base_budget_items.savings_goal_id` + `period_expenses.savings_goal_id` FK columns
 
 ### 6. Budget Period Status
 **Status:** Not started

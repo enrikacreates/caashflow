@@ -32,13 +32,17 @@ Budget management system for modern creative/entrepreneurial families. App #1 in
 | `households` | Family/org unit — central entity |
 | `household_members` | User ↔ household join (role: owner\|member) |
 | `settings` | Deduction percentages (1:1 with household) |
-| `base_budget_items` | Master expense template |
+| `base_budget_items` | Master expense template (has `debt_id`, `savings_goal_id` FK) |
 | `budget_periods` | Pay periods |
-| `period_expenses` | Expenses copied into a period |
+| `period_expenses` | Expenses copied into a period (has `debt_id`, `savings_goal_id` FK) |
 | `period_linked_invoices` | Many-to-many: periods ↔ invoices |
 | `period_manual_income` | One-off income per period |
 | `invoices` | Income/invoice tracking |
 | `budget_requests` | Wish-list items |
+| `debts` | Debt tracking (balance, interest, payments) |
+| `savings_goals` | Savings goals (purchase 🎯 / fund 🌱 types) |
+| `accounts` | User-defined account categories |
+| `priority_categories` | User-defined priority categories with colors |
 
 **RLS:** Enabled on all tables. Users access data only through their `household_id`.
 **New user trigger:** `handle_new_user()` auto-creates household + settings + owner membership on signup.
@@ -46,7 +50,7 @@ Budget management system for modern creative/entrepreneurial families. App #1 in
 ## Known Issues / Tech Debt
 - `app/actions/periods.ts` and `app/actions/period-expenses.ts` have duplicate exports — consolidate into `period-expenses.ts` (it has proper `household_id` validation)
 - `middleware.ts` should be renamed to `proxy.ts` (Next.js 16 deprecation warning)
-- Accounts and priority categories are hardcoded in `lib/constants.ts` — should be DB-driven
+- ~~Accounts and priority categories are hardcoded in `lib/constants.ts`~~ → ✅ Now DB-driven (accounts + priority_categories tables)
 
 ## Deployment
 - **Production URL:** caashflow.app (hosted on Vercel)
@@ -54,7 +58,7 @@ Budget management system for modern creative/entrepreneurial families. App #1 in
 - **`.vercel/project.json`** links to `prj_lv9DD8tX3roHPJ0BnTlEwOyZMtv7` / `team_34AYhElACT1dHoEJEsadEdqy`
 - **Deploy command (no git remote):** `npx vercel deploy --prod` from project root
 - **Deploy command (with GitHub connected):** `git push origin main` — auto-deploys on push to main
-- **GitHub status:** Not connected yet — see Vercel dashboard "Connect Git Repository"
+- **GitHub status:** Connected — repo `enrikacreates/caashflow`, auto-deploys on push to main
 - **DNS status:** Vercel recommends switching Namecheap A record → CNAME `cname.vercel-dns.com`
 
 ## Roadmap (see full plan at `.claude/plans/roadmap.md`)

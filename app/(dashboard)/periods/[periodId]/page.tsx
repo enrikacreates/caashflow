@@ -27,6 +27,9 @@ export default async function PeriodDetailPage({
         allReceivedInvoices={detail.allReceivedInvoices}
         settings={detail.settings}
         categories={categories ?? []}
+        savingsGoals={detail.savingsGoals}
+        savingsAllocations={detail.savingsAllocations}
+        lastPeriodAllocations={detail.lastPeriodAllocations}
       />
     </div>
   )

@@ -189,12 +189,29 @@ export interface SavingsGoal {
   updated_at: string
 }
 
+export interface PeriodSavingsAllocation {
+  id: string
+  period_id: string
+  household_id: string
+  savings_goal_id: string
+  amount: number
+  contributed: number
+  created_at: string
+  updated_at: string
+}
+
 export interface DeductionOverrides {
   tithe_percentage?: number
   savings_percentage?: number
   tax_percentage?: number
   profit_percentage?: number
   fun_money_percentage?: number
+  // Dollar-amount overrides (used when % | $ toggle is set to $)
+  tithe_amount?: number
+  savings_amount?: number
+  tax_amount?: number
+  profit_amount?: number
+  fun_money_amount?: number
 }
 
 export type Frequency = 'Monthly' | 'Weekly' | 'Annually' | 'One-Time'
