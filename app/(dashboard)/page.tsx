@@ -7,7 +7,7 @@ import { getBaseBudgetItems } from '@/app/actions/base-budget'
 import { getSettings } from '@/app/actions/settings'
 import { getPeriodDetail } from '@/app/actions/periods'
 import { formatCurrency, formatCurrencyShort } from '@/lib/utils'
-import { calculateDeductions, calculatePayNowTotal, calculateAccountBreakdown, getNext6Months } from '@/lib/calculations'
+import { calculateDeductions, calculatePayNowTotal, calculateAccountBreakdown, getNext6Months, calculateMonthlyEquivalent } from '@/lib/calculations'
 import type { Invoice } from '@/lib/types'
 import { ArrowRightLeft, TrendingUp } from 'lucide-react'
 
