@@ -65,7 +65,7 @@ export default function GaugeIcon({ angle = 0, color = '#C1BCBC' }: GaugeIconPro
         y1={py}
         x2={px}
         y2={py - 32}
-        strokeWidth="2.5"
+        strokeWidth="4"
         strokeLinecap="round"
         style={{
           stroke: color,
@@ -79,7 +79,7 @@ export default function GaugeIcon({ angle = 0, color = '#C1BCBC' }: GaugeIconPro
       <circle
         cx={px}
         cy={py}
-        r="3.5"
+        r="5"
         style={{ fill: color, transition: 'fill 0.4s ease' }}
       />
 
