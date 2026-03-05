@@ -68,9 +68,14 @@ export default async function DashboardPage({
   // Needle range: -80 (full left = bad) → 0 (center) → +80 (full right = healthy)
   const safeIncome = Math.max(selectedPeriod?.income_amount ?? 0, 1)
 
-  // Income — fixed slight-positive; always green (income is a good thing)
-  const incomeAngle = 15
-  const incomeGaugeColor = GAUGE_COLORS.green
+  // Income — how much of monthly expenses does this period's income cover?
+  // 0% covered = -80° red / 50% = center amber / 100%+ = +80° green
+  const incomeRatio = (selectedPeriod?.income_amount ?? 0) / Math.max(monthlyExpenses, 1)
+  const incomeAngle = Math.max(-80, Math.min(80, Math.round((incomeRatio - 0.5) * 160)))
+  const incomeGaugeColor =
+    incomeAngle > 30  ? GAUGE_COLORS.green :
+    incomeAngle > -30 ? GAUGE_COLORS.amber :
+                        GAUGE_COLORS.red
 
   // Amount Left — proportional to income; red if over budget, green if positive
   const amountLeftAngle = Math.max(-80, Math.min(80, Math.round((amountLeft / safeIncome) * 80)))
