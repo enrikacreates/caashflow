@@ -1,4 +1,5 @@
 import StatCard from '@/components/dashboard/StatCard'
+import { GAUGE_COLORS } from '@/components/dashboard/GaugeIcon'
 import PeriodSwitcherHeader from '@/components/dashboard/PeriodSwitcherHeader'
 import { getBudgetPeriods } from '@/app/actions/periods'
 import { getInvoices } from '@/app/actions/invoices'
@@ -64,24 +65,30 @@ export default async function DashboardPage({
     .reduce((sum, item) => sum + item.default_amount, 0)
 
   // --- Gauge angles & colors ---
-  // Needle range: -80 (full left = bad / over budget) → 0 (center) → +80 (full right = healthy)
+  // Needle range: -80 (full left = bad) → 0 (center) → +80 (full right = healthy)
   const safeIncome = Math.max(selectedPeriod?.income_amount ?? 0, 1)
 
-  // Income — fixed neutral positive; needle just confirms money is coming in
+  // Income — fixed slight-positive; always green (income is a good thing)
   const incomeAngle = 15
-  const incomeGaugeColor = 'var(--color-category-income)'
+  const incomeGaugeColor = GAUGE_COLORS.green
 
-  // Amount Left — proportional to income; negative = red & left, positive = green & right
+  // Amount Left — proportional to income; red if over budget, green if positive
   const amountLeftAngle = Math.max(-80, Math.min(80, Math.round((amountLeft / safeIncome) * 80)))
-  const amountLeftColor = amountLeft >= 0 ? '#68D391' : '#F87272'
+  const amountLeftColor = amountLeft >= 0 ? GAUGE_COLORS.green : GAUGE_COLORS.red
 
-  // Pay Now — lower spend vs income = healthier (needle right); inverse of payNow/income ratio
+  // Pay Now — lower spend vs income = healthier (right); three-state color
   const payNowAngle = Math.max(-80, Math.min(80, Math.round((1 - payNowTotal / safeIncome) * 80)))
-  const payNowGaugeColor = 'var(--color-mint)'
+  const payNowGaugeColor =
+    payNowAngle > 30  ? GAUGE_COLORS.green :
+    payNowAngle > -30 ? GAUGE_COLORS.amber :
+                        GAUGE_COLORS.red
 
-  // Expenses — same logic as Pay Now; monthly fixed costs vs income
+  // Expenses — same logic; monthly fixed costs vs income
   const expensesAngle = Math.max(-80, Math.min(80, Math.round((1 - monthlyExpenses / safeIncome) * 80)))
-  const expensesGaugeColor = 'var(--color-category-other)'
+  const expensesGaugeColor =
+    expensesAngle > 30  ? GAUGE_COLORS.green :
+    expensesAngle > -30 ? GAUGE_COLORS.amber :
+                          GAUGE_COLORS.red
 
   return (
     <div className="max-w-3xl mx-auto space-y-8">
