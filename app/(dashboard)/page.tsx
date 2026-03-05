@@ -59,10 +59,8 @@ export default async function DashboardPage({
   })
   const maxMonthly = Math.max(...monthlyTotals.map((m) => m.total), 1)
 
-  // Monthly expenses total from base budget
-  const monthlyExpenses = baseItems
-    .filter((item) => item.frequency === 'Monthly')
-    .reduce((sum, item) => sum + item.default_amount, 0)
+  // Monthly-equivalent total — normalizes Weekly (×52/12), Annual (÷12), excludes One-Time
+  const monthlyExpenses = calculateMonthlyEquivalent(baseItems)
 
   // --- Gauge angles & colors ---
   // Needle range: -80 (full left = bad) → 0 (center) → +80 (full right = healthy)

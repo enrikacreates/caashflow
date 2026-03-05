@@ -1,4 +1,4 @@
-import type { Settings, DeductionOverrides, PeriodExpense, PeriodSavingsAllocation } from './types'
+import type { Settings, DeductionOverrides, PeriodExpense, PeriodSavingsAllocation, BaseBudgetItem } from './types'
 import { getEffectiveAmount } from './utils'
 
 export function getEffectivePercentage(
@@ -113,6 +113,25 @@ export function calculateAccountBreakdown(
       breakdown[account] = (breakdown[account] || 0) + getEffectiveAmount(e)
     })
   return breakdown
+}
+
+/**
+ * Normalize all base budget items to a monthly equivalent.
+ *   Monthly  → as-is
+ *   Weekly   → × (52 / 12)
+ *   Annually → ÷ 12
+ *   One-Time → excluded (not recurring)
+ */
+export function calculateMonthlyEquivalent(items: BaseBudgetItem[]): number {
+  return items.reduce((sum, item) => {
+    switch (item.frequency) {
+      case 'Monthly':  return sum + item.default_amount
+      case 'Weekly':   return sum + item.default_amount * (52 / 12)
+      case 'Annually': return sum + item.default_amount / 12
+      case 'One-Time': return sum
+      default:         return sum
+    }
+  }, 0)
 }
 
 export function getNext6Months(): string[] {
