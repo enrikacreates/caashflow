@@ -47,7 +47,7 @@ export default function DashboardLayout({
       </button>
 
       {/* Main content — offset by sidebar width on desktop */}
-      <main className="md:ml-[220px] p-6 md:p-10">
+      <main className="md:ml-[220px] px-6 py-6 md:px-16 md:py-10">
         <div className="max-w-4xl mx-auto">
           {children}
         </div>
