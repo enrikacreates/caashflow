@@ -47,6 +47,23 @@ Budget management system for modern creative/entrepreneurial families. App #1 in
 **RLS:** Enabled on all tables. Users access data only through their `household_id`.
 **New user trigger:** `handle_new_user()` auto-creates household + settings + owner membership on signup.
 
+## Incoming Caashflow (Invoices) Feature
+- **Route:** `/invoices` (also accessible at `/cashflow` — both render the same `InvoicesClient`)
+- **Page title:** "Incoming Caashflow" — generic income tracker, not just invoices
+- **Form fields:** "Source *" (client_name in DB), "Description" (project_name in DB) — generic labels, works for invoices, gifts, sales, etc.
+- **Status flow:** projected → sent → received (skip "sent" for non-invoice income)
+- **Budget assignment:** available in the edit modal for `received` invoices only
+  - `invoices.budgeted` (boolean) auto-sets `true` when linked to any period, clears when all links removed
+  - Edit modal shows a clickable link to the period (e.g. "Mar 2026 →") when budgeted, or a dropdown picker when not
+  - Link navigates to `/periods/[periodId]`
+- **Period join:** `getInvoices()` joins `period_linked_invoices → budget_periods` to get the linked period name/id
+- **`Invoice` type** has optional `period_linked_invoices` array with nested `budget_periods` shape
+
+## Budget Periods Feature
+- **`budget_periods.period_month`** — `DATE` column storing first-of-month for the budgeted calendar month (e.g. `2026-04-01`)
+- **`CreatePeriodModal`** — has a month picker that defaults to next month; auto-updates the period name as the month changes
+- **`createBudgetPeriod` action** — converts `"YYYY-MM"` from `<input type="month">` to `"YYYY-MM-01"` before storing
+
 ## Known Issues / Tech Debt
 - `app/actions/periods.ts` and `app/actions/period-expenses.ts` have duplicate exports — consolidate into `period-expenses.ts` (it has proper `household_id` validation)
 - `middleware.ts` should be renamed to `proxy.ts` (Next.js 16 deprecation warning)
@@ -68,8 +85,9 @@ Budget management system for modern creative/entrepreneurial families. App #1 in
 3. ✅ Dynamic Accounts & Priority Categories (CRUD)
 4. ✅ Debt Demo (progress tracking, payoff date, confetti)
 5. ✅ Savings Goals (purchase + fund types, linked budget items, confetti)
-6. Budget Period Status (incomplete/complete/closed/archived)
-7. Budget Request → Period Linking
+6. ✅ Incoming Caashflow — generic income tracker (invoices, gifts, sales) with budget period linking
+7. Budget Period Status (incomplete/complete/closed/archived)
+8. Budget Request → Period Linking
 
 ### NEXT
 8. CSV Import/Export

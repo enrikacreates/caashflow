@@ -61,6 +61,7 @@ export interface BudgetPeriod {
   id: string
   household_id: string
   period_name: string
+  period_month: string | null
   income_amount: number
   deduction_overrides: DeductionOverrides
   created_at: string
@@ -106,8 +107,14 @@ export interface Invoice {
   projected_date: string | null
   actual_received_date: string | null
   month: string | null
+  budgeted: boolean
   created_at: string
   updated_at: string
+  // Joined from period_linked_invoices → budget_periods (populated by getInvoices)
+  period_linked_invoices?: Array<{
+    period_id: string
+    budget_periods: { id: string; period_name: string } | null
+  }>
 }
 
 export interface PeriodLinkedInvoice {

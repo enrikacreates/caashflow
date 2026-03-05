@@ -1,11 +1,28 @@
 'use client'
 
-import { useTransition } from 'react'
+import { useState, useTransition } from 'react'
 import { createBudgetPeriod } from '@/app/actions/periods'
 
 export default function CreatePeriodModal({ onClose }: { onClose: () => void }) {
   const [isPending, startTransition] = useTransition()
   const inputClass = 'w-full bg-bg-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-teal/40 transition-all shadow-card'
+
+  // Default to next month — you're likely budgeting for next month, not this one
+  const now = new Date()
+  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  const defaultMonthValue = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}`
+  const defaultName = `${monthNames[nextMonth.getMonth()]} ${nextMonth.getFullYear()}`
+
+  const [periodName, setPeriodName] = useState(defaultName)
+
+  // When the month picker changes, update the name suggestion
+  const handleMonthChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const [year, month] = e.target.value.split('-').map(Number)
+    if (year && month) {
+      setPeriodName(`${monthNames[month - 1]} ${year}`)
+    }
+  }
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -16,11 +33,6 @@ export default function CreatePeriodModal({ onClose }: { onClose: () => void }) 
     })
   }
 
-  // Generate suggested name based on current date
-  const now = new Date()
-  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-  const suggestedName = `${monthNames[now.getMonth()]} ${now.getFullYear()}`
-
   return (
     <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-bg-white rounded-lg shadow-card p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
@@ -30,13 +42,28 @@ export default function CreatePeriodModal({ onClose }: { onClose: () => void }) 
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
+            <label className="block text-sm font-bold text-text-heading mb-1">Budget Month *</label>
+            <input
+              type="month"
+              name="period_month"
+              required
+              defaultValue={defaultMonthValue}
+              onChange={handleMonthChange}
+              className={inputClass}
+            />
+            <p className="text-xs text-text-muted mt-1">
+              Which month are you budgeting for?
+            </p>
+          </div>
+          <div>
             <label className="block text-sm font-bold text-text-heading mb-1">Budget Name *</label>
             <input
               type="text"
               name="period_name"
               required
-              defaultValue={suggestedName}
-              placeholder="e.g., Jan 2026"
+              value={periodName}
+              onChange={(e) => setPeriodName(e.target.value)}
+              placeholder="e.g., Apr 2026"
               className={inputClass}
             />
             <p className="text-xs text-text-muted mt-1">

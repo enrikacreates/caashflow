@@ -27,12 +27,16 @@ export async function createBudgetPeriod(formData: FormData) {
   const householdId = await getUserHouseholdId()
 
   const periodName = formData.get('period_name') as string
+  const periodMonthRaw = formData.get('period_month') as string | null
+  // period_month arrives as "YYYY-MM" from <input type="month"> — store as first-of-month date
+  const periodMonth = periodMonthRaw ? `${periodMonthRaw}-01` : null
 
   const { data: period, error: periodError } = await supabase
     .from('budget_periods')
     .insert({
       household_id: householdId,
       period_name: periodName,
+      period_month: periodMonth,
       income_amount: 0,
       deduction_overrides: {},
     })

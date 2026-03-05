@@ -184,8 +184,15 @@ export async function linkInvoiceToPeriod(periodId: string, invoiceId: string) {
 
   if (error) throw new Error(`Failed to link invoice to period: ${error.message}`)
 
+  // Auto-flag the invoice as budgeted — assigning it to any period marks it
+  await supabase
+    .from('invoices')
+    .update({ budgeted: true, updated_at: new Date().toISOString() })
+    .eq('id', invoiceId)
+
   revalidatePath(`/periods/${periodId}`)
   revalidatePath('/periods')
+  revalidatePath('/invoices')
 }
 
 export async function unlinkInvoiceFromPeriod(periodId: string, invoiceId: string) {
@@ -199,8 +206,22 @@ export async function unlinkInvoiceFromPeriod(periodId: string, invoiceId: strin
 
   if (error) throw new Error(`Failed to unlink invoice from period: ${error.message}`)
 
+  // Check if invoice is still linked to any other periods — clear budgeted flag only if not
+  const { count } = await supabase
+    .from('period_linked_invoices')
+    .select('*', { count: 'exact', head: true })
+    .eq('invoice_id', invoiceId)
+
+  if ((count ?? 0) === 0) {
+    await supabase
+      .from('invoices')
+      .update({ budgeted: false, updated_at: new Date().toISOString() })
+      .eq('id', invoiceId)
+  }
+
   revalidatePath(`/periods/${periodId}`)
   revalidatePath('/periods')
+  revalidatePath('/invoices')
 }
 
 export async function addManualIncome(

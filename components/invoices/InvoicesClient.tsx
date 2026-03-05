@@ -3,10 +3,16 @@
 import { useState, useTransition } from 'react'
 import { deleteInvoice } from '@/app/actions/invoices'
 import { formatCurrency, formatDate, getStatusColor } from '@/lib/utils'
-import type { Invoice } from '@/lib/types'
+import type { Invoice, BudgetPeriod } from '@/lib/types'
 import InvoiceFormModal from './InvoiceFormModal'
 
-export default function InvoicesClient({ invoices }: { invoices: Invoice[] }) {
+export default function InvoicesClient({
+  invoices,
+  periods,
+}: {
+  invoices: Invoice[]
+  periods: BudgetPeriod[]
+}) {
   const [isPending, startTransition] = useTransition()
   const [modalOpen, setModalOpen] = useState(false)
   const [editItem, setEditItem] = useState<Invoice | null>(null)
@@ -25,7 +31,7 @@ export default function InvoicesClient({ invoices }: { invoices: Invoice[] }) {
       <div className="flex mb-6">
         <button onClick={() => { setEditItem(null); setModalOpen(true) }}
           className="bg-primary-teal text-text-inverse rounded-full px-5 py-2.5 text-label font-bold hover:opacity-90 transition-opacity">
-          + Add Invoice
+          + Add Income
         </button>
       </div>
 
@@ -49,8 +55,8 @@ export default function InvoicesClient({ invoices }: { invoices: Invoice[] }) {
           <table className="w-full">
             <thead className="bg-[#c9e5e4]">
               <tr>
-                <th className="text-left text-caption font-bold uppercase text-text-muted px-4 py-3">Client</th>
-                <th className="text-left text-caption font-bold uppercase text-text-muted px-4 py-3">Project</th>
+                <th className="text-left text-caption font-bold uppercase text-text-muted px-4 py-3">Source</th>
+                <th className="text-left text-caption font-bold uppercase text-text-muted px-4 py-3">Description</th>
                 <th className="text-left text-caption font-bold uppercase text-text-muted px-4 py-3">Amount</th>
                 <th className="text-left text-caption font-bold uppercase text-text-muted px-4 py-3">Status</th>
                 <th className="text-left text-caption font-bold uppercase text-text-muted px-4 py-3">Projected</th>
@@ -89,7 +95,7 @@ export default function InvoicesClient({ invoices }: { invoices: Invoice[] }) {
       </div>
 
       {modalOpen && (
-        <InvoiceFormModal editItem={editItem} onClose={() => { setModalOpen(false); setEditItem(null) }} />
+        <InvoiceFormModal editItem={editItem} periods={periods} onClose={() => { setModalOpen(false); setEditItem(null) }} />
       )}
     </>
   )

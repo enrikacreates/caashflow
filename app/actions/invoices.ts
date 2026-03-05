@@ -10,7 +10,7 @@ export async function getInvoices() {
 
   const { data, error } = await supabase
     .from('invoices')
-    .select('*')
+    .select('*, period_linked_invoices ( period_id, budget_periods ( id, period_name ) )')
     .eq('household_id', householdId)
     .order('created_at', { ascending: false })
 
@@ -40,6 +40,7 @@ export async function createInvoice(formData: FormData) {
   if (error) throw new Error(`Failed to create invoice: ${error.message}`)
 
   revalidatePath('/cashflow')
+  revalidatePath('/invoices')
 }
 
 export async function updateInvoice(formData: FormData) {
@@ -67,6 +68,7 @@ export async function updateInvoice(formData: FormData) {
   if (error) throw new Error(`Failed to update invoice: ${error.message}`)
 
   revalidatePath('/cashflow')
+  revalidatePath('/invoices')
 }
 
 export async function deleteInvoice(id: string) {
@@ -82,4 +84,5 @@ export async function deleteInvoice(id: string) {
   if (error) throw new Error(`Failed to delete invoice: ${error.message}`)
 
   revalidatePath('/cashflow')
+  revalidatePath('/invoices')
 }
