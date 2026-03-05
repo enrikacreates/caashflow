@@ -8,6 +8,7 @@ import { getPeriodDetail } from '@/app/actions/periods'
 import { formatCurrency, formatCurrencyShort } from '@/lib/utils'
 import { calculateDeductions, calculatePayNowTotal, calculateAccountBreakdown, getNext6Months } from '@/lib/calculations'
 import type { Invoice } from '@/lib/types'
+import { ArrowRightLeft, TrendingUp } from 'lucide-react'
 
 export default async function DashboardPage({
   searchParams,
@@ -98,12 +99,15 @@ export default async function DashboardPage({
       {/* Account Transfer Summary */}
       {Object.keys(accountBreakdown).length > 0 && (
         <div>
-          <h2 className="text-h2 font-semibold text-text-heading mb-4">Account Transfers</h2>
+          <div className="flex items-center gap-2 mb-3">
+            <ArrowRightLeft size={16} className="text-text-muted" />
+            <h2 className="text-caption font-semibold text-text-muted uppercase tracking-wide">Account Transfers</h2>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {Object.entries(accountBreakdown).map(([account, total]) => (
               <div key={account} className="bg-bg-white rounded-lg p-6 shadow-card">
                 <p className="text-caption font-bold uppercase text-text-muted mb-1">{account}</p>
-                <p className="text-h3 font-semibold text-text-heading">{formatCurrency(total)}</p>
+                <p className="text-h2 font-bold text-text-heading">{formatCurrency(total)}</p>
               </div>
             ))}
           </div>
@@ -112,7 +116,10 @@ export default async function DashboardPage({
 
       {/* 6-Month Cash Flow */}
       <div>
-        <h2 className="text-h2 font-semibold text-text-heading mb-4">6-Month Cash Flow</h2>
+        <div className="flex items-center gap-2 mb-3">
+          <TrendingUp size={16} className="text-text-muted" />
+          <h2 className="text-caption font-semibold text-text-muted uppercase tracking-wide">6-Month Cash Flow</h2>
+        </div>
         <div className="bg-bg-white rounded-lg p-6 shadow-card relative overflow-hidden">
 
           {/* "FLOW" watermark — Passion One, decorative only */}

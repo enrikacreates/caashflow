@@ -20,7 +20,7 @@ export default function StatCard({ label, value, accentColor, className = '' }: 
         bg-bg-white rounded-lg
         shadow-[0px_12px_24px_0px_rgba(110,110,110,0.4)]
         flex flex-col justify-between
-        p-6 min-h-[220px]
+        p-5 min-h-[160px]
         ${className}
       `}
     >
@@ -36,7 +36,7 @@ export default function StatCard({ label, value, accentColor, className = '' }: 
       </div>
 
       {/* Label */}
-      <p className="font-medium text-sm leading-tight tracking-[1px] text-text-muted">
+      <p className="text-caption font-semibold text-text-muted uppercase tracking-wide mt-3">
         {label}
       </p>
     </div>

@@ -23,7 +23,7 @@ export default function PeriodSwitcherHeader({
 
   if (!currentPeriod) {
     return (
-      <h1 className="text-h1 font-semibold text-text-heading">No Budget Yet</h1>
+      <h1 className="text-h1 font-bold text-text-heading">No Budget Yet</h1>
     )
   }
 
@@ -35,7 +35,7 @@ export default function PeriodSwitcherHeader({
         aria-haspopup="listbox"
         aria-expanded={open}
       >
-        <h1 className="text-h1 font-semibold text-text-heading uppercase tracking-wide">
+        <h1 className="text-h1 font-bold text-text-heading">
           {currentPeriod.period_name}
         </h1>
         <ChevronDown
