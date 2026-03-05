@@ -63,7 +63,7 @@ export default async function DashboardPage({
     .reduce((sum, item) => sum + item.default_amount, 0)
 
   return (
-    <div className="space-y-8">
+    <div className="max-w-3xl mx-auto space-y-8">
 
       {/* Page Header — period name acts as title with switcher dropdown */}
       <PeriodSwitcherHeader
