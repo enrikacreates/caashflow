@@ -63,6 +63,26 @@ export default async function DashboardPage({
     .filter((item) => item.frequency === 'Monthly')
     .reduce((sum, item) => sum + item.default_amount, 0)
 
+  // --- Gauge angles & colors ---
+  // Needle range: -80 (full left = bad / over budget) → 0 (center) → +80 (full right = healthy)
+  const safeIncome = Math.max(selectedPeriod?.income_amount ?? 0, 1)
+
+  // Income — fixed neutral positive; needle just confirms money is coming in
+  const incomeAngle = 15
+  const incomeGaugeColor = 'var(--color-category-income)'
+
+  // Amount Left — proportional to income; negative = red & left, positive = green & right
+  const amountLeftAngle = Math.max(-80, Math.min(80, Math.round((amountLeft / safeIncome) * 80)))
+  const amountLeftColor = amountLeft >= 0 ? '#68D391' : '#F87272'
+
+  // Pay Now — lower spend vs income = healthier (needle right); inverse of payNow/income ratio
+  const payNowAngle = Math.max(-80, Math.min(80, Math.round((1 - payNowTotal / safeIncome) * 80)))
+  const payNowGaugeColor = 'var(--color-mint)'
+
+  // Expenses — same logic as Pay Now; monthly fixed costs vs income
+  const expensesAngle = Math.max(-80, Math.min(80, Math.round((1 - monthlyExpenses / safeIncome) * 80)))
+  const expensesGaugeColor = 'var(--color-category-other)'
+
   return (
     <div className="max-w-3xl mx-auto space-y-8">
 
@@ -78,21 +98,29 @@ export default async function DashboardPage({
           label="Income"
           value={formatCurrencyShort(selectedPeriod?.income_amount || 0)}
           accentColor="var(--color-category-income)"
+          gaugeAngle={incomeAngle}
+          gaugeColor={incomeGaugeColor}
         />
         <StatCard
           label="Amount Left"
           value={formatCurrencyShort(amountLeft)}
           accentColor="var(--color-category-expense)"
+          gaugeAngle={amountLeftAngle}
+          gaugeColor={amountLeftColor}
         />
         <StatCard
           label="Pay Now"
           value={formatCurrencyShort(payNowTotal)}
           accentColor="var(--color-mint)"
+          gaugeAngle={payNowAngle}
+          gaugeColor={payNowGaugeColor}
         />
         <StatCard
           label="Expenses"
           value={formatCurrencyShort(monthlyExpenses)}
           accentColor="var(--color-category-other)"
+          gaugeAngle={expensesAngle}
+          gaugeColor={expensesGaugeColor}
         />
       </div>
 
