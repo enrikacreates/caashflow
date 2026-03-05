@@ -15,6 +15,8 @@ interface StatCardProps {
   gaugeAngle?: number
   /** Gauge needle + pivot dot color — any CSS color or CSS var */
   gaugeColor?: string
+  /** Optional contextual line below the label, e.g. "of $10K goal" */
+  subtitle?: string
   /** Optional: classname to override card size/etc */
   className?: string
 }
@@ -25,6 +27,7 @@ export default function StatCard({
   accentColor,
   gaugeAngle = 0,
   gaugeColor = '#C1BCBC',
+  subtitle,
   className = '',
 }: StatCardProps) {
   return (
@@ -53,10 +56,17 @@ export default function StatCard({
         </p>
       </div>
 
-      {/* Label */}
-      <p className="text-caption font-semibold text-text-muted uppercase tracking-wide mt-3">
-        {label}
-      </p>
+      {/* Label + optional context subtitle */}
+      <div className="mt-3">
+        <p className="text-caption font-semibold text-text-muted uppercase tracking-wide">
+          {label}
+        </p>
+        {subtitle && (
+          <p className="text-[11px] text-text-muted mt-0.5 leading-tight">
+            {subtitle}
+          </p>
+        )}
+      </div>
     </div>
   )
 }

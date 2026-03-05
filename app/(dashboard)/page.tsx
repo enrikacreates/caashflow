@@ -35,6 +35,7 @@ export default async function DashboardPage({
   let payNowTotal = 0
   let accountBreakdown: Record<string, number> = {}
   let amountLeft = 0
+  let incomeAfterDeductions = 0
 
   if (selectedPeriod) {
     const detail = await getPeriodDetail(selectedPeriod.id)
@@ -45,6 +46,7 @@ export default async function DashboardPage({
       settings,
       selectedPeriod.deduction_overrides
     )
+    incomeAfterDeductions = deductions.incomeAfterDeductions
     amountLeft = deductions.incomeAfterDeductions - payNowTotal
   }
 
@@ -134,6 +136,7 @@ export default async function DashboardPage({
           accentColor="var(--color-category-income)"
           gaugeAngle={incomeAngle}
           gaugeColor={incomeGaugeColor}
+          subtitle={incomeGoal ? `of ${formatCurrencyShort(incomeGoal)} goal` : `of ${formatCurrencyShort(monthlyExpenses)} expenses`}
         />
         <StatCard
           label="Amount Left"
@@ -141,6 +144,7 @@ export default async function DashboardPage({
           accentColor="var(--color-category-expense)"
           gaugeAngle={amountLeftAngle}
           gaugeColor={amountLeftColor}
+          subtitle={incomeAfterDeductions > 0 ? `of ${formatCurrencyShort(incomeAfterDeductions)} budget` : undefined}
         />
         <StatCard
           label="Pay Now"
@@ -148,6 +152,7 @@ export default async function DashboardPage({
           accentColor="var(--color-mint)"
           gaugeAngle={payNowAngle}
           gaugeColor={payNowGaugeColor}
+          subtitle={incomeAfterDeductions > 0 ? `of ${formatCurrencyShort(incomeAfterDeductions)} budget` : undefined}
         />
         <StatCard
           label="Expenses"
@@ -155,6 +160,7 @@ export default async function DashboardPage({
           accentColor="var(--color-category-other)"
           gaugeAngle={expensesAngle}
           gaugeColor={expensesGaugeColor}
+          subtitle={expenseGoal ? `of ${formatCurrencyShort(expenseGoal)} goal` : undefined}
         />
       </div>
 
