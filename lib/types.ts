@@ -32,6 +32,8 @@ export interface Settings {
   tax_percentage: number
   profit_percentage: number
   fun_money_percentage: number
+  monthly_expense_goal: number | null
+  monthly_income_goal: number | null
   updated_at: string
 }
 

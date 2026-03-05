@@ -23,12 +23,17 @@ export async function updateSettings(formData: FormData) {
   const supabase = await createClient()
   const householdId = await getUserHouseholdId()
 
+  const expenseGoalRaw = formData.get('monthly_expense_goal') as string
+  const incomeGoalRaw = formData.get('monthly_income_goal') as string
+
   const updates = {
     tithe_percentage: parseFloat(formData.get('tithe_percentage') as string) || 0,
     savings_percentage: parseFloat(formData.get('savings_percentage') as string) || 0,
     tax_percentage: parseFloat(formData.get('tax_percentage') as string) || 0,
     profit_percentage: parseFloat(formData.get('profit_percentage') as string) || 0,
     fun_money_percentage: parseFloat(formData.get('fun_money_percentage') as string) || 0,
+    monthly_expense_goal: expenseGoalRaw ? parseFloat(expenseGoalRaw) || null : null,
+    monthly_income_goal: incomeGoalRaw ? parseFloat(incomeGoalRaw) || null : null,
     updated_at: new Date().toISOString(),
   }
 

@@ -68,9 +68,11 @@ export default async function DashboardPage({
   // Needle range: -80 (full left = bad) → 0 (center) → +80 (full right = healthy)
   const safeIncome = Math.max(selectedPeriod?.income_amount ?? 0, 1)
 
-  // Income — how much of monthly expenses does this period's income cover?
-  // 0% covered = -80° red / 50% = center amber / 100%+ = +80° green
-  const incomeRatio = (selectedPeriod?.income_amount ?? 0) / Math.max(monthlyExpenses, 1)
+  // Income — goal-aware if monthly_income_goal is set, else falls back to expense coverage ratio
+  // With goal: 0% of goal = -80° red / 50% = center amber / 100%+ = +80° green
+  const incomeGoal = settings.monthly_income_goal
+  const incomeTarget = incomeGoal ?? monthlyExpenses
+  const incomeRatio = (selectedPeriod?.income_amount ?? 0) / Math.max(incomeTarget, 1)
   const incomeAngle = Math.max(-80, Math.min(80, Math.round((incomeRatio - 0.5) * 160)))
   const incomeGaugeColor =
     incomeAngle > 30  ? GAUGE_COLORS.green :
@@ -88,12 +90,34 @@ export default async function DashboardPage({
     payNowAngle > -30 ? GAUGE_COLORS.amber :
                         GAUGE_COLORS.red
 
-  // Expenses — same logic; monthly fixed costs vs income
-  const expensesAngle = Math.max(-80, Math.min(80, Math.round((1 - monthlyExpenses / safeIncome) * 80)))
-  const expensesGaugeColor =
-    expensesAngle > 30  ? GAUGE_COLORS.green :
-    expensesAngle > -30 ? GAUGE_COLORS.amber :
-                          GAUGE_COLORS.red
+  // Expenses — goal-aware if monthly_expense_goal is set
+  // With goal: green = at/under goal, amber = ≤10% over, red = >10% over
+  // Without goal: falls back to ratio vs income
+  const expenseGoal = settings.monthly_expense_goal
+  let expensesAngle: number
+  let expensesGaugeColor: string
+  if (expenseGoal) {
+    const overage = monthlyExpenses - expenseGoal
+    if (overage <= 0) {
+      // Under or at goal — map 0→goal onto +80→0
+      expensesAngle = Math.max(0, Math.min(80, Math.round((1 - monthlyExpenses / expenseGoal) * 80)))
+      expensesGaugeColor = GAUGE_COLORS.green
+    } else if (overage <= expenseGoal * 0.1) {
+      // Within 10% over goal — amber zone
+      expensesAngle = Math.round(-40 * (overage / (expenseGoal * 0.1)))
+      expensesGaugeColor = GAUGE_COLORS.amber
+    } else {
+      // More than 10% over goal — red, full left
+      expensesAngle = Math.max(-80, Math.round(-40 - 40 * Math.min(1, (overage - expenseGoal * 0.1) / (expenseGoal * 0.1))))
+      expensesGaugeColor = GAUGE_COLORS.red
+    }
+  } else {
+    expensesAngle = Math.max(-80, Math.min(80, Math.round((1 - monthlyExpenses / safeIncome) * 80)))
+    expensesGaugeColor =
+      expensesAngle > 30  ? GAUGE_COLORS.green :
+      expensesAngle > -30 ? GAUGE_COLORS.amber :
+                            GAUGE_COLORS.red
+  }
 
   return (
     <div className="max-w-3xl mx-auto space-y-8">
