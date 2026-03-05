@@ -1,13 +1,11 @@
 'use client'
 
 import { useState } from 'react'
+import { Sprout, Target, Trophy, ChevronDown, ChevronRight } from 'lucide-react'
 import SavingsGoalCard from './SavingsGoalCard'
 import SavingsGoalModal from './SavingsGoalModal'
+import { formatCurrency } from '@/lib/utils'
 import type { SavingsGoal, BaseBudgetItem } from '@/lib/types'
-
-function formatCurrency(n: number) {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
-}
 
 export default function SavingsClient({
   goals,
@@ -42,14 +40,14 @@ export default function SavingsClient({
     <>
       {/* Summary */}
       {activeGoals.length > 0 && (
-        <div className="bg-white border border-line rounded-[20px] p-6">
+        <div className="bg-bg-white rounded-lg shadow-card p-6">
           <div className="flex items-end justify-between">
             <div>
-              <p className="text-xs font-bold text-muted uppercase tracking-wide mb-1">
+              <p className="text-caption font-semibold text-text-muted uppercase tracking-wide mb-1">
                 Total Saved
               </p>
-              <p className="text-4xl font-black text-ink">{formatCurrency(totalSaved)}</p>
-              <p className="text-sm text-muted mt-1">
+              <p className="text-h1 font-bold text-text-heading">{formatCurrency(totalSaved)}</p>
+              <p className="text-caption text-text-muted mt-1">
                 across {activeGoals.length} active goal{activeGoals.length !== 1 ? 's' : ''}
                 {purchaseGoals.length > 0 && fundGoals.length > 0 && (
                   <span>
@@ -65,7 +63,7 @@ export default function SavingsClient({
                 setEditingGoal(undefined)
                 setShowModal(true)
               }}
-              className="bg-blue text-white rounded-[12px] px-5 py-2.5 text-sm font-bold hover:opacity-90 transition-opacity"
+              className="bg-primary-teal text-text-inverse rounded-full px-5 py-2.5 text-caption font-semibold hover:opacity-90 transition-opacity"
             >
               + Add Goal
             </button>
@@ -75,15 +73,15 @@ export default function SavingsClient({
 
       {/* Empty state */}
       {goals.length === 0 && (
-        <div className="bg-white border border-line rounded-[20px] p-12 text-center">
-          <p className="text-4xl mb-3">🌱</p>
-          <p className="font-black font-display text-ink text-xl mb-1">No savings goals yet</p>
-          <p className="text-muted text-sm mb-6">
+        <div className="bg-bg-white rounded-lg shadow-card p-12 text-center">
+          <Sprout size={48} strokeWidth={1.5} className="text-text-muted mx-auto mb-4" />
+          <p className="font-bold text-text-heading text-h3 mb-1">No savings goals yet</p>
+          <p className="text-caption text-text-muted mb-6">
             Track purchases you&apos;re saving for and funds you&apos;re building
           </p>
           <button
             onClick={() => setShowModal(true)}
-            className="bg-blue text-white rounded-[12px] px-6 py-3 text-sm font-bold hover:opacity-90 transition-opacity"
+            className="bg-primary-teal text-text-inverse rounded-full px-6 py-3 text-caption font-semibold hover:opacity-90 transition-opacity"
           >
             + Add First Goal
           </button>
@@ -94,8 +92,10 @@ export default function SavingsClient({
       {purchaseGoals.length > 0 && (
         <div>
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-lg">🎯</span>
-            <h2 className="text-xs font-bold text-muted uppercase tracking-wide">Saving For</h2>
+            <Target size={16} className="text-text-muted" />
+            <h2 className="text-caption font-semibold text-text-muted uppercase tracking-wide">
+              Saving For
+            </h2>
           </div>
           <div className="space-y-4">
             {purchaseGoals.map((goal) => (
@@ -109,8 +109,10 @@ export default function SavingsClient({
       {fundGoals.length > 0 && (
         <div>
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-lg">🌱</span>
-            <h2 className="text-xs font-bold text-muted uppercase tracking-wide">Funds</h2>
+            <Sprout size={16} className="text-text-muted" />
+            <h2 className="text-caption font-semibold text-text-muted uppercase tracking-wide">
+              Funds
+            </h2>
           </div>
           <div className="space-y-4">
             {fundGoals.map((goal) => (
@@ -120,14 +122,14 @@ export default function SavingsClient({
         </div>
       )}
 
-      {/* Add button when no summary */}
+      {/* Add button when no summary (only achieved goals remain) */}
       {activeGoals.length === 0 && goals.length > 0 && (
         <button
           onClick={() => {
             setEditingGoal(undefined)
             setShowModal(true)
           }}
-          className="bg-blue text-white rounded-[12px] px-5 py-2.5 text-sm font-bold hover:opacity-90 transition-opacity"
+          className="bg-primary-teal text-text-inverse rounded-full px-5 py-2.5 text-caption font-semibold hover:opacity-90 transition-opacity"
         >
           + Add Goal
         </button>
@@ -138,10 +140,11 @@ export default function SavingsClient({
         <div>
           <button
             onClick={() => setShowAchieved((v) => !v)}
-            className="text-sm font-bold text-muted hover:text-ink transition-colors flex items-center gap-2"
+            className="text-caption font-semibold text-text-muted hover:text-text-heading transition-colors flex items-center gap-2"
           >
-            <span>{showAchieved ? '▼' : '▶'}</span>
-            {achievedGoals.length} Achieved 🎉
+            {showAchieved ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            {achievedGoals.length} Achieved
+            <Trophy size={14} className="text-warning" />
           </button>
           {showAchieved && (
             <div className="space-y-2 mt-3">

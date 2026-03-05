@@ -1,6 +1,26 @@
 # Caashflow Roadmap
 
-_Last updated: 2026-03-02 (Savings Allocation + % | $ Toggle in progress)_
+_Last updated: 2026-03-05_
+
+---
+
+## DESIGN POLISH LOG
+
+### ✅ Table Visual System (2026-03-05)
+Applied a consistent, airy table design across all data tables (BaseBudgetClient, InvoicesClient, PeriodDetailClient):
+- **Flat tables** — removed `shadow-card` card wrapper; kept `rounded-lg overflow-hidden` for corner clipping
+- **Mint zebra** — odd rows white, even rows `#E8F5F4` (clearly readable from page load)
+- **Teal header** — `bg-[#c9e5e4]` as saturated anchor for all `<thead>`
+- **Greige-lavender hover** — `#E1DEEC` (grey-mauve, no added green)
+- **No row borders** — removed `border-b`/`border-t` from all `<tr>` elements for a clean, spacious feel
+- **Priority pill truncation** — `max-w-[120px] truncate` prevents overflow on long category names
+- **pay_now semantic highlight** — `bg-primary-teal/[0.15]` retained as distinct row state in PeriodDetailClient
+
+### ✅ Settings Shadow Hierarchy (2026-03-05)
+Stepped down settings panel elevation to distinguish utility chrome from featured content:
+- All 5 settings panels: `shadow-card` → `shadow-sm`
+- Featured content (dashboards, period cards, debt/savings) retains `shadow-card`
+- Creates clear visual hierarchy: "look at me" vs. "I'm just organizing things"
 
 ---
 

@@ -20,8 +20,8 @@ export default async function SettingsPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-black font-display text-ink">Settings</h1>
-        <p className="text-muted text-sm mt-1">Manage your deduction percentages and data</p>
+        <h1 className="text-h1 font-bold text-text-heading">Settings</h1>
+        <p className="text-body text-text-muted mt-1">Manage your deduction percentages and data</p>
       </div>
 
       <SettingsForm settings={settings} />

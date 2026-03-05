@@ -66,38 +66,38 @@ export default function DataManagement() {
   }
 
   return (
-    <div className="bg-white border border-line rounded-[20px] p-6 space-y-6">
-      <h2 className="text-lg font-black font-display text-ink">Data Management</h2>
+    <div className="bg-bg-white rounded-lg shadow-sm p-6 space-y-6">
+      <h2 className="text-h3 font-bold text-text-heading">Data Management</h2>
 
       <div className="flex flex-wrap gap-3">
         <button
           onClick={handleExport}
           disabled={isPending}
-          className="bg-blue text-white rounded-[12px] px-5 py-2.5 font-bold hover:opacity-90 disabled:opacity-50 text-sm"
+          className="bg-primary-teal text-text-inverse rounded-full px-5 py-2.5 text-caption font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity"
         >
           Export Data (JSON)
         </button>
 
-        <label className="bg-white text-ink border border-line rounded-[12px] px-5 py-2.5 font-bold hover:border-blue cursor-pointer text-sm transition-colors">
+        <label className="bg-bg-white text-text-heading border border-border rounded-full px-5 py-2.5 text-caption font-semibold hover:border-primary cursor-pointer transition-colors">
           Import Data (JSON)
           <input type="file" accept=".json" onChange={handleImport} className="hidden" />
         </label>
       </div>
 
-      <div className="border-t border-line pt-4">
-        <h3 className="text-sm font-bold text-ink mb-3">Seed Defaults</h3>
+      <div className="border-t border-border pt-4">
+        <h3 className="text-caption font-semibold text-text-heading mb-3">Seed Defaults</h3>
         <div className="flex flex-wrap gap-3">
           <button
             onClick={handleSeedBudget}
             disabled={isPending}
-            className="bg-white text-ink border border-line rounded-[12px] px-5 py-2.5 font-bold hover:border-blue text-sm disabled:opacity-50 transition-colors"
+            className="bg-bg-white text-text-heading border border-border rounded-full px-5 py-2.5 text-caption font-semibold hover:border-primary disabled:opacity-50 transition-colors"
           >
             Seed Base Budget Defaults
           </button>
           <button
             onClick={handleSeedRequests}
             disabled={isPending}
-            className="bg-white text-ink border border-line rounded-[12px] px-5 py-2.5 font-bold hover:border-blue text-sm disabled:opacity-50 transition-colors"
+            className="bg-bg-white text-text-heading border border-border rounded-full px-5 py-2.5 text-caption font-semibold hover:border-primary disabled:opacity-50 transition-colors"
           >
             Seed Request Defaults
           </button>
@@ -105,7 +105,7 @@ export default function DataManagement() {
       </div>
 
       {message && (
-        <div className="text-sm font-bold text-green">{message}</div>
+        <div className="text-caption font-bold text-green">{message}</div>
       )}
     </div>
   )

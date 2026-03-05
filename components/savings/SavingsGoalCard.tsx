@@ -1,13 +1,11 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { Target, Sprout, Trophy, PartyPopper } from 'lucide-react'
 import { addContribution, markAchieved, deleteSavingsGoal } from '@/app/actions/savings'
 import { bigConfetti, smallConfetti } from '@/lib/confetti'
+import { formatCurrency } from '@/lib/utils'
 import type { SavingsGoal } from '@/lib/types'
-
-function formatCurrency(n: number) {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
-}
 
 function daysUntil(dateStr: string): number {
   const target = new Date(dateStr + 'T00:00:00')
@@ -87,13 +85,13 @@ export default function SavingsGoalCard({ goal, onEdit }: Props) {
   // Achieved state
   if (goal.is_achieved) {
     return (
-      <div className="bg-white border border-line rounded-[20px] p-6 opacity-60">
+      <div className="bg-bg-white rounded-lg shadow-card p-6 opacity-60">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="text-2xl">🎉</span>
+            <Trophy size={22} className="text-warning flex-shrink-0" />
             <div>
-              <p className="font-bold text-ink line-through">{goal.name}</p>
-              <p className="text-xs text-muted">
+              <p className="font-semibold text-text-heading line-through">{goal.name}</p>
+              <p className="text-caption text-text-muted">
                 Achieved{' '}
                 {goal.achieved_at
                   ? new Date(goal.achieved_at).toLocaleDateString('en-US', {
@@ -107,7 +105,7 @@ export default function SavingsGoalCard({ goal, onEdit }: Props) {
           <button
             onClick={handleDelete}
             disabled={isPending}
-            className="text-xs text-muted hover:text-orange font-bold transition-colors"
+            className="text-caption text-text-muted hover:text-warning font-semibold transition-colors"
           >
             Remove
           </button>
@@ -117,33 +115,32 @@ export default function SavingsGoalCard({ goal, onEdit }: Props) {
   }
 
   return (
-    <div
-      className={
-        isPurchase
-          ? 'bg-white border border-blue/30 rounded-[20px] p-6'
-          : 'bg-white border border-green/30 rounded-[20px] p-6'
-      }
-    >
+    <div className="bg-bg-white rounded-lg shadow-card p-6">
       {/* Header */}
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-start gap-3">
-          <span className="text-2xl">{isPurchase ? '🎯' : '🌱'}</span>
+          {isPurchase
+            ? <Target size={22} className="text-primary flex-shrink-0 mt-0.5" />
+            : <Sprout size={22} className="text-primary-teal flex-shrink-0 mt-0.5" />
+          }
           <div>
-            <h3 className="text-lg font-black font-display text-ink">{goal.name}</h3>
+            <h3 className="text-h3 font-semibold text-text-heading">{goal.name}</h3>
             <div className="flex items-center flex-wrap gap-2 mt-0.5">
               {isPurchase ? (
-                <span className="text-xs bg-blue/10 text-blue font-bold px-2 py-0.5 rounded-full">
+                <span className="text-caption bg-primary/10 text-primary font-semibold px-2 py-0.5 rounded-full">
                   Purchase
                 </span>
               ) : (
-                <span className="text-xs bg-green/10 text-green font-bold px-2 py-0.5 rounded-full">
+                <span className="text-caption bg-primary-teal/10 text-primary-teal font-semibold px-2 py-0.5 rounded-full">
                   Fund
                 </span>
               )}
               {goal.target_date && (
                 <span
                   className={
-                    days !== null && days < 30 ? 'text-xs text-orange' : 'text-xs text-muted'
+                    days !== null && days < 30
+                      ? 'text-caption text-warning'
+                      : 'text-caption text-text-muted'
                   }
                 >
                   {days !== null && days < 0
@@ -158,7 +155,7 @@ export default function SavingsGoalCard({ goal, onEdit }: Props) {
                 </span>
               )}
               {goal.monthly_contribution && (
-                <span className="text-xs text-muted">
+                <span className="text-caption text-text-muted">
                   {formatCurrency(goal.monthly_contribution)}/mo goal
                 </span>
               )}
@@ -168,14 +165,14 @@ export default function SavingsGoalCard({ goal, onEdit }: Props) {
         <div className="flex gap-3 flex-shrink-0">
           <button
             onClick={() => onEdit(goal)}
-            className="text-xs text-blue font-bold hover:underline"
+            className="text-caption text-primary font-semibold hover:underline"
           >
             Edit
           </button>
           <button
             onClick={handleDelete}
             disabled={isPending}
-            className="text-xs text-muted hover:text-orange font-bold transition-colors"
+            className="text-caption text-text-muted hover:text-warning font-semibold transition-colors"
           >
             Delete
           </button>
@@ -185,15 +182,17 @@ export default function SavingsGoalCard({ goal, onEdit }: Props) {
       {/* Amount */}
       <div className="flex items-end justify-between mb-2">
         <div>
-          <p className="text-3xl font-black text-ink">{formatCurrency(goal.current_amount)}</p>
-          <p className="text-xs text-muted mt-0.5">of {formatCurrency(goal.target_amount)} goal</p>
+          <p className="text-h2 font-bold text-text-heading">{formatCurrency(goal.current_amount)}</p>
+          <p className="text-caption text-text-muted mt-0.5">
+            of {formatCurrency(goal.target_amount)} goal
+          </p>
         </div>
         {isPurchase ? (
-          <p className="text-sm font-bold text-blue">
+          <p className="text-caption font-semibold text-primary">
             {isOverflowing ? '100% ✓' : `${Math.round(progressPercent)}%`}
           </p>
         ) : (
-          <p className="text-sm font-bold text-green">
+          <p className="text-caption font-semibold text-primary-teal">
             {isOverflowing
               ? `+${formatCurrency(goal.current_amount - goal.target_amount)} over`
               : `${Math.round(progressPercent)}%`}
@@ -202,29 +201,31 @@ export default function SavingsGoalCard({ goal, onEdit }: Props) {
       </div>
 
       {/* Progress bar */}
-      <div className="w-full bg-line rounded-full h-3 mb-4 overflow-hidden relative">
+      <div className="w-full bg-surface-gray rounded-full h-3 mb-4 overflow-hidden relative">
         {isPurchase ? (
           <div
-            className="h-3 rounded-full bg-blue transition-all duration-500"
+            className="h-3 rounded-full bg-primary transition-all duration-500"
             style={{ width: `${clampedProgress}%` }}
           />
         ) : (
           <>
             <div
-              className="h-3 rounded-full bg-green transition-all duration-500"
+              className="h-3 rounded-full bg-primary-teal transition-all duration-500"
               style={{ width: `${clampedProgress}%` }}
             />
             {isOverflowing && (
-              <div className="absolute inset-0 rounded-full bg-green/20 animate-pulse" />
+              <div className="absolute inset-0 rounded-full bg-primary-teal/20 animate-pulse" />
             )}
           </>
         )}
       </div>
 
-      {goal.notes && <p className="text-xs text-muted mb-4 italic">{goal.notes}</p>}
+      {goal.notes && (
+        <p className="text-caption text-text-muted mb-4 italic">{goal.notes}</p>
+      )}
 
       {error && (
-        <div className="bg-orange/10 border border-orange/20 rounded-[12px] px-3 py-2 mb-3 text-xs text-orange font-medium">
+        <div className="bg-warning/10 border border-warning/20 rounded-sm px-3 py-2 mb-3 text-caption text-warning font-medium">
           {error}
         </div>
       )}
@@ -232,7 +233,7 @@ export default function SavingsGoalCard({ goal, onEdit }: Props) {
       {/* Add contribution */}
       <div className="flex gap-2 mb-3">
         <div className="relative flex-1">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted text-sm">$</span>
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-caption">$</span>
           <input
             type="number"
             value={contributionInput}
@@ -243,46 +244,27 @@ export default function SavingsGoalCard({ goal, onEdit }: Props) {
             placeholder="Add contribution…"
             min="0"
             step="0.01"
-            className="w-full bg-white border border-line rounded-[12px] pl-7 pr-4 py-2.5 text-sm focus:outline-none focus:border-blue transition-colors"
+            className="w-full bg-bg-white border border-border rounded-sm pl-7 pr-4 py-2.5 text-caption focus:outline-none focus:border-primary transition-colors"
           />
         </div>
-        {isPurchase ? (
-          <button
-            onClick={handleContribute}
-            disabled={isPending || !contributionInput}
-            className="bg-blue text-white rounded-[12px] px-4 py-2.5 text-sm font-bold hover:opacity-90 disabled:opacity-50 transition-opacity whitespace-nowrap"
-          >
-            {isPending ? '…' : 'Add'}
-          </button>
-        ) : (
-          <button
-            onClick={handleContribute}
-            disabled={isPending || !contributionInput}
-            className="bg-green text-white rounded-[12px] px-4 py-2.5 text-sm font-bold hover:opacity-90 disabled:opacity-50 transition-opacity whitespace-nowrap"
-          >
-            {isPending ? '…' : 'Add'}
-          </button>
-        )}
+        <button
+          onClick={handleContribute}
+          disabled={isPending || !contributionInput}
+          className="bg-primary-teal text-text-inverse rounded-full px-4 py-2.5 text-caption font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity whitespace-nowrap"
+        >
+          {isPending ? '…' : 'Add'}
+        </button>
       </div>
 
       {/* Mark as Achieved */}
-      {isPurchase ? (
-        <button
-          onClick={handleMarkAchieved}
-          disabled={isPending}
-          className="w-full bg-blue text-white rounded-[14px] px-5 py-3 text-base font-black font-display hover:opacity-90 disabled:opacity-50 transition-opacity"
-        >
-          🎉 Mark as Achieved
-        </button>
-      ) : (
-        <button
-          onClick={handleMarkAchieved}
-          disabled={isPending}
-          className="w-full bg-green text-white rounded-[14px] px-5 py-3 text-base font-black font-display hover:opacity-90 disabled:opacity-50 transition-opacity"
-        >
-          🎉 Mark as Achieved
-        </button>
-      )}
+      <button
+        onClick={handleMarkAchieved}
+        disabled={isPending}
+        className="w-full bg-pill-pink text-text-heading rounded-full px-5 py-3 text-label font-bold flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-50 transition-opacity"
+      >
+        <PartyPopper size={18} />
+        Mark as Achieved
+      </button>
     </div>
   )
 }

@@ -1,13 +1,21 @@
+import StatCard from '@/components/dashboard/StatCard'
+import PeriodSwitcherHeader from '@/components/dashboard/PeriodSwitcherHeader'
 import { getBudgetPeriods } from '@/app/actions/periods'
 import { getInvoices } from '@/app/actions/invoices'
 import { getBaseBudgetItems } from '@/app/actions/base-budget'
 import { getSettings } from '@/app/actions/settings'
 import { getPeriodDetail } from '@/app/actions/periods'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, formatCurrencyShort } from '@/lib/utils'
 import { calculateDeductions, calculatePayNowTotal, calculateAccountBreakdown, getNext6Months } from '@/lib/calculations'
 import type { Invoice } from '@/lib/types'
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ period?: string }>
+}) {
+  const { period: periodParam } = await searchParams
+
   const [periods, invoices, baseItems, settings] = await Promise.all([
     getBudgetPeriods(),
     getInvoices(),
@@ -15,27 +23,27 @@ export default async function DashboardPage() {
     getSettings(),
   ])
 
-  // Get latest period (last in array by created_at)
   const latestPeriod = periods.length > 0 ? periods[periods.length - 1] : null
 
-  let expenses: Awaited<ReturnType<typeof getPeriodDetail>>['expenses'] = []
+  // Use URL param if valid, otherwise fall back to latest
+  const selectedPeriod = periodParam
+    ? (periods.find((p: { id: string }) => p.id === periodParam) ?? latestPeriod)
+    : latestPeriod
+
   let payNowTotal = 0
   let accountBreakdown: Record<string, number> = {}
-  let incomeAfterDeductions = 0
   let amountLeft = 0
 
-  if (latestPeriod) {
-    const detail = await getPeriodDetail(latestPeriod.id)
-    expenses = detail.expenses
+  if (selectedPeriod) {
+    const detail = await getPeriodDetail(selectedPeriod.id)
     payNowTotal = calculatePayNowTotal(detail.expenses)
     accountBreakdown = calculateAccountBreakdown(detail.expenses)
     const deductions = calculateDeductions(
-      latestPeriod.income_amount,
+      selectedPeriod.income_amount,
       settings,
-      latestPeriod.deduction_overrides
+      selectedPeriod.deduction_overrides
     )
-    incomeAfterDeductions = deductions.incomeAfterDeductions
-    amountLeft = incomeAfterDeductions - payNowTotal
+    amountLeft = deductions.incomeAfterDeductions - payNowTotal
   }
 
   // 6-Month Cash Flow chart data
@@ -49,105 +57,95 @@ export default async function DashboardPage() {
   })
   const maxMonthly = Math.max(...monthlyTotals.map((m) => m.total), 1)
 
-  // Quick stats
+  // Monthly expenses total from base budget
   const monthlyExpenses = baseItems
     .filter((item) => item.frequency === 'Monthly')
-    .reduce((sum, item) => sum + item.default_amount, 0)
-  const monthlyDebt = baseItems
-    .filter((item) => item.priority_category === 'P3: Debt' && item.frequency === 'Monthly')
     .reduce((sum, item) => sum + item.default_amount, 0)
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-black font-display text-ink">Dashboard</h1>
-        <p className="text-muted text-sm mt-1">Your financial overview at a glance</p>
-      </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white border border-line rounded-[20px] p-6">
-          <div className="text-xs font-bold uppercase text-muted mb-1">Current Period</div>
-          <div className="text-lg font-bold text-ink">
-            {latestPeriod ? latestPeriod.period_name : 'No periods yet'}
-          </div>
-        </div>
-        <div className="bg-white border border-line rounded-[20px] p-6">
-          <div className="text-xs font-bold uppercase text-muted mb-1">Total Income</div>
-          <div className="text-lg font-bold text-ink">
-            {formatCurrency(latestPeriod?.income_amount || 0)}
-          </div>
-        </div>
-        <div className="bg-white border border-line rounded-[20px] p-6">
-          <div className="text-xs font-bold uppercase text-muted mb-1">Pay Now Total</div>
-          <div className="text-lg font-bold text-ink">
-            {formatCurrency(payNowTotal)}
-          </div>
-        </div>
-        <div className="bg-white border border-line rounded-[20px] p-6">
-          <div className="text-xs font-bold uppercase text-muted mb-1">Amount Left</div>
-          <div className={`text-lg font-bold ${amountLeft >= 0 ? 'text-green' : 'text-orange'}`}>
-            {formatCurrency(amountLeft)}
-          </div>
-        </div>
+      {/* Page Header — period name acts as title with switcher dropdown */}
+      <PeriodSwitcherHeader
+        currentPeriod={selectedPeriod}
+        allPeriods={periods}
+      />
+
+      {/* Stat Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard
+          label="Income"
+          value={formatCurrencyShort(selectedPeriod?.income_amount || 0)}
+          accentColor="var(--color-category-income)"
+        />
+        <StatCard
+          label="Amount Left"
+          value={formatCurrencyShort(amountLeft)}
+          accentColor="var(--color-category-expense)"
+        />
+        <StatCard
+          label="Pay Now"
+          value={formatCurrencyShort(payNowTotal)}
+          accentColor="var(--color-mint)"
+        />
+        <StatCard
+          label="Expenses"
+          value={formatCurrencyShort(monthlyExpenses)}
+          accentColor="var(--color-category-other)"
+        />
       </div>
 
       {/* Account Transfer Summary */}
       {Object.keys(accountBreakdown).length > 0 && (
         <div>
-          <h2 className="text-xl font-black font-display text-ink mb-4">Account Transfer Summary</h2>
+          <h2 className="text-h2 font-semibold text-text-heading mb-4">Account Transfers</h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {Object.entries(accountBreakdown).map(([account, total]) => (
-              <div key={account} className="bg-white border border-line rounded-[20px] p-6">
-                <div className="text-xs font-bold uppercase text-muted mb-1">{account}</div>
-                <div className="text-lg font-bold text-ink">{formatCurrency(total)}</div>
+              <div key={account} className="bg-bg-white rounded-lg p-6 shadow-card">
+                <p className="text-caption font-bold uppercase text-text-muted mb-1">{account}</p>
+                <p className="text-h3 font-semibold text-text-heading">{formatCurrency(total)}</p>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* 6-Month Cash Flow Chart */}
+      {/* 6-Month Cash Flow */}
       <div>
-        <h2 className="text-xl font-black font-display text-ink mb-4">6-Month Cash Flow</h2>
-        <div className="bg-white border border-line rounded-[20px] p-6">
-          <div className="flex items-end gap-3 h-48">
+        <h2 className="text-h2 font-semibold text-text-heading mb-4">6-Month Cash Flow</h2>
+        <div className="bg-bg-white rounded-lg p-6 shadow-card relative overflow-hidden">
+
+          {/* "FLOW" watermark — Passion One, decorative only */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
+            <span
+              className="font-display leading-none text-category-income opacity-30"
+              style={{ fontSize: '20rem' }}
+            >
+              FLOW
+            </span>
+          </div>
+
+          {/* Chart — sits above watermark */}
+          <div className="relative z-10 flex items-end gap-3 h-48">
             {monthlyTotals.map((m) => (
               <div key={m.month} className="flex-1 flex flex-col items-center gap-2">
-                <div className="text-xs font-bold text-ink">
+                <span className="text-caption font-bold text-text-heading">
                   {formatCurrency(m.total)}
-                </div>
+                </span>
                 <div
-                  className="w-full bg-blue rounded-t-[8px] min-h-[4px] transition-all"
+                  className="w-full bg-primary-teal rounded-t-sm min-h-[4px] transition-all"
                   style={{ height: `${(m.total / maxMonthly) * 100}%` }}
                 />
-                <div className="text-xs text-muted font-medium">
+                <span className="text-caption text-text-muted font-medium">
                   {new Date(m.month + '-01').toLocaleDateString('en-US', { month: 'short' })}
-                </div>
+                </span>
               </div>
             ))}
           </div>
+
         </div>
       </div>
 
-      {/* Quick Stats */}
-      <div>
-        <h2 className="text-xl font-black font-display text-ink mb-4">Quick Stats</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="bg-white border border-line rounded-[20px] p-6">
-            <div className="text-xs font-bold uppercase text-muted mb-1">
-              Total Monthly Expenses (Base Budget)
-            </div>
-            <div className="text-lg font-bold text-ink">{formatCurrency(monthlyExpenses)}</div>
-          </div>
-          <div className="bg-white border border-line rounded-[20px] p-6">
-            <div className="text-xs font-bold uppercase text-muted mb-1">
-              Monthly Debt Payments
-            </div>
-            <div className="text-lg font-bold text-ink">{formatCurrency(monthlyDebt)}</div>
-          </div>
-        </div>
-      </div>
     </div>
   )
 }

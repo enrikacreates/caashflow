@@ -8,8 +8,8 @@ export default async function DebtsPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-black font-display text-ink">Debt Demo</h1>
-        <p className="text-muted text-sm mt-1">Demolish your debts and celebrate every payment</p>
+        <h1 className="text-h1 font-bold text-text-heading">Debt Demo</h1>
+        <p className="text-caption text-text-muted mt-1">Demolish your debts and celebrate every payment</p>
       </div>
       <DebtsClient debts={debts} budgetItems={budgetItems} />
     </div>

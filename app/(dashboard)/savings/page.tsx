@@ -10,8 +10,8 @@ export default async function SavingsPage() {
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div>
-        <h1 className="text-3xl font-black font-display text-ink">Savings Goals</h1>
-        <p className="text-muted text-sm mt-1">Track purchases you&apos;re saving for and funds you&apos;re building.</p>
+        <h1 className="text-h1 font-bold text-text-heading">Savings Goals</h1>
+        <p className="text-caption text-text-muted mt-1">Track purchases you&apos;re saving for and funds you&apos;re building.</p>
       </div>
       <SavingsClient goals={goals} budgetItems={budgetItems} />
     </div>

@@ -3,11 +3,9 @@
 import { useState, useTransition } from 'react'
 import { logPayment, markPaidOff, deleteDebt } from '@/app/actions/debts'
 import { bigConfetti, smallConfetti } from '@/lib/confetti'
+import { formatCurrency } from '@/lib/utils'
+import { Hammer, Trophy, PartyPopper } from 'lucide-react'
 import type { Debt } from '@/lib/types'
-
-function formatCurrency(n: number) {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
-}
 
 function calculatePayoffDate(
   currentBalance: number,
@@ -98,13 +96,13 @@ export default function DebtCard({ debt, onEdit }: Props) {
 
   if (debt.is_paid_off) {
     return (
-      <div className="bg-white border border-line rounded-[20px] p-6 opacity-60">
+      <div className="bg-bg-white rounded-lg shadow-card p-6 opacity-60">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="text-2xl">🎉</span>
+            <Trophy size={22} className="text-warning flex-shrink-0" />
             <div>
-              <p className="font-bold text-ink line-through">{debt.name}</p>
-              <p className="text-xs text-muted">
+              <p className="font-semibold text-text-heading line-through">{debt.name}</p>
+              <p className="text-caption text-text-muted">
                 Paid off {debt.paid_off_at
                   ? new Date(debt.paid_off_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
                   : ''}
@@ -114,7 +112,7 @@ export default function DebtCard({ debt, onEdit }: Props) {
           <button
             onClick={handleDelete}
             disabled={isPending}
-            className="text-xs text-muted hover:text-orange font-bold transition-colors"
+            className="text-caption text-text-muted hover:text-warning font-semibold transition-colors"
           >
             Remove
           </button>
@@ -124,33 +122,33 @@ export default function DebtCard({ debt, onEdit }: Props) {
   }
 
   return (
-    <div className="bg-white border border-line rounded-[20px] p-6">
+    <div className="bg-bg-white rounded-lg shadow-card p-6">
       {/* Header */}
       <div className="flex items-start justify-between mb-4">
         <div>
-          <h3 className="text-lg font-black font-display text-ink">{debt.name}</h3>
+          <h3 className="text-h3 font-semibold text-text-heading">{debt.name}</h3>
           <div className="flex items-center gap-2 mt-0.5">
             {debt.interest_rate !== null && (
-              <span className="text-xs bg-orange/10 text-orange font-bold px-2 py-0.5 rounded-full">
+              <span className="text-caption bg-warning/10 text-warning font-semibold px-2 py-0.5 rounded-full">
                 {debt.interest_rate}% APR
               </span>
             )}
             {debt.due_day && (
-              <span className="text-xs text-muted">Due day {debt.due_day}</span>
+              <span className="text-caption text-text-muted">Due day {debt.due_day}</span>
             )}
           </div>
         </div>
         <div className="flex gap-3 flex-shrink-0">
           <button
             onClick={() => onEdit(debt)}
-            className="text-xs text-blue font-bold hover:underline"
+            className="text-caption text-primary font-semibold hover:underline"
           >
             Edit
           </button>
           <button
             onClick={handleDelete}
             disabled={isPending}
-            className="text-xs text-muted hover:text-orange font-bold transition-colors"
+            className="text-caption text-text-muted hover:text-warning font-semibold transition-colors"
           >
             Delete
           </button>
@@ -160,38 +158,38 @@ export default function DebtCard({ debt, onEdit }: Props) {
       {/* Balance */}
       <div className="flex items-end justify-between mb-2">
         <div>
-          <p className="text-3xl font-black text-ink">{formatCurrency(debt.current_balance)}</p>
-          <p className="text-xs text-muted mt-0.5">
+          <p className="text-h2 font-bold text-text-heading">{formatCurrency(debt.current_balance)}</p>
+          <p className="text-caption text-text-muted mt-0.5">
             of {formatCurrency(debt.original_balance)} original
           </p>
         </div>
-        <p className="text-sm font-bold text-green">{Math.round(progress)}% paid</p>
+        <p className="text-caption font-semibold text-success">{Math.round(progress)}% paid</p>
       </div>
 
       {/* Progress bar */}
-      <div className="w-full bg-line rounded-full h-3 mb-4 overflow-hidden">
+      <div className="w-full bg-surface-gray rounded-full h-3 mb-4 overflow-hidden">
         <div
-          className="h-3 rounded-full bg-green transition-all duration-500"
+          className="h-3 rounded-full bg-primary-teal transition-all duration-500"
           style={{ width: `${progress}%` }}
         />
       </div>
 
       {/* Details row */}
-      <div className="flex items-center gap-4 mb-4 text-xs text-muted">
+      <div className="flex items-center gap-4 mb-4 text-caption text-text-muted">
         {debt.minimum_payment && (
-          <span>Min. payment: <strong className="text-ink">{formatCurrency(debt.minimum_payment)}/mo</strong></span>
+          <span>Min. payment: <strong className="text-text-heading">{formatCurrency(debt.minimum_payment)}/mo</strong></span>
         )}
         {payoffDate && (
-          <span>Payoff: <strong className="text-ink">{formatPayoffLabel(payoffDate)}</strong></span>
+          <span>Payoff: <strong className="text-text-heading">{formatPayoffLabel(payoffDate)}</strong></span>
         )}
       </div>
 
       {debt.notes && (
-        <p className="text-xs text-muted mb-4 italic">{debt.notes}</p>
+        <p className="text-caption text-text-muted mb-4 italic">{debt.notes}</p>
       )}
 
       {error && (
-        <div className="bg-orange/10 border border-orange/20 rounded-[12px] px-3 py-2 mb-3 text-xs text-orange font-medium">
+        <div className="bg-warning/10 border border-warning/20 rounded-sm px-3 py-2 mb-3 text-caption text-warning font-medium">
           {error}
         </div>
       )}
@@ -199,7 +197,7 @@ export default function DebtCard({ debt, onEdit }: Props) {
       {/* Log payment */}
       <div className="flex gap-2 mb-3">
         <div className="relative flex-1">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted text-sm">$</span>
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-caption">$</span>
           <input
             type="number"
             value={paymentInput}
@@ -208,13 +206,13 @@ export default function DebtCard({ debt, onEdit }: Props) {
             placeholder="Log payment…"
             min="0"
             step="0.01"
-            className="w-full bg-white border border-line rounded-[12px] pl-7 pr-4 py-2.5 text-sm focus:outline-none focus:border-blue transition-colors"
+            className="w-full bg-bg-white border border-border rounded-sm pl-7 pr-4 py-2.5 text-caption focus:outline-none focus:border-primary transition-colors"
           />
         </div>
         <button
           onClick={handleLogPayment}
           disabled={isPending || !paymentInput}
-          className="bg-blue text-white rounded-[12px] px-4 py-2.5 text-sm font-bold hover:opacity-90 disabled:opacity-50 transition-opacity whitespace-nowrap"
+          className="bg-primary-teal text-text-inverse rounded-full px-4 py-2.5 text-caption font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity whitespace-nowrap"
         >
           {isPending ? '…' : 'Log'}
         </button>
@@ -224,9 +222,10 @@ export default function DebtCard({ debt, onEdit }: Props) {
       <button
         onClick={handleMarkPaidOff}
         disabled={isPending}
-        className="w-full bg-green text-white rounded-[14px] px-5 py-3 text-base font-black font-display hover:opacity-90 disabled:opacity-50 transition-opacity"
+        className="w-full bg-pill-pink text-text-heading rounded-full px-5 py-3 text-label font-bold flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-50 transition-opacity"
       >
-        🎉 Mark as Paid Off
+        <PartyPopper size={18} />
+        Mark as Paid Off
       </button>
     </div>
   )

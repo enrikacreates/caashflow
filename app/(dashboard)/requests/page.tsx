@@ -11,8 +11,8 @@ export default async function RequestsPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-black font-display text-ink">Budget Requests</h1>
-        <p className="text-muted text-sm mt-1">One-time purchases and upcoming items</p>
+        <h1 className="text-h1 font-bold text-text-heading">Next Buys</h1>
+        <p className="text-body text-text-muted mt-1">Your wishlist and upcoming purchases</p>
       </div>
       <RequestsClient requests={requests} categories={categories ?? []} />
     </div>

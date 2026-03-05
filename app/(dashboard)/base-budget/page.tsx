@@ -13,8 +13,8 @@ export default async function BaseBudgetPage() {
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-black font-display text-ink">Base Budget Template</h1>
-          <p className="text-muted text-sm mt-1">Master list of all recurring expenses</p>
+          <h1 className="text-h1 font-bold text-text-heading">Base Budget Template</h1>
+          <p className="text-body text-text-muted mt-1">Master list of all recurring expenses</p>
         </div>
       </div>
       <BaseBudgetClient items={items} accounts={accounts ?? []} categories={categories ?? []} />

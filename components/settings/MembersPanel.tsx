@@ -53,26 +53,26 @@ export default function MembersPanel({ members, currentUserId }: MembersPanelPro
   }
 
   return (
-    <div className="bg-white border border-line rounded-[20px] p-6">
+    <div className="bg-bg-white rounded-lg shadow-sm p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-lg font-black font-display text-ink">Household Members</h2>
-          <p className="text-xs text-muted mt-0.5">{members.length} member{members.length !== 1 ? 's' : ''}</p>
+          <h2 className="text-h3 font-bold text-text-heading">Household Members</h2>
+          <p className="text-caption text-text-muted mt-0.5">{members.length} member{members.length !== 1 ? 's' : ''}</p>
         </div>
         <button
           onClick={handleGenerateLink}
           disabled={generatingLink}
-          className="bg-blue text-white rounded-[12px] px-4 py-2 text-sm font-bold hover:opacity-90 disabled:opacity-50 transition-opacity"
+          className="bg-primary-teal text-text-inverse rounded-full px-4 py-2 text-caption font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity"
         >
-          {generatingLink ? 'Generating...' : '+ Invite Member'}
+          {generatingLink ? 'Generating…' : '+ Invite Member'}
         </button>
       </div>
 
       {/* Invite link banner */}
       {inviteLink && (
-        <div className="bg-blue/5 border border-blue/20 rounded-[16px] p-4 mb-5">
-          <p className="text-xs font-bold text-blue mb-2">🔗 Invite Link (expires in 7 days)</p>
-          <p className="text-xs text-muted mb-3">
+        <div className="bg-primary-teal/5 border border-primary-teal/20 rounded-lg p-4 mb-5">
+          <p className="text-caption font-bold text-primary mb-2">🔗 Invite Link (expires in 7 days)</p>
+          <p className="text-caption text-text-muted mb-3">
             Share this link with the person you want to invite. They&apos;ll create an account
             and be automatically added to your household.
           </p>
@@ -80,23 +80,23 @@ export default function MembersPanel({ members, currentUserId }: MembersPanelPro
             <input
               readOnly
               value={inviteLink}
-              className="flex-1 bg-white border border-line rounded-[10px] px-3 py-2 text-xs text-ink font-mono min-w-0"
+              className="flex-1 bg-bg-white border border-border rounded-sm px-3 py-2 text-caption text-text-heading font-mono min-w-0"
             />
             <button
               onClick={handleCopy}
-              className="bg-blue text-white rounded-[10px] px-3 py-2 text-xs font-bold whitespace-nowrap hover:opacity-90 transition-opacity"
+              className="bg-primary-teal text-text-inverse rounded-full px-3 py-2 text-caption font-semibold whitespace-nowrap hover:opacity-90 transition-opacity"
             >
               {copied ? '✓ Copied!' : 'Copy'}
             </button>
           </div>
-          <p className="text-xs text-muted mt-2">
+          <p className="text-caption text-text-muted mt-2">
             Generating a new link expires the previous one.
           </p>
         </div>
       )}
 
       {error && (
-        <div className="bg-orange/10 border border-orange/20 rounded-[12px] px-4 py-3 mb-4 text-sm text-orange font-medium">
+        <div className="bg-warning/10 border border-warning/20 rounded-lg px-4 py-3 mb-4 text-caption text-warning font-medium">
           {error}
         </div>
       )}
@@ -110,36 +110,36 @@ export default function MembersPanel({ members, currentUserId }: MembersPanelPro
           return (
             <div
               key={member.id}
-              className="flex items-center justify-between py-3 border-b border-line last:border-0"
+              className="flex items-center justify-between py-3 border-b border-border last:border-0"
             >
               <div className="flex items-center gap-3 min-w-0">
                 {/* Avatar placeholder */}
-                <div className="w-9 h-9 rounded-full bg-cream-2 border border-line flex items-center justify-center flex-shrink-0">
-                  <span className="text-sm font-black text-muted">
+                <div className="w-9 h-9 rounded-full bg-surface-gray border border-border flex items-center justify-center flex-shrink-0">
+                  <span className="text-caption font-bold text-text-muted">
                     {(member.email ?? member.user_id).charAt(0).toUpperCase()}
                   </span>
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-bold text-ink truncate">
+                    <span className="text-caption font-semibold text-text-heading truncate">
                       {member.email ?? `Member ${member.id.slice(0, 8)}`}
                     </span>
                     {isCurrentUser && (
-                      <span className="text-xs text-muted font-medium">(you)</span>
+                      <span className="text-caption text-text-muted font-medium">(you)</span>
                     )}
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
                     <span
-                      className={`inline-block text-xs font-bold px-2 py-0.5 rounded-full ${
+                      className={`inline-block text-caption font-bold px-2 py-0.5 rounded-full ${
                         isOwner
-                          ? 'bg-blue/10 text-blue'
+                          ? 'bg-primary-teal/10 text-primary'
                           : 'bg-green/10 text-green'
                       }`}
                     >
                       {isOwner ? 'Owner' : 'Member'}
                     </span>
                     {member.created_at && (
-                      <span className="text-xs text-muted">
+                      <span className="text-caption text-text-muted">
                         Joined {new Date(member.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
                       </span>
                     )}
@@ -152,9 +152,9 @@ export default function MembersPanel({ members, currentUserId }: MembersPanelPro
                 <button
                   onClick={() => handleRemove(member.id)}
                   disabled={removingId === member.id}
-                  className="text-xs text-muted hover:text-orange font-bold transition-colors ml-4 flex-shrink-0 disabled:opacity-50"
+                  className="text-caption text-text-muted hover:text-warning font-semibold transition-colors ml-4 flex-shrink-0 disabled:opacity-50"
                 >
-                  {removingId === member.id ? 'Removing...' : 'Remove'}
+                  {removingId === member.id ? 'Removing…' : 'Remove'}
                 </button>
               )}
             </div>
@@ -162,7 +162,7 @@ export default function MembersPanel({ members, currentUserId }: MembersPanelPro
         })}
 
         {members.length === 0 && (
-          <div className="text-center py-8 text-muted text-sm">
+          <div className="text-center py-8 text-text-muted text-caption">
             No members yet. Invite someone to get started.
           </div>
         )}

@@ -73,17 +73,17 @@ export default function AccountsPanel({ accounts }: AccountsPanelProps) {
     setEditName(account.name)
   }
 
-  const inputClass = 'w-full bg-white border border-line rounded-[12px] px-4 py-2.5 text-sm focus:outline-none focus:border-blue transition-colors'
+  const inputClass = 'w-full bg-bg-white border border-border rounded-sm px-4 py-2.5 text-caption focus:outline-none focus:border-primary transition-colors'
 
   return (
-    <div className="bg-white border border-line rounded-[20px] p-6">
+    <div className="bg-bg-white rounded-lg shadow-sm p-6">
       <div className="mb-6">
-        <h2 className="text-lg font-black font-display text-ink">Accounts</h2>
-        <p className="text-xs text-muted mt-0.5">Bank accounts / payment sources for your expenses</p>
+        <h2 className="text-h3 font-bold text-text-heading">Accounts</h2>
+        <p className="text-caption text-text-muted mt-0.5">Bank accounts / payment sources for your expenses</p>
       </div>
 
       {error && (
-        <div className="bg-orange/10 border border-orange/20 rounded-[12px] px-4 py-3 mb-4 text-sm text-orange font-medium">
+        <div className="bg-warning/10 border border-warning/20 rounded-lg px-4 py-3 mb-4 text-caption text-warning font-medium">
           {error}
         </div>
       )}
@@ -91,13 +91,13 @@ export default function AccountsPanel({ accounts }: AccountsPanelProps) {
       {/* Account list */}
       <div className="space-y-2 mb-4">
         {accounts.map((account, index) => (
-          <div key={account.id} className="flex items-center gap-2 py-2 border-b border-line last:border-0">
+          <div key={account.id} className="flex items-center gap-2 py-2 border-b border-border last:border-0">
             {/* Reorder buttons */}
             <div className="flex flex-col gap-0.5 flex-shrink-0">
               <button
                 onClick={() => handleMove(index, 'up')}
                 disabled={index === 0 || isPending}
-                className="text-muted hover:text-ink disabled:opacity-20 text-xs leading-none"
+                className="text-text-muted hover:text-text-heading disabled:opacity-20 text-xs leading-none"
                 title="Move up"
               >
                 ▲
@@ -105,7 +105,7 @@ export default function AccountsPanel({ accounts }: AccountsPanelProps) {
               <button
                 onClick={() => handleMove(index, 'down')}
                 disabled={index === accounts.length - 1 || isPending}
-                className="text-muted hover:text-ink disabled:opacity-20 text-xs leading-none"
+                className="text-text-muted hover:text-text-heading disabled:opacity-20 text-xs leading-none"
                 title="Move down"
               >
                 ▼
@@ -129,13 +129,13 @@ export default function AccountsPanel({ accounts }: AccountsPanelProps) {
                 <button
                   onClick={() => handleUpdate(account.id)}
                   disabled={isPending}
-                  className="text-blue text-sm font-bold hover:opacity-80 flex-shrink-0"
+                  className="text-caption text-primary font-semibold hover:opacity-80 flex-shrink-0"
                 >
                   Save
                 </button>
                 <button
                   onClick={() => setEditingId(null)}
-                  className="text-muted text-sm font-bold hover:text-ink flex-shrink-0"
+                  className="text-caption text-text-muted font-semibold hover:text-text-heading flex-shrink-0"
                 >
                   Cancel
                 </button>
@@ -144,7 +144,7 @@ export default function AccountsPanel({ accounts }: AccountsPanelProps) {
               <>
                 <span
                   onClick={() => startEdit(account)}
-                  className="flex-1 text-sm font-medium text-ink cursor-pointer hover:text-blue transition-colors"
+                  className="flex-1 text-caption font-medium text-text-heading cursor-pointer hover:text-primary transition-colors"
                   title="Click to edit"
                 >
                   {account.name}
@@ -152,7 +152,7 @@ export default function AccountsPanel({ accounts }: AccountsPanelProps) {
                 <button
                   onClick={() => handleDelete(account.id, account.name)}
                   disabled={isPending}
-                  className="text-xs text-muted hover:text-orange font-bold transition-colors flex-shrink-0 disabled:opacity-50"
+                  className="text-caption text-text-muted hover:text-warning font-semibold transition-colors flex-shrink-0 disabled:opacity-50"
                 >
                   Delete
                 </button>
@@ -162,7 +162,7 @@ export default function AccountsPanel({ accounts }: AccountsPanelProps) {
         ))}
 
         {accounts.length === 0 && (
-          <div className="text-center py-6 text-muted text-sm">
+          <div className="text-center py-6 text-text-muted text-caption">
             No accounts yet. Add one below.
           </div>
         )}
@@ -181,9 +181,9 @@ export default function AccountsPanel({ accounts }: AccountsPanelProps) {
         <button
           onClick={handleAdd}
           disabled={!newName.trim() || isPending}
-          className="bg-blue text-white rounded-[12px] px-4 py-2.5 text-sm font-bold hover:opacity-90 disabled:opacity-50 transition-opacity whitespace-nowrap"
+          className="bg-primary-teal text-text-inverse rounded-full px-4 py-2.5 text-caption font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity whitespace-nowrap"
         >
-          {isPending ? 'Adding...' : '+ Add'}
+          {isPending ? 'Adding…' : '+ Add'}
         </button>
       </div>
     </div>

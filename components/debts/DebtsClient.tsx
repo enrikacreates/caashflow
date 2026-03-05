@@ -1,13 +1,11 @@
 'use client'
 
 import { useState } from 'react'
+import { Hammer, Trophy, ChevronDown, ChevronRight } from 'lucide-react'
 import DebtCard from './DebtCard'
 import DebtModal from './DebtModal'
+import { formatCurrency } from '@/lib/utils'
 import type { Debt, BaseBudgetItem } from '@/lib/types'
-
-function formatCurrency(n: number) {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
-}
 
 export default function DebtsClient({
   debts,
@@ -42,30 +40,30 @@ export default function DebtsClient({
     <>
       {/* Summary */}
       {activeDebts.length > 0 && (
-        <div className="bg-white border border-line rounded-[20px] p-6">
+        <div className="bg-bg-white rounded-lg shadow-card p-6">
           <div className="flex items-end justify-between mb-3">
             <div>
-              <p className="text-xs font-bold text-muted uppercase tracking-wide mb-1">
+              <p className="text-caption font-semibold text-text-muted uppercase tracking-wide mb-1">
                 Total Remaining
               </p>
-              <p className="text-4xl font-black text-ink">{formatCurrency(totalRemaining)}</p>
-              <p className="text-sm text-muted mt-1">
+              <p className="text-h1 font-bold text-text-heading">{formatCurrency(totalRemaining)}</p>
+              <p className="text-caption text-text-muted mt-1">
                 across {activeDebts.length} debt{activeDebts.length !== 1 ? 's' : ''}
                 {totalOriginal > 0 && ` · ${Math.round(overallProgress)}% paid overall`}
               </p>
             </div>
             <button
               onClick={() => { setEditingDebt(undefined); setShowModal(true) }}
-              className="bg-blue text-white rounded-[12px] px-5 py-2.5 text-sm font-bold hover:opacity-90 transition-opacity"
+              className="bg-primary-teal text-text-inverse rounded-full px-5 py-2.5 text-caption font-semibold hover:opacity-90 transition-opacity"
             >
               + Add Debt
             </button>
           </div>
 
           {totalOriginal > 0 && (
-            <div className="w-full bg-line rounded-full h-2.5 overflow-hidden">
+            <div className="w-full bg-surface-gray rounded-full h-2.5 overflow-hidden">
               <div
-                className="h-2.5 rounded-full bg-green transition-all duration-500"
+                className="h-2.5 rounded-full bg-primary-teal transition-all duration-500"
                 style={{ width: `${overallProgress}%` }}
               />
             </div>
@@ -75,13 +73,13 @@ export default function DebtsClient({
 
       {/* Empty state */}
       {debts.length === 0 && (
-        <div className="bg-white border border-line rounded-[20px] p-12 text-center">
-          <p className="text-4xl mb-3">💪</p>
-          <p className="font-black font-display text-ink text-xl mb-1">No debts tracked yet</p>
-          <p className="text-muted text-sm mb-6">Add your first debt to start tracking progress</p>
+        <div className="bg-bg-white rounded-lg shadow-card p-12 text-center">
+          <Hammer size={48} strokeWidth={1.5} className="text-text-muted mx-auto mb-4" />
+          <p className="font-bold text-text-heading text-h3 mb-1">No debts tracked yet</p>
+          <p className="text-caption text-text-muted mb-6">Add your first debt to start tracking progress</p>
           <button
             onClick={() => setShowModal(true)}
-            className="bg-blue text-white rounded-[12px] px-6 py-3 text-sm font-bold hover:opacity-90 transition-opacity"
+            className="bg-primary-teal text-text-inverse rounded-full px-6 py-3 text-caption font-semibold hover:opacity-90 transition-opacity"
           >
             + Add First Debt
           </button>
@@ -101,7 +99,7 @@ export default function DebtsClient({
       {activeDebts.length === 0 && debts.length > 0 && (
         <button
           onClick={() => { setEditingDebt(undefined); setShowModal(true) }}
-          className="bg-blue text-white rounded-[12px] px-5 py-2.5 text-sm font-bold hover:opacity-90 transition-opacity"
+          className="bg-primary-teal text-text-inverse rounded-full px-5 py-2.5 text-caption font-semibold hover:opacity-90 transition-opacity"
         >
           + Add Debt
         </button>
@@ -112,10 +110,11 @@ export default function DebtsClient({
         <div>
           <button
             onClick={() => setShowPaidOff((v) => !v)}
-            className="text-sm font-bold text-muted hover:text-ink transition-colors flex items-center gap-2"
+            className="text-caption font-semibold text-text-muted hover:text-text-heading transition-colors flex items-center gap-2"
           >
-            <span>{showPaidOff ? '▼' : '▶'}</span>
-            {paidOffDebts.length} Paid Off 🎉
+            {showPaidOff ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            {paidOffDebts.length} Paid Off
+            <Trophy size={14} className="text-warning" />
           </button>
           {showPaidOff && (
             <div className="space-y-2 mt-3">

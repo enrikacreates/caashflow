@@ -220,7 +220,7 @@ export default function PeriodDetailClient({
   }
 
   const inputClass = 'bg-white border border-line rounded-[8px] px-2 py-1 text-sm focus:outline-none focus:border-blue transition-colors'
-  const thClass = 'text-left text-xs font-bold text-muted uppercase px-3 py-2 whitespace-nowrap cursor-pointer hover:text-ink select-none'
+  const thClass = 'text-left text-caption font-bold uppercase text-text-muted px-3 py-2 whitespace-nowrap cursor-pointer hover:text-text-heading select-none'
 
   return (
     <div className="space-y-8">
@@ -504,19 +504,19 @@ export default function PeriodDetailClient({
           </span>
         </h2>
 
-        <div className="bg-white border border-line rounded-[20px] overflow-hidden">
+        <div className="rounded-lg overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-line bg-cream-2">
-                  <th className="text-center px-3 py-2 text-xs font-bold text-muted uppercase w-10">Pay</th>
+                <tr className="border-b border-border bg-[#c9e5e4]">
+                  <th className="text-center px-3 py-2 text-caption font-bold uppercase text-text-muted w-10">Pay</th>
                   <th className={thClass} onClick={() => handleSort('name')}>
                     Name<SortIcon col="name" />
                   </th>
                   <th className={thClass} onClick={() => handleSort('default_amount')}>
                     Amount<SortIcon col="default_amount" />
                   </th>
-                  <th className="text-center px-3 py-2 text-xs font-bold text-muted uppercase">Pay Amt</th>
+                  <th className="text-center px-3 py-2 text-caption font-bold uppercase text-text-muted">Pay Amt</th>
                   <th className={thClass} onClick={() => handleSort('account')}>
                     Account<SortIcon col="account" />
                   </th>
@@ -526,9 +526,9 @@ export default function PeriodDetailClient({
                   <th className={thClass} onClick={() => handleSort('due_day')}>
                     Due<SortIcon col="due_day" />
                   </th>
-                  <th className="text-center px-3 py-2 text-xs font-bold text-muted uppercase">Xfer</th>
-                  <th className="text-center px-3 py-2 text-xs font-bold text-muted uppercase">Paid</th>
-                  <th className="text-center px-3 py-2 text-xs font-bold text-muted uppercase">Clear</th>
+                  <th className="text-center px-3 py-2 text-caption font-bold uppercase text-text-muted">Xfer</th>
+                  <th className="text-center px-3 py-2 text-caption font-bold uppercase text-text-muted">Paid</th>
+                  <th className="text-center px-3 py-2 text-caption font-bold uppercase text-text-muted">Clear</th>
                 </tr>
               </thead>
               <tbody>
@@ -545,7 +545,7 @@ export default function PeriodDetailClient({
                 ))}
               </tbody>
               <tfoot>
-                <tr className="border-t-2 border-line bg-cream-2">
+                <tr className="border-t-2 border-border bg-[#c9e5e4]">
                   <td className="px-3 py-3" />
                   <td className="px-3 py-3 font-bold text-ink text-sm">Pay Now Total</td>
                   <td className="px-3 py-3 font-bold text-ink text-sm">{formatCurrency(payNowTotal)}</td>
@@ -591,7 +591,7 @@ function ExpenseRow({
   const hasOverride = expense.amount_override !== null && expense.amount_override !== undefined
 
   return (
-    <tr className={`border-b border-line hover:bg-cream-2/50 transition-colors ${expense.pay_now ? 'bg-blue/[0.03]' : ''}`}>
+    <tr className={`transition-colors ${expense.pay_now ? 'bg-primary-teal/[0.15] hover:bg-[#E1DEEC]' : 'odd:bg-bg-white even:bg-[#E8F5F4] hover:bg-[#E1DEEC]'}`}>
       {/* PayNow */}
       <td className="text-center px-3 py-2">
         <input
@@ -691,7 +691,7 @@ function ExpenseRow({
       {/* Priority */}
       <td className="px-3 py-2">
         {expense.priority_category && (
-          <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase whitespace-nowrap ${getPriorityColor(categoryColorMap.get(expense.priority_category))}`}>
+          <span className={`inline-block max-w-[120px] truncate px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${getPriorityColor(categoryColorMap.get(expense.priority_category))}`}>
             {expense.priority_category}
           </span>
         )}

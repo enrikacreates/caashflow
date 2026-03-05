@@ -1,35 +1,362 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800;900&family=Inter:wght@400;500;600;700&display=swap');
+/* ============================================================
+ * CAASHFLOW — globals.css
+ * Design System v2.0
+ *
+ * Structure:
+ * 1. Fonts (Google Fonts import)
+ * 2. Tailwind
+ * 3. @theme inline  → Tailwind utility tokens (colors, fonts, radius, shadows)
+ * 4. :root          → CSS-only tokens (transitions, z-index, sizes, spacing)
+ * 5. Base styles
+ * 6. Accessibility helpers
+ * 7. Scrollbar
+ * ============================================================ */
+
+
+/* ============================================================
+ * 1. FONTS
+ * Passion One: display/logo only (only comes in weight 400)
+ * Inter: all UI text (400, 500, 600, 700)
+ * ============================================================ */
+@import url('https://fonts.googleapis.com/css2?family=Passion+One&family=Inter:wght@400;500;600;700&display=swap');
+
+
+/* ============================================================
+ * 2. TAILWIND
+ * ============================================================ */
 @import "tailwindcss";
 
+
+/* ============================================================
+ * 3. @theme inline — Tailwind Design Tokens
+ *
+ * 💡 Why "inline"? In Tailwind v4, @theme inline emits these
+ *    as real CSS custom properties at :root, so you can use
+ *    them two ways:
+ *      → As Tailwind classes:   className="bg-primary text-text"
+ *      → As CSS variables:      background: var(--color-primary)
+ *    Without "inline" they're scoped to a layer and var() breaks.
+ * ============================================================ */
 @theme inline {
-  --color-cream: #FDFCF6;
-  --color-cream-2: #FBF9F1;
-  --color-ink: #111111;
-  --color-muted: #868172;
-  --color-line: #C1BDB8;
-  --color-blue: #1F8AC4;
-  --color-green: #14644A;
-  --color-orange: #EB9B3C;
-  --color-blush: #F6DED9;
-  --color-yellow: #F2B24A;
-  --color-rosy: #E7A7AE;
 
-  --font-display: 'Poppins', 'Inter', system-ui, sans-serif;
-  --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+  /* --------------------------------------------------
+   * BRAND COLORS
+   * -------------------------------------------------- */
+  --color-primary:       #0078D0;   /* Main CTAs, links */
+  --color-primary-teal:  #00AD9C;   /* Footer bar, secondary actions */
+  --color-primary-light: #1AB5DB;   /* Hover states */
+  --color-mint:          #CCE6E3;   /* Success, savings */
+  --color-mint-dark:     #a4c1be;   /* Mint borders */
 
-  --radius-sm: 12px;
-  --radius-md: 20px;
-  --radius-lg: 28px;
+  /* --------------------------------------------------
+   * BACKGROUNDS
+   * Layering: cream (app) → cream-light (cards) → white (modals)
+   * -------------------------------------------------- */
+  --color-bg-cream:       #fff7ef;  /* Main app background */
+  --color-bg-cream-light: #fffaf5;  /* Card backgrounds */
+  --color-bg-white:       #ffffff;  /* Elevated cards, modals */
+
+  /* --------------------------------------------------
+   * CATEGORY COLORS
+   * Used as backgrounds only — never for text.
+   * Always pair with --color-text for WCAG AA contrast.
+   * -------------------------------------------------- */
+  --color-category-income:   #9be3e6;  /* Cyan — money earned */
+  --color-category-expense:  #fcbdba;  /* Salmon — money spent */
+  --color-category-savings:  #CCE6E3;  /* Mint — money saved */
+  --color-category-other:    #E3CCBB;  /* Woody beige — uncategorized */
+
+  /* --------------------------------------------------
+   * SURFACE COLORS
+   * For badges, pills, section backgrounds (bg only, dark text)
+   * -------------------------------------------------- */
+  --color-surface-mint:     #e2f2f1;
+  --color-surface-lavender: #dbd4f7;
+  --color-surface-pink:     #f9b8b9;
+  --color-surface-gray:     #e9e9e9;
+  --color-surface-beige:    #f5f1ed;
+
+  /* --------------------------------------------------
+   * PILL COLORS
+   * Vibrant accents for period selectors, month pills, tags
+   * -------------------------------------------------- */
+  --color-pill-lavender:   #dbd4f7;
+  --color-pill-mauve:      #e399cc;
+  --color-pill-coral:      #ffac97;
+  --color-pill-cyan-light: #b7f0f4;
+  --color-pill-peach:      #f6c28f;
+  --color-pill-yellow:     #ffd34f;
+  --color-pill-blue:       #40b4f3;
+  --color-pill-teal:       #7acdc5;
+  --color-pill-cyan:       #53bed8;
+  --color-pill-pink:       #ffcbcd;
+  --color-pill-green:      #bde7b5;
+  --color-pill-tan:        #e0cea2;
+
+  /* --------------------------------------------------
+   * UI ELEMENT COLORS
+   * -------------------------------------------------- */
+  --color-border:  #C1BCBC;  /* Default borders */
+  --color-divider: #efefef;  /* Subtle dividers */
+
+  /* --------------------------------------------------
+   * TEXT COLORS
+   * All tested for WCAG AA on their intended backgrounds.
+   * -------------------------------------------------- */
+  --color-text:         #3F3F3F;  /* Body text — use on all light backgrounds */
+  --color-text-heading: #302d2e;  /* Headings, dollar amounts — stronger contrast */
+  --color-text-muted:   #8a8a8a;  /* De-emphasized labels */
+  --color-text-inverse: #ffffff;  /* White text on dark/teal backgrounds */
+
+  /* --------------------------------------------------
+   * SEMANTIC COLORS (alerts, status)
+   * -------------------------------------------------- */
+  --color-error:   #d32f2f;
+  --color-warning: #ED6113;
+  --color-success: #2e7d32;
+  --color-info:    #0078D0;  /* Matches primary */
+
+  /* --------------------------------------------------
+   * FONTS
+   * 💡 Defining --font-sans here overrides Tailwind's default
+   *    sans-serif stack. So className="font-sans" → Inter.
+   *    --font-display is a new utility: className="font-display"
+   * -------------------------------------------------- */
+  --font-display: 'Passion One', sans-serif;  /* Logo, watermarks only */
+  --font-sans:    'Inter', sans-serif;         /* All UI text */
+
+  /* --------------------------------------------------
+   * BORDER RADIUS
+   * Decision guide:
+   *   sm   (8px)    → inputs, error banners
+   *   md   (16px)   → cards, containers
+   *   lg   (24px)   → stat cards, hero sections
+   *   btn  (9999px) → ALL buttons (roundness is THE look)
+   *   pill (9999px) → period pills, avatars, tags
+   * -------------------------------------------------- */
+  --radius-sm:   8px;
+  --radius-md:   16px;
+  --radius-lg:   24px;
+  --radius-btn:  9999px;
+  --radius-pill: 9999px;
+
+  /* --------------------------------------------------
+   * SHADOWS
+   * sm    → subtle hover lift
+   * md    → dropdowns, popovers
+   * lg    → modals
+   * card  → cards sitting on cream background (matches Figma exactly)
+   * -------------------------------------------------- */
+  --shadow-sm:   0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md:   0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --shadow-lg:   0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  --shadow-card: 0 12px 24px 0px rgba(110, 110, 110, 0.4);
+
+  /* --------------------------------------------------
+   * TYPOGRAPHY SCALE
+   * Semantic font sizes sourced from Figma design system.
+   * The --{name}--line-height and --{name}--letter-spacing
+   * modifiers are Tailwind v4 syntax — they bundle lh + ls
+   * into the text-* utility automatically.
+   *
+   * Usage:  className="text-h2 font-semibold text-text-heading"
+   *
+   * display  56px — Passion One watermarks, hero numbers
+   * h1       40px — Page headings, stat card values
+   * h2       28px — Section headings
+   * h3       24px — Subsection headings
+   * body     20px — Body text (default)
+   * label    16px — Small labels, semibold text
+   * caption  14px — Metadata, captions, hints
+   * -------------------------------------------------- */
+  --text-display: 3.5rem;                   /* 56px */
+  --text-display--line-height: 1;
+
+  --text-h1: 2.5rem;                        /* 40px */
+  --text-h1--line-height: 3rem;             /* 48px */
+
+  --text-h2: 1.75rem;                       /* 28px */
+  --text-h2--line-height: 2.1rem;           /* ~33.6px */
+  --text-h2--letter-spacing: 0.125rem;      /* 2px */
+
+  --text-h3: 1.5rem;                        /* 24px */
+  --text-h3--line-height: 1.8rem;           /* 28.8px */
+  --text-h3--letter-spacing: 0.0625rem;     /* 1px */
+
+  --text-body: 1.25rem;                     /* 20px */
+  --text-body--line-height: 1.875rem;       /* 30px */
+
+  --text-label: 1rem;                       /* 16px */
+  --text-label--line-height: 1.5rem;        /* 24px */
+
+  --text-caption: 0.875rem;                 /* 14px */
+  --text-caption--line-height: 1.3125rem;   /* 21px */
+
 }
 
+
+/* ============================================================
+ * 4. :root — CSS-only Variables
+ *
+ * 💡 These live here instead of @theme because:
+ *    - Transitions would clash with Tailwind's built-in
+ *      transition-* utilities if added to @theme
+ *    - Z-index, sizes, spacing: better used with var() in
+ *      component CSS than as generated utility classes
+ * ============================================================ */
+:root {
+
+  /* --------------------------------------------------
+   * SPACING — 8-point grid
+   * Reference: use var(--space-4) for 16px, etc.
+   * -------------------------------------------------- */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+
+  /* --------------------------------------------------
+   * TYPOGRAPHY SCALE
+   * -------------------------------------------------- */
+  --text-xs:   14px;  /* Captions, small labels */
+  --text-sm:   16px;  /* Body small, UI elements */
+  --text-base: 20px;  /* Default body */
+  --text-md:   22px;  /* Emphasized body */
+  --text-lg:   24px;  /* Small headings */
+  --text-xl:   28px;  /* Section headings */
+  --text-2xl:  32px;  /* Page subheadings */
+  --text-3xl:  40px;  /* Page headings */
+  --text-4xl:  48px;  /* Hero text */
+  --text-5xl:  56px;  /* Display text, large numbers */
+
+  /* Font weights */
+  --font-regular:  400;
+  --font-medium:   500;
+  --font-semibold: 600;
+  --font-bold:     700;
+
+  /* Letter spacing */
+  --tracking-tight:   -0.5px;  /* Large headings */
+  --tracking-normal:  0px;     /* Default */
+  --tracking-wide:    1px;     /* Readable labels */
+  --tracking-wider:   2px;     /* Uppercase pills */
+  --tracking-widest:  3px;     /* Large uppercase headings */
+
+  /* Line heights */
+  --leading-none:    1;
+  --leading-tight:   1.2;
+  --leading-normal:  1.5;
+  --leading-relaxed: 1.75;
+
+  /* --------------------------------------------------
+   * COMPONENT SIZES
+   * -------------------------------------------------- */
+  --h-input:     48px;
+  --h-button:    56px;
+  --h-button-sm: 40px;
+  --h-badge:     32px;
+  --h-pill-sm:   40px;
+  --h-pill-md:   56px;
+  --h-pill-lg:   72px;
+  --h-card-sm:   86px;
+  --h-card-md:   180px;
+  --h-card-lg:   245px;
+
+  /* Avatars */
+  --avatar-sm: 64px;
+  --avatar-md: 96px;
+  --avatar-lg: 128px;
+
+  /* --------------------------------------------------
+   * BORDERS
+   * -------------------------------------------------- */
+  --border-width:       1px;
+  --border-width-thick: 2px;
+
+  /* --------------------------------------------------
+   * INTERACTIVE STATES
+   * Usage:
+   *   button:hover  { opacity: var(--state-hover-opacity); }
+   *   button:active { transform: scale(var(--state-active-scale)); }
+   * -------------------------------------------------- */
+  --state-hover-opacity:  0.9;
+  --state-hover-darken:   0.95;
+  --state-active-scale:   0.98;
+  --state-disabled-opacity: 0.4;
+  --state-focus-ring: 0 0 0 3px rgba(0, 120, 208, 0.2);
+
+  /* --------------------------------------------------
+   * Z-INDEX SCALE
+   * Keeps stacking context predictable across the app
+   * -------------------------------------------------- */
+  --z-base:           0;
+  --z-dropdown:       100;
+  --z-sticky:         200;
+  --z-modal-backdrop: 400;
+  --z-modal:          500;
+  --z-tooltip:        700;
+
+  /* --------------------------------------------------
+   * TRANSITIONS
+   * 💡 Why not in @theme? Tailwind has its own transition-*
+   *    utilities. Putting custom transitions in :root means
+   *    you use them as: style={{ transition: 'var(--transition-bounce)' }}
+   *    or in a CSS class — not as a Tailwind class.
+   * -------------------------------------------------- */
+  --transition-fast:   150ms ease;
+  --transition-base:   200ms ease;
+  --transition-slow:   300ms ease;
+  --transition-bounce: 300ms cubic-bezier(0.68, -0.55, 0.265, 1.55);
+
+}
+
+
+/* ============================================================
+ * 5. BASE STYLES
+ * ============================================================ */
 body {
-  font-family: var(--font-body);
-  background-color: var(--color-cream);
-  color: var(--color-ink);
-  line-height: 1.35;
+  font-family: var(--font-sans);
+  background-color: var(--color-bg-cream);
+  color: var(--color-text);
+  line-height: var(--leading-normal);
 }
 
-/* Scrollbar styling */
+
+/* ============================================================
+ * 6. ACCESSIBILITY HELPERS
+ * ============================================================ */
+
+/* Visually hide content but keep it readable by screen readers */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Keyboard focus ring — uses brand blue */
+*:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+
+/* ============================================================
+ * 7. SCROLLBAR
+ * ============================================================ */
 ::-webkit-scrollbar {
   width: 6px;
 }
@@ -37,6 +364,6 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-line);
+  background: var(--color-border);
   border-radius: 999px;
 }

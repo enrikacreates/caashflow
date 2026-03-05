@@ -1,8 +1,21 @@
 'use client'
 
 import { useState } from 'react'
+import { Menu } from 'lucide-react'
 import Sidebar from '@/components/layout/Sidebar'
 
+/* -------------------------------------------------------
+ * DASHBOARD LAYOUT
+ *
+ * Wraps all protected routes with:
+ *   - Persistent left sidebar (desktop)
+ *   - Slide-in sidebar + backdrop (mobile)
+ *   - Hamburger trigger (mobile, top-left)
+ *   - Main content area with correct left margin on desktop
+ *
+ * All protected routes live under app/(dashboard)/ and
+ * automatically inherit this layout.
+ * ------------------------------------------------------- */
 export default function DashboardLayout({
   children,
 }: {
@@ -11,19 +24,30 @@ export default function DashboardLayout({
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   return (
-    <div className="min-h-screen">
-      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+    <div className="min-h-screen bg-bg-cream">
+      {/* Sidebar — always rendered, visibility controlled via CSS transform */}
+      <Sidebar
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+      />
 
+      {/* Mobile hamburger — fixed top-left, hidden on desktop */}
       <button
         onClick={() => setSidebarOpen(true)}
-        className="fixed top-4 left-4 z-30 md:hidden bg-white border border-line rounded-[12px] w-10 h-10 flex items-center justify-center"
+        className="
+          fixed top-4 left-4 z-30 md:hidden
+          bg-bg-white border border-border rounded-sm
+          w-10 h-10 flex items-center justify-center
+          text-text hover:bg-surface-beige
+          transition-colors duration-150
+        "
+        aria-label="Open navigation"
       >
-        <svg width="18" height="14" viewBox="0 0 18 14" fill="none">
-          <path d="M1 1h16M1 7h16M1 13h16" stroke="#111" strokeWidth="2" strokeLinecap="round"/>
-        </svg>
+        <Menu size={18} aria-hidden="true" />
       </button>
 
-      <main className="md:ml-[250px] p-6 md:p-8">
+      {/* Main content — offset by sidebar width on desktop */}
+      <main className="md:ml-[260px] p-6 md:p-8">
         {children}
       </main>
     </div>
