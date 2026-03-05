@@ -112,7 +112,7 @@ export default function BaseBudgetClient({ items, accounts, categories }: Props)
                   <tr>
                     <th className={thClass('name')} onClick={() => toggleSort('name')}>Name {sortKey === 'name' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
                     <th className={thClass('default_amount')} onClick={() => toggleSort('default_amount')}>Amount {sortKey === 'default_amount' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
-                    <th className={thClass('due_day')} onClick={() => toggleSort('due_day')}>Due Day {sortKey === 'due_day' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+                    <th className={thClass('due_day')} onClick={() => toggleSort('due_day')}>Due {sortKey === 'due_day' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
                     <th className={thClass('account')} onClick={() => toggleSort('account')}>Account {sortKey === 'account' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
                     <th className={thClass('priority_category')} onClick={() => toggleSort('priority_category')}>Priority {sortKey === 'priority_category' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
                     <th className="text-left text-caption font-bold uppercase text-text-muted px-4 py-3">AutoPay</th>
