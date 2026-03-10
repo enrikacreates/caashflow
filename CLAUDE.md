@@ -64,6 +64,34 @@ Budget management system for modern creative/entrepreneurial families. App #1 in
 - **`CreatePeriodModal`** — has a month picker that defaults to next month; auto-updates the period name as the month changes
 - **`createBudgetPeriod` action** — converts `"YYYY-MM"` from `<input type="month">` to `"YYYY-MM-01"` before storing
 
+## Budgeting Model & Dashboard Calculations
+
+**Model:** Priority-based budgeting for irregular income. Income arrives in multiple checks throughout a month. Expenses are paid in priority order as income comes in. Process continues until income is used up or all expenses are paid — surplus goes to savings/debt.
+
+**Key flags on `period_expenses`:**
+- `pay_now` — decision point: "I'm paying this from this period's income"
+- `paid` — tracks whether the expense has actually been paid
+
+### Dashboard Stat Cards (`app/(dashboard)/page.tsx`)
+
+| Card | Value | Calculation | Gauge |
+|------|-------|-------------|-------|
+| **Income** | `income_amount` | Period income | Compares to `monthly_income_goal` (settings) or `monthlyExpenses` fallback |
+| **Remaining** | `amountLeft` | `incomeAfterDeductions − calculatePaidTotal(expenses)` | Proportional to income; green if positive, red if over |
+| **Pay Now** | `payNowTotal` | `calculatePayNowTotal(expenses)` — `pay_now && !paid` | Lower ratio to income = healthier |
+| **Expenses** | `monthlyExpenses` | `calculateMonthlyEquivalent(baseItems)` — all base budget items normalized to monthly | Compares to `monthly_expense_goal` (settings) or income fallback |
+
+### Calculation functions (`lib/calculations.ts`)
+
+| Function | Filter | Purpose |
+|----------|--------|---------|
+| `calculatePayNowTotal` | `pay_now && !paid` | Unpaid items flagged for payment — what's left to pay |
+| `calculatePaidTotal` | `pay_now && paid` | Paid items — money already deployed from income |
+| `calculateMonthlyEquivalent` | All base items | Normalizes Weekly (×52/12), Annual (÷12), excludes One-Time |
+| `calculateDeductions` | N/A | Tithe + savings + tax + profit + fun money off gross income |
+
+**Flow:** Checking an expense as `paid` moves it from Pay Now → reduces Remaining. Goal is Remaining = $0 (every dollar deployed).
+
 ## Known Issues / Tech Debt
 - `app/actions/periods.ts` and `app/actions/period-expenses.ts` have duplicate exports — consolidate into `period-expenses.ts` (it has proper `household_id` validation)
 - `middleware.ts` should be renamed to `proxy.ts` (Next.js 16 deprecation warning)

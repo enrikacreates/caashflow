@@ -23,25 +23,29 @@ export default function PeriodSwitcherHeader({
 
   if (!currentPeriod) {
     return (
-      <h1 className="text-h1 font-bold text-text-heading">No Budget Yet</h1>
+      <div>
+        <h1 className="text-h1 font-bold text-text-heading">Latest</h1>
+        <p className="text-sm text-text-muted mt-0.5">No budget yet</p>
+      </div>
     )
   }
 
   return (
     <div className="relative inline-block">
+      <h1 className="text-h1 font-bold text-text-heading">Latest</h1>
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 group"
+        className="flex items-center gap-1.5 group mt-0.5"
         aria-haspopup="listbox"
         aria-expanded={open}
       >
-        <h1 className="text-h1 font-bold text-text-heading">
+        <span className="text-sm font-medium text-text-muted">
           {currentPeriod.period_name}
-        </h1>
+        </span>
         <ChevronDown
-          size={22}
+          size={14}
           strokeWidth={2.5}
-          className={`text-text-muted transition-transform duration-200 mt-1 ${open ? 'rotate-180' : ''}`}
+          className={`text-text-muted transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
         />
       </button>
 

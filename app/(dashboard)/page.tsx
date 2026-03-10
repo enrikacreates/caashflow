@@ -7,9 +7,9 @@ import { getBaseBudgetItems } from '@/app/actions/base-budget'
 import { getSettings } from '@/app/actions/settings'
 import { getPeriodDetail } from '@/app/actions/periods'
 import { formatCurrency, formatCurrencyShort } from '@/lib/utils'
-import { calculateDeductions, calculatePayNowTotal, calculateAccountBreakdown, getNext6Months, calculateMonthlyEquivalent } from '@/lib/calculations'
+import { calculateDeductions, calculatePayNowTotal, calculatePaidTotal, calculateAccountBreakdown, getNext6Months, calculateMonthlyEquivalent } from '@/lib/calculations'
 import type { Invoice } from '@/lib/types'
-import { ArrowRightLeft, TrendingUp } from 'lucide-react'
+import { ArrowRightLeft, TrendingUp, Wallet, Clock, Receipt } from 'lucide-react'
 
 export default async function DashboardPage({
   searchParams,
@@ -40,6 +40,7 @@ export default async function DashboardPage({
   if (selectedPeriod) {
     const detail = await getPeriodDetail(selectedPeriod.id)
     payNowTotal = calculatePayNowTotal(detail.expenses)
+    const paidTotal = calculatePaidTotal(detail.expenses)
     accountBreakdown = calculateAccountBreakdown(detail.expenses)
     const deductions = calculateDeductions(
       selectedPeriod.income_amount,
@@ -47,7 +48,7 @@ export default async function DashboardPage({
       selectedPeriod.deduction_overrides
     )
     incomeAfterDeductions = deductions.incomeAfterDeductions
-    amountLeft = deductions.incomeAfterDeductions - payNowTotal
+    amountLeft = deductions.incomeAfterDeductions - paidTotal
   }
 
   // 6-Month Cash Flow chart data
@@ -136,15 +137,17 @@ export default async function DashboardPage({
           accentColor="var(--color-category-income)"
           gaugeAngle={incomeAngle}
           gaugeColor={incomeGaugeColor}
+          icon={TrendingUp}
           subtitle={incomeGoal ? `of ${formatCurrencyShort(incomeGoal)} goal` : `of ${formatCurrencyShort(monthlyExpenses)} expenses`}
         />
         <StatCard
-          label="Amount Left"
+          label="Remaining"
           value={formatCurrencyShort(amountLeft)}
           accentColor="var(--color-category-expense)"
           gaugeAngle={amountLeftAngle}
           gaugeColor={amountLeftColor}
-          subtitle={incomeAfterDeductions > 0 ? `of ${formatCurrencyShort(incomeAfterDeductions)} budget` : undefined}
+          icon={Wallet}
+          subtitle={incomeAfterDeductions > 0 ? `of ${formatCurrencyShort(incomeAfterDeductions)} to budget` : undefined}
         />
         <StatCard
           label="Pay Now"
@@ -152,7 +155,8 @@ export default async function DashboardPage({
           accentColor="var(--color-mint)"
           gaugeAngle={payNowAngle}
           gaugeColor={payNowGaugeColor}
-          subtitle={incomeAfterDeductions > 0 ? `of ${formatCurrencyShort(incomeAfterDeductions)} budget` : undefined}
+          icon={Clock}
+          subtitle={incomeAfterDeductions > 0 ? `of ${formatCurrencyShort(incomeAfterDeductions)} to pay` : undefined}
         />
         <StatCard
           label="Expenses"
@@ -160,6 +164,7 @@ export default async function DashboardPage({
           accentColor="var(--color-category-other)"
           gaugeAngle={expensesAngle}
           gaugeColor={expensesGaugeColor}
+          icon={Receipt}
           subtitle={expenseGoal ? `of ${formatCurrencyShort(expenseGoal)} goal` : undefined}
         />
       </div>

@@ -43,41 +43,55 @@ export default function GaugeIcon({ angle = 0, color = GAUGE_COLORS.neutral }: G
 
   return (
     <svg
-      width="100%"
-      viewBox="0 0 138 68"
+      width="70%"
+      viewBox="0 -2 138 70"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"
+      style={{ display: 'block', margin: '0 auto' }}
     >
-      {/* Outer shell */}
-      <path
-        d="M137.022 47.7854C137.022 74.1766 133.401 66.1893 68.5111 66.1893C0 66.1893 0 74.1766 0 47.7854C0 21.3943 30.6735 0 68.5111 0C106.349 0 137.022 21.3943 137.022 47.7854Z"
-        fill="#EFEFEF"
-      />
+      {/* Background chrome — lightened + faded so gauge recedes behind text */}
+      <g opacity={0.45}>
+        {/* Arch ring */}
+        <path
+          d="M0 47.7854C0 21.3943 30.6735 0 68.5111 0C106.349 0 137.022 21.3943 137.022 47.7854"
+          fill="none"
+          stroke="#D9D6D6"
+          strokeWidth="2.87428"
+          strokeLinecap="round"
+        />
 
-      {/* Inner face */}
-      <path
-        d="M123.139 50.9559C123.139 71.9658 120.252 65.6072 68.5116 65.6072C13.8838 65.6072 13.8838 71.9658 13.8838 50.9559C13.8838 29.946 38.3415 12.9141 68.5116 12.9141C98.6817 12.9141 123.139 29.946 123.139 50.9559Z"
-        fill="white"
-      />
+        {/* Right tick mark — inside inner arch, pointing inward */}
+        <line
+          y1="-1.43714" x2="10" y2="-1.43714"
+          transform="matrix(-0.468522 -0.883452 0.854865 -0.51885 95.3721 58.0615)"
+          stroke="#D9D6D6" strokeWidth="2.87428"
+        />
 
-      {/* Right tick mark */}
-      <line
-        y1="-1.43714" x2="16.7486" y2="-1.43714"
-        transform="matrix(0.468522 -0.883452 0.854865 0.51885 95.3721 58.0615)"
-        stroke="#C1BCBC" strokeWidth="2.87428"
-      />
+        {/* Left tick mark — inside inner arch, pointing inward */}
+        <line
+          y1="-1.43714" x2="10" y2="-1.43714"
+          transform="matrix(0.468522 -0.883452 0.854865 0.51885 42.2529 58.0615)"
+          stroke="#D9D6D6" strokeWidth="2.87428"
+        />
 
-      {/* Left tick mark */}
-      <line
-        y1="-1.43714" x2="16.7486" y2="-1.43714"
-        transform="matrix(-0.468522 -0.883452 -0.854865 0.51885 42.2529 58.0615)"
-        stroke="#C1BCBC" strokeWidth="2.87428"
-      />
+        {/* Inner arch — frames needle base and tick marks */}
+        <path
+          d="M42.25 58.06 A26.6 26.6 0 0 1 95.37 58.06"
+          fill="none"
+          stroke="#D9D6D6"
+          strokeWidth="1.91875"
+          strokeLinecap="round"
+        />
 
-      {/* Dynamic needle — arrow shape rotates around gauge pivot
-          The <g> handles the animated rotation; the <path> inside is
-          statically positioned so its pivot cap sits at (px, py) */}
+        {/* Bottom baseline */}
+        <path
+          d="M14.7646 61.7197H119.657"
+          stroke="#D9D6D6" strokeWidth="1.91875"
+        />
+      </g>
+
+      {/* Dynamic needle — full opacity, semantic color stays prominent */}
       <g
         style={{
           transformOrigin: `${px}px ${py}px`,
@@ -91,12 +105,6 @@ export default function GaugeIcon({ angle = 0, color = GAUGE_COLORS.neutral }: G
           style={{ fill: color, transition: 'fill 0.4s ease' }}
         />
       </g>
-
-      {/* Bottom baseline */}
-      <path
-        d="M14.7646 61.7197H119.657"
-        stroke="#C1BCBC" strokeWidth="1.91875"
-      />
     </svg>
   )
 }

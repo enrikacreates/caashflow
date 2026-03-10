@@ -108,7 +108,7 @@ Muted label:      text-caption text-text-muted
 ## Shadows
 | Token | Value | Usage |
 |-------|-------|-------|
-| `shadow-card` | `0 12px 24px 0px rgba(110,110,110,0.4)` | Cards floating on cream — the main card shadow |
+| `shadow-card` | `0 3px 8px 0px rgba(110,110,110,0.15)` | Cards floating on cream — subtle, close-to-page |
 | `shadow-sm` | subtle | Hover lifts |
 | `shadow-md` | medium | Dropdowns, popovers |
 | `shadow-lg` | strong | Modals |

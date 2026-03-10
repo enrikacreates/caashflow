@@ -96,9 +96,17 @@ export function calculateAllocationTotals(allocations: PeriodSavingsAllocation[]
   return { totalAllocated, totalContributed, hasPendingDeltas }
 }
 
+/** Sum of unpaid pay-now items (left to pay this period) */
 export function calculatePayNowTotal(expenses: PeriodExpense[]): number {
   return expenses
-    .filter((e) => e.pay_now)
+    .filter((e) => e.pay_now && !e.paid)
+    .reduce((sum, e) => sum + getEffectiveAmount(e), 0)
+}
+
+/** Sum of paid pay-now expenses — money already deployed from income */
+export function calculatePaidTotal(expenses: PeriodExpense[]): number {
+  return expenses
+    .filter((e) => e.pay_now && e.paid)
     .reduce((sum, e) => sum + getEffectiveAmount(e), 0)
 }
 
