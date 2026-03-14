@@ -24,7 +24,7 @@ export default function SettingsForm({ settings }: { settings: Settings }) {
     <div className="space-y-6">
 
       {/* Deduction Percentages */}
-      <div className="bg-bg-white rounded-lg shadow-sm p-6">
+      <div className="bg-bg-white rounded-lg shadow-card p-6">
         <h2 className="text-h3 font-bold text-text-heading mb-4">Deduction Percentages</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">

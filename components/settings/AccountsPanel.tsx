@@ -76,7 +76,7 @@ export default function AccountsPanel({ accounts }: AccountsPanelProps) {
   const inputClass = 'w-full bg-bg-white border border-border rounded-sm px-4 py-2.5 text-caption focus:outline-none focus:border-primary transition-colors'
 
   return (
-    <div className="bg-bg-white rounded-lg shadow-sm p-6">
+    <div className="bg-bg-white rounded-lg shadow-card p-6">
       <div className="mb-6">
         <h2 className="text-h3 font-bold text-text-heading">Accounts</h2>
         <p className="text-caption text-text-muted mt-0.5">Bank accounts / payment sources for your expenses</p>

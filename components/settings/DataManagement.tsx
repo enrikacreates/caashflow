@@ -66,7 +66,7 @@ export default function DataManagement() {
   }
 
   return (
-    <div className="bg-bg-white rounded-lg shadow-sm p-6 space-y-6">
+    <div className="bg-bg-white rounded-lg shadow-card p-6 space-y-6">
       <h2 className="text-h3 font-bold text-text-heading">Data Management</h2>
 
       <div className="flex flex-wrap gap-3">

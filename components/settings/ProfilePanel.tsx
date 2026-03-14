@@ -127,13 +127,13 @@ export default function ProfilePanel({ profile, email, households: initialHouseh
     : email.charAt(0).toUpperCase()
 
   return (
-    <div className="bg-bg-white rounded-lg shadow-sm p-6">
+    <div className="bg-bg-white rounded-lg shadow-card p-6">
       <h2 className="text-h3 font-bold text-text-heading mb-6">Profile</h2>
 
       {/* Avatar section */}
       <div className="flex items-center gap-5 mb-6">
         <div className="relative group">
-          <div className="w-20 h-20 rounded-full overflow-hidden bg-surface-beige border-2 border-border flex items-center justify-center flex-shrink-0">
+          <div className="w-20 h-20 rounded-full overflow-hidden bg-surface-beige shadow-sm flex items-center justify-center flex-shrink-0">
             {avatarUrl ? (
               <img src={avatarUrl} alt="Profile photo" className="w-full h-full object-cover" />
             ) : (
@@ -194,7 +194,7 @@ export default function ProfilePanel({ profile, email, households: initialHouseh
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
             placeholder="Your name"
-            className="w-full border border-border rounded-lg px-3 py-2.5 text-body text-text-heading placeholder:text-text-muted/50 focus:outline-none focus:ring-2 focus:ring-primary-teal/30 focus:border-primary-teal transition-colors"
+            className="w-full bg-bg-white border border-border rounded-sm px-4 py-2.5 text-caption focus:outline-none focus:border-primary transition-colors"
           />
         </div>
 
@@ -207,7 +207,7 @@ export default function ProfilePanel({ profile, email, households: initialHouseh
             type="email"
             value={email}
             readOnly
-            className="w-full border border-border rounded-lg px-3 py-2.5 text-body text-text-muted bg-surface-beige/30 cursor-not-allowed"
+            className="w-full bg-surface-beige/30 border border-border rounded-sm px-4 py-2.5 text-caption text-text-muted cursor-not-allowed"
           />
           <p className="text-caption text-text-muted mt-1">Email is managed through your login provider</p>
         </div>
@@ -225,7 +225,7 @@ export default function ProfilePanel({ profile, email, households: initialHouseh
               return (
                 <div
                   key={h.household_id}
-                  className="flex items-center gap-2 border border-border rounded-lg px-3 py-2.5"
+                  className="flex items-center gap-2 bg-surface-beige/30 rounded-sm px-4 py-2.5"
                 >
                   {isEditing ? (
                     /* Rename inline edit */

@@ -53,7 +53,7 @@ export default function MembersPanel({ members, currentUserId }: MembersPanelPro
   }
 
   return (
-    <div className="bg-bg-white rounded-lg shadow-sm p-6">
+    <div className="bg-bg-white rounded-lg shadow-card p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-h3 font-bold text-text-heading">Household Members</h2>
@@ -70,7 +70,7 @@ export default function MembersPanel({ members, currentUserId }: MembersPanelPro
 
       {/* Invite link banner */}
       {inviteLink && (
-        <div className="bg-primary-teal/5 border border-primary-teal/20 rounded-lg p-4 mb-5">
+        <div className="bg-primary-teal/5 rounded-lg p-4 mb-5">
           <p className="text-caption font-bold text-primary mb-2">🔗 Invite Link (expires in 7 days)</p>
           <p className="text-caption text-text-muted mb-3">
             Share this link with the person you want to invite. They&apos;ll create an account
@@ -114,7 +114,7 @@ export default function MembersPanel({ members, currentUserId }: MembersPanelPro
             >
               <div className="flex items-center gap-3 min-w-0">
                 {/* Avatar placeholder */}
-                <div className="w-9 h-9 rounded-full bg-surface-gray border border-border flex items-center justify-center flex-shrink-0">
+                <div className="w-9 h-9 rounded-full bg-surface-gray shadow-sm flex items-center justify-center flex-shrink-0">
                   <span className="text-caption font-bold text-text-muted">
                     {(member.email ?? member.user_id).charAt(0).toUpperCase()}
                   </span>

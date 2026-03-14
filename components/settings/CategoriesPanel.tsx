@@ -87,7 +87,7 @@ export default function CategoriesPanel({ categories }: CategoriesPanelProps) {
   const inputClass = 'w-full bg-bg-white border border-border rounded-sm px-4 py-2.5 text-caption focus:outline-none focus:border-primary transition-colors'
 
   return (
-    <div className="bg-bg-white rounded-lg shadow-sm p-6">
+    <div className="bg-bg-white rounded-lg shadow-card p-6">
       <div className="mb-6">
         <h2 className="text-h3 font-bold text-text-heading">Priority Categories</h2>
         <p className="text-caption text-text-muted mt-0.5">Organize expenses by priority level with color coding</p>

@@ -79,22 +79,22 @@ function LoginForm() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 bg-cream">
+    <div className="min-h-screen flex items-center justify-center px-4 bg-bg-cream">
       <div className="w-full max-w-md">
+        {/* Logo — SVG, centered, big */}
         <div className="text-center mb-10">
-          <h1 className="text-5xl font-black font-display tracking-tight text-ink">
-            CAASHFLOW
-          </h1>
-          <p className="text-muted mt-2 text-sm font-semibold uppercase tracking-widest">
-            Budget System
-          </p>
+          <img
+            src="/logo.svg"
+            alt="Caashflow"
+            className="h-16 w-auto mx-auto"
+          />
         </div>
 
         {inviteToken && mode !== 'forgot' && (
-          <div className="bg-blue/10 border border-blue/20 rounded-[16px] px-5 py-4 mb-6 text-center">
+          <div className="bg-primary/10 rounded-lg px-5 py-4 mb-6 text-center">
             <div className="text-2xl mb-1">🏠</div>
-            <p className="text-sm font-bold text-ink">You have a household invite!</p>
-            <p className="text-xs text-muted mt-1">
+            <p className="text-caption font-bold text-text-heading">You have a household invite!</p>
+            <p className="text-caption text-text-muted mt-1">
               {mode === 'signup'
                 ? 'Create an account below to accept it.'
                 : 'Log in to join the household.'}
@@ -102,36 +102,37 @@ function LoginForm() {
           </div>
         )}
 
-        <div className="bg-white rounded-[28px] border border-line p-8">
+        {/* Card — shadow, no border */}
+        <div className="bg-bg-white rounded-lg shadow-card p-8">
           {mode === 'forgot' ? (
             <>
               <div className="text-center mb-6">
                 <div className="text-3xl mb-2">🔑</div>
-                <h2 className="text-xl font-black font-display text-ink">Reset Password</h2>
-                <p className="text-xs text-muted mt-1">
+                <h2 className="text-h3 font-bold text-text-heading">Reset Password</h2>
+                <p className="text-caption text-text-muted mt-1">
                   Enter your email and we&apos;ll send you a reset link.
                 </p>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div>
-                  <label className="block text-sm font-bold text-ink mb-1.5">Email</label>
+                  <label className="text-caption font-semibold text-text-heading block mb-1.5">Email</label>
                   <input
                     type="email"
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full px-4 py-3 bg-white border border-line rounded-[12px] text-ink focus:outline-none focus:border-blue transition-colors"
+                    className="w-full bg-bg-white border border-border rounded-sm px-4 py-2.5 text-caption focus:outline-none focus:border-primary transition-colors"
                     placeholder="you@example.com"
                   />
                 </div>
 
                 {message && (
                   <div
-                    className={`p-3 rounded-[12px] text-sm font-medium ${
+                    className={`p-3 rounded-sm text-caption font-medium ${
                       message.type === 'error'
-                        ? 'bg-orange/10 text-orange border border-orange/20'
-                        : 'bg-green/10 text-green border border-green/20'
+                        ? 'bg-warning/10 text-warning'
+                        : 'bg-success/10 text-success'
                     }`}
                   >
                     {message.text}
@@ -141,7 +142,7 @@ function LoginForm() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full py-3 bg-blue text-white rounded-[12px] font-bold text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+                  className="w-full bg-primary-teal text-text-inverse rounded-full px-5 py-2.5 text-label font-bold hover:opacity-90 transition-opacity disabled:opacity-50"
                 >
                   {loading ? 'Sending...' : 'Send Reset Link'}
                 </button>
@@ -149,30 +150,31 @@ function LoginForm() {
 
               <button
                 onClick={() => { setMode('login'); setMessage(null) }}
-                className="w-full text-center text-sm text-blue font-bold mt-4 hover:opacity-70 transition-opacity"
+                className="w-full text-center text-caption text-primary font-semibold mt-4 hover:underline transition-opacity"
               >
                 Back to Login
               </button>
             </>
           ) : (
             <>
-              <div className="flex bg-cream-2 rounded-[12px] p-1 mb-8">
+              {/* Login / Sign Up toggle — pill style */}
+              <div className="flex bg-surface-beige rounded-full p-1 mb-8">
                 <button
                   onClick={() => setMode('login')}
-                  className={`flex-1 py-2.5 rounded-[10px] text-sm font-bold transition-all ${
+                  className={`flex-1 py-2.5 rounded-full text-caption font-bold transition-all ${
                     mode === 'login'
-                      ? 'bg-white text-ink shadow-sm'
-                      : 'text-muted hover:text-ink'
+                      ? 'bg-bg-white text-text-heading shadow-sm'
+                      : 'text-text-muted hover:text-text-heading'
                   }`}
                 >
                   Log In
                 </button>
                 <button
                   onClick={() => setMode('signup')}
-                  className={`flex-1 py-2.5 rounded-[10px] text-sm font-bold transition-all ${
+                  className={`flex-1 py-2.5 rounded-full text-caption font-bold transition-all ${
                     mode === 'signup'
-                      ? 'bg-white text-ink shadow-sm'
-                      : 'text-muted hover:text-ink'
+                      ? 'bg-bg-white text-text-heading shadow-sm'
+                      : 'text-text-muted hover:text-text-heading'
                   }`}
                 >
                   Sign Up
@@ -181,24 +183,24 @@ function LoginForm() {
 
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div>
-                  <label className="block text-sm font-bold text-ink mb-1.5">Email</label>
+                  <label className="text-caption font-semibold text-text-heading block mb-1.5">Email</label>
                   <input
                     type="email"
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full px-4 py-3 bg-white border border-line rounded-[12px] text-ink focus:outline-none focus:border-blue transition-colors"
+                    className="w-full bg-bg-white border border-border rounded-sm px-4 py-2.5 text-caption focus:outline-none focus:border-primary transition-colors"
                     placeholder="you@example.com"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-ink mb-1.5">Password</label>
+                  <label className="text-caption font-semibold text-text-heading block mb-1.5">Password</label>
                   <input
                     type="password"
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full px-4 py-3 bg-white border border-line rounded-[12px] text-ink focus:outline-none focus:border-blue transition-colors"
+                    className="w-full bg-bg-white border border-border rounded-sm px-4 py-2.5 text-caption focus:outline-none focus:border-primary transition-colors"
                     placeholder={mode === 'signup' ? 'Create a password (6+ chars)' : 'Your password'}
                     minLength={6}
                   />
@@ -209,7 +211,7 @@ function LoginForm() {
                     <button
                       type="button"
                       onClick={() => { setMode('forgot'); setMessage(null) }}
-                      className="text-xs text-muted hover:text-blue font-semibold transition-colors"
+                      className="text-caption text-text-muted hover:text-primary font-semibold transition-colors"
                     >
                       Forgot password?
                     </button>
@@ -218,10 +220,10 @@ function LoginForm() {
 
                 {message && (
                   <div
-                    className={`p-3 rounded-[12px] text-sm font-medium ${
+                    className={`p-3 rounded-sm text-caption font-medium ${
                       message.type === 'error'
-                        ? 'bg-orange/10 text-orange border border-orange/20'
-                        : 'bg-green/10 text-green border border-green/20'
+                        ? 'bg-warning/10 text-warning'
+                        : 'bg-success/10 text-success'
                     }`}
                   >
                     {message.text}
@@ -231,7 +233,7 @@ function LoginForm() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full py-3 bg-blue text-white rounded-[12px] font-bold text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+                  className="w-full bg-primary-teal text-text-inverse rounded-full px-5 py-2.5 text-label font-bold hover:opacity-90 transition-opacity disabled:opacity-50"
                 >
                   {loading ? 'Loading...' : mode === 'login' ? 'Log In' : 'Create Account'}
                 </button>
@@ -248,8 +250,8 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center bg-cream">
-          <div className="text-muted text-sm">Loading...</div>
+        <div className="min-h-screen flex items-center justify-center bg-bg-cream">
+          <div className="text-caption text-text-muted">Loading...</div>
         </div>
       }
     >
