@@ -283,9 +283,9 @@ export async function recalculatePeriodIncome(periodId: string) {
   if (linkedError) throw new Error(`Failed to fetch linked invoices: ${linkedError.message}`)
 
   const invoiceTotal = (linkedInvoices || []).reduce((sum, link) => {
-    const invoice = link.invoices as unknown as { amount: number; status: string }
+    const invoice = link.invoices as unknown as { amount: number | string; status: string }
     if (invoice && invoice.status === 'received') {
-      return sum + (invoice.amount || 0)
+      return sum + (Number(invoice.amount) || 0)
     }
     return sum
   }, 0)
@@ -300,7 +300,7 @@ export async function recalculatePeriodIncome(periodId: string) {
   if (manualError) throw new Error(`Failed to fetch manual income: ${manualError.message}`)
 
   const manualTotal = (manualIncomeRows || []).reduce(
-    (sum, row) => sum + (row.amount || 0),
+    (sum, row) => sum + (Number(row.amount) || 0),
     0
   )
 

@@ -668,6 +668,10 @@ function ExpenseRow({
               if (val >= owedAmount && !expense.paid) {
                 onCheckboxChange(expense.id, 'paid', true)
               }
+              // Auto-uncheck paid when pay amount is cleared back to 0
+              if ((val === 0 || isNaN(val)) && expense.paid) {
+                onCheckboxChange(expense.id, 'paid', false)
+              }
             }}
             className={`w-20 text-right text-xs ${inputClass} ${
               expense.paid_amount > 0 && expense.paid_amount < owedAmount
