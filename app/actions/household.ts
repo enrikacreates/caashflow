@@ -72,6 +72,82 @@ export async function removeHouseholdMember(memberId: string) {
   revalidatePath('/settings')
 }
 
+// ── Household Name + Leave ──────────────────────────────────────────────────
+
+export async function renameHousehold(householdId: string, name: string) {
+  const supabase = await createClient()
+  const user = await getAuthUser()
+  if (!user) throw new Error('Not authenticated')
+
+  // Verify the user is the owner of this household
+  const { data: membership } = await supabase
+    .from('household_members')
+    .select('role')
+    .eq('household_id', householdId)
+    .eq('user_id', user.id)
+    .single()
+
+  if (!membership || membership.role !== 'owner') {
+    throw new Error('Only the household owner can rename it')
+  }
+
+  const trimmed = name.trim()
+  if (!trimmed) throw new Error('Name cannot be empty')
+
+  const { error } = await supabase
+    .from('households')
+    .update({ name: trimmed, updated_at: new Date().toISOString() })
+    .eq('id', householdId)
+
+  if (error) throw new Error(`Failed to rename household: ${error.message}`)
+  revalidatePath('/settings')
+}
+
+export async function leaveHousehold(householdId: string) {
+  const supabase = await createClient()
+  const user = await getAuthUser()
+  if (!user) throw new Error('Not authenticated')
+
+  // Verify the user is NOT the owner (owners can't leave)
+  const { data: membership } = await supabase
+    .from('household_members')
+    .select('id, role')
+    .eq('household_id', householdId)
+    .eq('user_id', user.id)
+    .single()
+
+  if (!membership) throw new Error('You are not a member of this household')
+  if (membership.role === 'owner') {
+    throw new Error('Owners cannot leave their household. Transfer ownership first or delete the household.')
+  }
+
+  const { error } = await supabase
+    .from('household_members')
+    .delete()
+    .eq('id', membership.id)
+
+  if (error) throw new Error(`Failed to leave household: ${error.message}`)
+  revalidatePath('/settings')
+}
+
+export async function getUserHouseholdsWithNames() {
+  const supabase = await createClient()
+  const user = await getAuthUser()
+  if (!user) throw new Error('Not authenticated')
+
+  const { data, error } = await supabase
+    .from('household_members')
+    .select('household_id, role, households(id, name)')
+    .eq('user_id', user.id)
+
+  if (error) throw new Error(`Failed to fetch households: ${error.message}`)
+  return (data ?? []).map((m) => ({
+    household_id: m.household_id,
+    role: m.role as 'owner' | 'member',
+    name: (m.households as unknown as { id: string; name: string } | null)?.name ?? 'Unnamed',
+  }))
+}
+
 // ── Invite Validation (public — used by join page) ─────────────────────────
 
 export async function getInviteDetails(token: string) {
