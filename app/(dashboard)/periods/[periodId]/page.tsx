@@ -16,8 +16,8 @@ export default async function PeriodDetailPage({
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-black font-display text-ink">{detail.period.period_name}</h1>
-        <p className="text-muted text-sm mt-1">Manage income, deductions, and expenses for this period</p>
+        <h1 className="text-h1 font-bold text-text-heading">{detail.period.period_name}</h1>
+        <p className="text-caption text-text-muted mt-1">Manage income, deductions, and expenses for this period</p>
       </div>
       <PeriodDetailClient
         period={detail.period}

@@ -219,28 +219,28 @@ export default function PeriodDetailClient({
     startTransition(() => updateDeductionOverrides(period.id, updates))
   }
 
-  const inputClass = 'bg-white border border-line rounded-[8px] px-2 py-1 text-sm focus:outline-none focus:border-blue transition-colors'
-  const thClass = 'text-left text-caption font-bold uppercase text-text-muted px-3 py-2 whitespace-nowrap cursor-pointer hover:text-text-heading select-none'
+  const inputClass = 'bg-bg-white border border-border rounded-sm px-2 py-1 text-caption focus:outline-none focus:border-primary transition-colors'
+  const thClass = 'text-left text-caption font-bold uppercase text-text-muted px-3 py-3 whitespace-nowrap cursor-pointer hover:text-text-heading select-none'
 
   return (
     <div className="space-y-8">
       {/* ─── Summary Cards ─────────────────────────────────── */}
       <div ref={summaryCardsRef} className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="bg-white border border-line rounded-[20px] p-5">
-          <div className="text-xs font-bold uppercase text-muted mb-1">Total Income</div>
-          <div className="text-lg font-bold text-ink">{formatCurrency(period.income_amount)}</div>
+        <div className="bg-bg-white rounded-lg shadow-card p-5">
+          <div className="text-caption font-bold uppercase text-text-muted mb-1">Total Income</div>
+          <div className="text-h3 font-bold text-text-heading">{formatCurrency(period.income_amount)}</div>
         </div>
-        <div className="bg-white border border-line rounded-[20px] p-5">
-          <div className="text-xs font-bold uppercase text-muted mb-1">After Deductions</div>
-          <div className="text-lg font-bold text-ink">{formatCurrency(deductions.incomeAfterDeductions)}</div>
+        <div className="bg-bg-white rounded-lg shadow-card p-5">
+          <div className="text-caption font-bold uppercase text-text-muted mb-1">After Deductions</div>
+          <div className="text-h3 font-bold text-text-heading">{formatCurrency(deductions.incomeAfterDeductions)}</div>
         </div>
-        <div className="bg-white border border-line rounded-[20px] p-5">
-          <div className="text-xs font-bold uppercase text-muted mb-1">Pay Now Total</div>
-          <div className="text-lg font-bold text-ink">{formatCurrency(payNowTotal)}</div>
+        <div className="bg-bg-white rounded-lg shadow-card p-5">
+          <div className="text-caption font-bold uppercase text-text-muted mb-1">Pay Now Total</div>
+          <div className="text-h3 font-bold text-text-heading">{formatCurrency(payNowTotal)}</div>
         </div>
-        <div className="bg-white border border-line rounded-[20px] p-5">
-          <div className="text-xs font-bold uppercase text-muted mb-1">Amount Left</div>
-          <div className={`text-lg font-bold ${amountLeft >= 0 ? 'text-green' : 'text-orange'}`}>
+        <div className="bg-bg-white rounded-lg shadow-card p-5">
+          <div className="text-caption font-bold uppercase text-text-muted mb-1">Amount Left</div>
+          <div className={`text-h3 font-bold ${amountLeft >= 0 ? 'text-success' : 'text-warning'}`}>
             {formatCurrency(amountLeft)}
           </div>
         </div>
@@ -249,13 +249,13 @@ export default function PeriodDetailClient({
       {/* ─── Sticky Summary Bar (visible when scrolled past cards) ── */}
       {showStickyBar && (
         <div className="sticky top-0 z-40 -mx-6 px-6 -mt-4">
-          <div className="bg-white/90 backdrop-blur-sm border border-line rounded-b-2xl shadow-sm px-4 py-2 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-4 text-xs">
-              <span className="text-muted">Income <span className="font-bold text-ink">{formatCurrency(period.income_amount)}</span></span>
-              <span className="text-muted hidden sm:inline">After Ded. <span className="font-bold text-ink">{formatCurrency(deductions.incomeAfterDeductions)}</span></span>
-              <span className="text-muted">Pay Now <span className="font-bold text-ink">{formatCurrency(payNowTotal)}</span></span>
+          <div className="bg-white/90 backdrop-blur-sm rounded-b-lg shadow-card px-4 py-2 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4 text-caption">
+              <span className="text-text-muted">Income <span className="font-bold text-text-heading">{formatCurrency(period.income_amount)}</span></span>
+              <span className="text-text-muted hidden sm:inline">After Ded. <span className="font-bold text-text-heading">{formatCurrency(deductions.incomeAfterDeductions)}</span></span>
+              <span className="text-text-muted">Pay Now <span className="font-bold text-text-heading">{formatCurrency(payNowTotal)}</span></span>
             </div>
-            <div className={`text-sm font-black ${amountLeft >= 0 ? 'text-green' : 'text-orange'}`}>
+            <div className={`text-label font-bold ${amountLeft >= 0 ? 'text-success' : 'text-warning'}`}>
               {formatCurrency(amountLeft)} left
             </div>
           </div>
@@ -263,19 +263,19 @@ export default function PeriodDetailClient({
       )}
 
       {/* ─── Income Section ────────────────────────────────── */}
-      <div className="bg-white border border-line rounded-[20px] p-6">
+      <div className="bg-bg-white rounded-lg shadow-card p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-black font-display text-ink">Income</h2>
+          <h2 className="text-h3 font-bold text-text-heading">Income</h2>
           <div className="flex gap-2">
             <button
               onClick={() => setShowInvoiceSelector(!showInvoiceSelector)}
-              className="text-xs bg-blue text-white rounded-[8px] px-3 py-1.5 font-bold hover:opacity-90"
+              className="bg-primary-teal text-text-inverse rounded-full px-4 py-1.5 text-caption font-bold hover:opacity-90 transition-opacity"
             >
               Link Invoice
             </button>
             <button
               onClick={() => setShowManualIncomeForm(!showManualIncomeForm)}
-              className="text-xs bg-white text-ink border border-line rounded-[8px] px-3 py-1.5 font-bold hover:border-blue"
+              className="bg-bg-white text-text-heading border border-border rounded-full px-4 py-1.5 text-caption font-bold hover:border-primary transition-colors"
             >
               + Manual
             </button>
@@ -285,22 +285,22 @@ export default function PeriodDetailClient({
         {/* Linked Invoices */}
         {linkedInvoices.length > 0 && (
           <div className="mb-4">
-            <div className="text-xs font-bold text-muted uppercase mb-2">Linked Invoices</div>
+            <div className="text-caption font-bold text-text-muted uppercase mb-2">Linked Invoices</div>
             <div className="space-y-2">
               {linkedInvoices.map((li) => (
-                <div key={li.id} className="flex items-center justify-between bg-cream-2 rounded-[10px] px-4 py-2">
+                <div key={li.id} className="flex items-center justify-between bg-surface-beige rounded-sm px-4 py-2">
                   <div>
-                    <span className="text-sm font-bold text-ink">{li.invoices.client_name}</span>
+                    <span className="text-caption font-bold text-text-heading">{li.invoices.client_name}</span>
                     {li.invoices.project_name && (
-                      <span className="text-sm text-muted ml-2">– {li.invoices.project_name}</span>
+                      <span className="text-caption text-text-muted ml-2">– {li.invoices.project_name}</span>
                     )}
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-sm font-bold text-ink">{formatCurrency(li.invoices.amount)}</span>
+                    <span className="text-caption font-bold text-text-heading">{formatCurrency(li.invoices.amount)}</span>
                     <button
                       onClick={() => handleUnlinkInvoice(li.invoice_id)}
                       disabled={isPending}
-                      className="text-xs text-orange font-bold hover:underline"
+                      className="text-caption text-warning font-semibold hover:underline"
                     >
                       Unlink
                     </button>
@@ -314,17 +314,17 @@ export default function PeriodDetailClient({
         {/* Manual Income */}
         {manualIncome.length > 0 && (
           <div className="mb-4">
-            <div className="text-xs font-bold text-muted uppercase mb-2">Manual Income</div>
+            <div className="text-caption font-bold text-text-muted uppercase mb-2">Manual Income</div>
             <div className="space-y-2">
               {manualIncome.map((mi) => (
-                <div key={mi.id} className="flex items-center justify-between bg-cream-2 rounded-[10px] px-4 py-2">
-                  <span className="text-sm font-bold text-ink">{mi.description}</span>
+                <div key={mi.id} className="flex items-center justify-between bg-surface-beige rounded-sm px-4 py-2">
+                  <span className="text-caption font-bold text-text-heading">{mi.description}</span>
                   <div className="flex items-center gap-3">
-                    <span className="text-sm font-bold text-ink">{formatCurrency(mi.amount)}</span>
+                    <span className="text-caption font-bold text-text-heading">{formatCurrency(mi.amount)}</span>
                     <button
                       onClick={() => handleRemoveManualIncome(mi.id)}
                       disabled={isPending}
-                      className="text-xs text-orange font-bold hover:underline"
+                      className="text-caption text-warning font-semibold hover:underline"
                     >
                       Remove
                     </button>
@@ -337,17 +337,17 @@ export default function PeriodDetailClient({
 
         {/* Invoice Selector Dropdown */}
         {showInvoiceSelector && (
-          <div className="border border-line rounded-[12px] p-4 mb-4">
-            <div className="text-xs font-bold text-muted uppercase mb-2">Select Received Invoices to Link</div>
+          <div className="bg-surface-beige rounded-sm p-4 mb-4">
+            <div className="text-caption font-bold text-text-muted uppercase mb-2">Select Received Invoices to Link</div>
             {allReceivedInvoices.filter((inv) => !linkedInvoiceIds.has(inv.id)).length === 0 ? (
-              <p className="text-sm text-muted">No unlinked received invoices available.</p>
+              <p className="text-caption text-text-muted">No unlinked received invoices available.</p>
             ) : (
               <div className="space-y-2 max-h-48 overflow-y-auto">
                 {allReceivedInvoices
                   .filter((inv) => !linkedInvoiceIds.has(inv.id))
                   .map((inv) => (
                     <div key={inv.id} className="flex items-center justify-between py-1">
-                      <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <label className="flex items-center gap-2 text-caption cursor-pointer">
                         <input
                           type="checkbox"
                           onChange={(e) => {
@@ -355,10 +355,10 @@ export default function PeriodDetailClient({
                           }}
                           className="rounded"
                         />
-                        <span className="font-medium text-ink">{inv.client_name}</span>
-                        {inv.project_name && <span className="text-muted">– {inv.project_name}</span>}
+                        <span className="font-medium text-text-heading">{inv.client_name}</span>
+                        {inv.project_name && <span className="text-text-muted">– {inv.project_name}</span>}
                       </label>
-                      <span className="text-sm font-bold text-ink">{formatCurrency(inv.amount)}</span>
+                      <span className="text-caption font-bold text-text-heading">{formatCurrency(inv.amount)}</span>
                     </div>
                   ))}
               </div>
@@ -368,34 +368,34 @@ export default function PeriodDetailClient({
 
         {/* Manual Income Form */}
         {showManualIncomeForm && (
-          <form onSubmit={handleAddManualIncome} className="flex gap-2 items-end border border-line rounded-[12px] p-4">
+          <form onSubmit={handleAddManualIncome} className="flex gap-2 items-end bg-surface-beige rounded-sm p-4">
             <div className="flex-1">
-              <label className="block text-xs font-bold text-muted mb-1">Description</label>
+              <label className="block text-caption font-bold text-text-muted mb-1">Description</label>
               <input type="text" name="description" required placeholder="e.g., Side project" className={inputClass + ' w-full'} />
             </div>
             <div className="w-32">
-              <label className="block text-xs font-bold text-muted mb-1">Amount</label>
+              <label className="block text-caption font-bold text-text-muted mb-1">Amount</label>
               <input type="number" name="amount" step="0.01" required placeholder="0.00" className={inputClass + ' w-full'} />
             </div>
             <button
               type="submit"
               disabled={isPending}
-              className="bg-blue text-white rounded-[8px] px-4 py-1.5 text-sm font-bold hover:opacity-90 disabled:opacity-50"
+              className="bg-primary-teal text-text-inverse rounded-full px-4 py-1.5 text-caption font-bold hover:opacity-90 disabled:opacity-50 transition-opacity"
             >
               Add
             </button>
           </form>
         )}
 
-        <div className="text-right mt-3 pt-3 border-t border-line">
-          <span className="text-sm text-muted">Total Income: </span>
-          <span className="text-lg font-bold text-ink">{formatCurrency(period.income_amount)}</span>
+        <div className="text-right mt-3 pt-3 border-t border-border">
+          <span className="text-caption text-text-muted">Total Income: </span>
+          <span className="text-h3 font-bold text-text-heading">{formatCurrency(period.income_amount)}</span>
         </div>
       </div>
 
       {/* ─── Deductions Grid ───────────────────────────────── */}
-      <div className="bg-white border border-line rounded-[20px] p-6">
-        <h2 className="text-xl font-black font-display text-ink mb-4">Deductions</h2>
+      <div className="bg-bg-white rounded-lg shadow-card p-6">
+        <h2 className="text-h3 font-bold text-text-heading mb-4">Deductions</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mb-4">
           {[
             { pctKey: 'tithe_percentage', amtKey: 'tithe_amount', label: 'Tithe', detail: deductions.details.titheD },
@@ -409,22 +409,22 @@ export default function PeriodDetailClient({
               period.deduction_overrides?.[amtKey as keyof DeductionOverrides] !== undefined
             return (
               <div key={pctKey} className="text-center">
-                <div className="text-xs font-bold text-muted uppercase mb-1">{label}</div>
+                <div className="text-caption font-bold text-text-muted uppercase mb-1">{label}</div>
                 {/* % | $ toggle */}
                 <div className="flex justify-center mb-1">
-                  <div className="flex rounded-[6px] border border-line overflow-hidden">
+                  <div className="flex rounded-full overflow-hidden bg-surface-beige">
                     <button
                       onClick={() => handleDeductionModeToggle(pctKey, amtKey, detail, '%')}
-                      className={`px-1.5 py-0.5 text-[10px] font-bold transition-colors ${
-                        detail.mode === '%' ? 'bg-ink text-white' : 'text-muted hover:text-ink'
+                      className={`px-2 py-0.5 text-[10px] font-bold transition-colors ${
+                        detail.mode === '%' ? 'bg-text-heading text-white' : 'text-text-muted hover:text-text-heading'
                       }`}
                     >
                       %
                     </button>
                     <button
                       onClick={() => handleDeductionModeToggle(pctKey, amtKey, detail, '$')}
-                      className={`px-1.5 py-0.5 text-[10px] font-bold transition-colors ${
-                        detail.mode === '$' ? 'bg-ink text-white' : 'text-muted hover:text-ink'
+                      className={`px-2 py-0.5 text-[10px] font-bold transition-colors ${
+                        detail.mode === '$' ? 'bg-text-heading text-white' : 'text-text-muted hover:text-text-heading'
                       }`}
                     >
                       $
@@ -441,29 +441,29 @@ export default function PeriodDetailClient({
                       detail.mode === '%' ? pctKey : amtKey,
                       e.target.value
                     )}
-                    className={`w-20 text-center text-sm font-bold rounded-[8px] border px-2 py-1 focus:outline-none focus:border-blue ${
-                      hasOverride ? 'border-blue bg-blue/5' : 'border-line'
+                    className={`w-20 text-center text-caption font-bold rounded-sm border px-2 py-1 focus:outline-none focus:border-primary ${
+                      hasOverride ? 'border-primary bg-primary/5' : 'border-border'
                     }`}
                   />
-                  <span className="text-xs text-muted">{detail.mode === '%' ? '%' : '$'}</span>
+                  <span className="text-caption text-text-muted">{detail.mode === '%' ? '%' : '$'}</span>
                 </div>
                 {detail.mode === '%' ? (
-                  <div className="text-sm font-bold text-ink">{formatCurrency(detail.amount)}</div>
+                  <div className="text-caption font-bold text-text-heading">{formatCurrency(detail.amount)}</div>
                 ) : (
-                  <div className="text-[10px] text-muted">= {detail.percentage.toFixed(1)}%</div>
+                  <div className="text-[10px] text-text-muted">= {detail.percentage.toFixed(1)}%</div>
                 )}
               </div>
             )
           })}
         </div>
-        <div className="flex justify-between items-center pt-4 border-t border-line">
+        <div className="flex justify-between items-center pt-4 border-t border-border">
           <div>
-            <span className="text-sm text-muted">Total Deductions: </span>
-            <span className="font-bold text-ink">{formatCurrency(deductions.total)}</span>
+            <span className="text-caption text-text-muted">Total Deductions: </span>
+            <span className="font-bold text-text-heading">{formatCurrency(deductions.total)}</span>
           </div>
           <div>
-            <span className="text-sm text-muted">After Deductions: </span>
-            <span className="font-bold text-ink">{formatCurrency(deductions.incomeAfterDeductions)}</span>
+            <span className="text-caption text-text-muted">After Deductions: </span>
+            <span className="font-bold text-text-heading">{formatCurrency(deductions.incomeAfterDeductions)}</span>
           </div>
         </div>
       </div>
@@ -483,12 +483,12 @@ export default function PeriodDetailClient({
       {/* ─── Account Transfer Summary ──────────────────────── */}
       {Object.keys(accountBreakdown).length > 0 && (
         <div>
-          <h2 className="text-xl font-black font-display text-ink mb-4">Account Transfers</h2>
+          <h2 className="text-h3 font-bold text-text-heading mb-4">Account Transfers</h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {Object.entries(accountBreakdown).map(([account, total]) => (
-              <div key={account} className="bg-white border border-line rounded-[20px] p-5">
-                <div className="text-xs font-bold uppercase text-muted mb-1">{account}</div>
-                <div className="text-lg font-bold text-ink">{formatCurrency(total)}</div>
+              <div key={account} className="bg-bg-white rounded-lg shadow-card p-5">
+                <div className="text-caption font-bold uppercase text-text-muted mb-1">{account}</div>
+                <div className="text-h3 font-bold text-text-heading">{formatCurrency(total)}</div>
               </div>
             ))}
           </div>
@@ -497,26 +497,26 @@ export default function PeriodDetailClient({
 
       {/* ─── Expenses Table ────────────────────────────────── */}
       <div>
-        <h2 className="text-xl font-black font-display text-ink mb-4">
+        <h2 className="text-h3 font-bold text-text-heading mb-4">
           Expenses
-          <span className="text-sm font-medium text-muted ml-2">
+          <span className="text-caption font-medium text-text-muted ml-2">
             ({expenses.filter((e) => e.pay_now).length} marked pay now)
           </span>
         </h2>
 
         <div className="rounded-lg overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full">
               <thead>
-                <tr className="border-b border-border bg-[#c9e5e4]">
-                  <th className="text-center px-3 py-2 text-caption font-bold uppercase text-text-muted w-10">Pay</th>
+                <tr className="bg-[#c9e5e4]">
+                  <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted w-10">Pay</th>
                   <th className={thClass} onClick={() => handleSort('name')}>
                     Name<SortIcon col="name" />
                   </th>
                   <th className={thClass} onClick={() => handleSort('default_amount')}>
                     Amount<SortIcon col="default_amount" />
                   </th>
-                  <th className="text-center px-3 py-2 text-caption font-bold uppercase text-text-muted">Pay Amt</th>
+                  <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted">Pay Amt</th>
                   <th className={thClass} onClick={() => handleSort('account')}>
                     Account<SortIcon col="account" />
                   </th>
@@ -526,9 +526,9 @@ export default function PeriodDetailClient({
                   <th className={thClass} onClick={() => handleSort('due_day')}>
                     Due<SortIcon col="due_day" />
                   </th>
-                  <th className="text-center px-3 py-2 text-caption font-bold uppercase text-text-muted">Xfer</th>
-                  <th className="text-center px-3 py-2 text-caption font-bold uppercase text-text-muted">Paid</th>
-                  <th className="text-center px-3 py-2 text-caption font-bold uppercase text-text-muted">Clear</th>
+                  <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted">Xfer</th>
+                  <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted">Paid</th>
+                  <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted">Clear</th>
                 </tr>
               </thead>
               <tbody>
@@ -545,10 +545,10 @@ export default function PeriodDetailClient({
                 ))}
               </tbody>
               <tfoot>
-                <tr className="border-t-2 border-border bg-[#c9e5e4]">
+                <tr className="bg-[#c9e5e4]">
                   <td className="px-3 py-3" />
-                  <td className="px-3 py-3 font-bold text-ink text-sm">Pay Now Total</td>
-                  <td className="px-3 py-3 font-bold text-ink text-sm">{formatCurrency(payNowTotal)}</td>
+                  <td className="px-3 py-3 font-bold text-text-heading text-caption">Pay Now Total</td>
+                  <td className="px-3 py-3 font-bold text-text-heading text-caption">{formatCurrency(payNowTotal)}</td>
                   <td colSpan={7} />
                 </tr>
               </tfoot>
@@ -561,7 +561,7 @@ export default function PeriodDetailClient({
       <div className="pt-4">
         <button
           onClick={() => router.push('/periods')}
-          className="text-sm text-blue font-bold hover:underline"
+          className="text-caption text-primary font-semibold hover:underline"
         >
           ← Back to Periods
         </button>
@@ -593,7 +593,7 @@ function ExpenseRow({
   return (
     <tr className={`transition-colors ${expense.pay_now ? 'bg-primary-teal/[0.15] hover:bg-[#E1DEEC]' : 'odd:bg-bg-white even:bg-[#E8F5F4] hover:bg-[#E1DEEC]'}`}>
       {/* PayNow */}
-      <td className="text-center px-3 py-2">
+      <td className="text-center px-3 py-3">
         <input
           type="checkbox"
           checked={expense.pay_now}
@@ -604,26 +604,26 @@ function ExpenseRow({
       </td>
 
       {/* Name */}
-      <td className="px-3 py-2">
+      <td className="px-3 py-3">
         {expense.base_item_id ? (
           <Link
             href={`/base-budget?edit=${expense.base_item_id}`}
-            className="font-medium text-ink hover:text-blue hover:underline transition-colors"
+            className="text-caption font-medium text-text-heading hover:text-primary hover:underline transition-colors"
           >
             {expense.name}
           </Link>
         ) : (
-          <div className="font-medium text-ink">{expense.name}</div>
+          <div className="text-caption font-medium text-text-heading">{expense.name}</div>
         )}
         {expense.auto_pay && (
-          <span className="text-[10px] bg-green/10 text-green px-1.5 py-0.5 rounded font-bold">AUTO</span>
+          <span className="text-[10px] bg-success/10 text-success px-1.5 py-0.5 rounded-full font-bold">AUTO</span>
         )}
         {expense.pay_url && (
           <a
             href={expense.pay_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-[10px] text-blue ml-1 font-bold hover:underline"
+            className="text-[10px] text-primary ml-1 font-bold hover:underline"
           >
             PAY →
           </a>
@@ -631,7 +631,7 @@ function ExpenseRow({
       </td>
 
       {/* Amount */}
-      <td className="px-3 py-2">
+      <td className="px-3 py-3">
         <input
           type="number"
           step="0.01"
@@ -644,17 +644,17 @@ function ExpenseRow({
               onDebouncedUpdate(expense.id, 'amount_override', val)
             }
           }}
-          className={`w-24 text-right ${inputClass} ${hasOverride ? 'border-blue bg-blue/5' : ''}`}
+          className={`w-24 text-right ${inputClass} ${hasOverride ? 'border-primary bg-primary/5' : ''}`}
         />
         {hasOverride && (
-          <div className="text-[10px] text-muted mt-0.5">
+          <div className="text-[10px] text-text-muted mt-0.5">
             default: {formatCurrency(expense.default_amount)}
           </div>
         )}
       </td>
 
       {/* Pay Amt — what you're actually paying this period (overrides Amount for budget calc) */}
-      <td className="px-3 py-2">
+      <td className="px-3 py-3">
         <div className="min-w-0">
           <input
             type="number"
@@ -673,16 +673,16 @@ function ExpenseRow({
                 onCheckboxChange(expense.id, 'paid', false)
               }
             }}
-            className={`w-20 text-right text-xs ${inputClass} ${
+            className={`w-20 text-right text-caption ${inputClass} ${
               expense.paid_amount > 0 && expense.paid_amount < owedAmount
-                ? 'border-orange bg-orange/5'
+                ? 'border-warning bg-warning/5'
                 : expense.paid_amount >= owedAmount
-                  ? 'border-green bg-green/5'
+                  ? 'border-success bg-success/5'
                   : ''
             }`}
           />
           {expense.paid_amount > 0 && expense.paid_amount < owedAmount && (
-            <div className="text-[10px] text-orange font-bold mt-0.5 whitespace-nowrap">
+            <div className="text-[10px] text-warning font-bold mt-0.5 whitespace-nowrap">
               {formatCurrency(owedAmount - expense.paid_amount)} remaining
             </div>
           )}
@@ -690,10 +690,10 @@ function ExpenseRow({
       </td>
 
       {/* Account */}
-      <td className="px-3 py-2 text-xs text-muted whitespace-nowrap">{expense.account || '—'}</td>
+      <td className="px-3 py-3 text-caption text-text-muted whitespace-nowrap">{expense.account || '—'}</td>
 
       {/* Priority */}
-      <td className="px-3 py-2">
+      <td className="px-3 py-3">
         {expense.priority_category && (
           <span className={`inline-block max-w-[120px] truncate px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${getPriorityColor(categoryColorMap.get(expense.priority_category))}`}>
             {expense.priority_category}
@@ -702,10 +702,10 @@ function ExpenseRow({
       </td>
 
       {/* Due Day */}
-      <td className="px-3 py-2 text-xs text-muted text-center">{expense.due_day || '—'}</td>
+      <td className="px-3 py-3 text-caption text-text-muted text-center">{expense.due_day || '—'}</td>
 
       {/* Transferred */}
-      <td className="text-center px-3 py-2">
+      <td className="text-center px-3 py-3">
         <input
           type="checkbox"
           checked={expense.transferred}
@@ -716,7 +716,7 @@ function ExpenseRow({
       </td>
 
       {/* Paid */}
-      <td className="text-center px-3 py-2">
+      <td className="text-center px-3 py-3">
         <input
           type="checkbox"
           checked={expense.paid}
@@ -727,7 +727,7 @@ function ExpenseRow({
       </td>
 
       {/* Cleared */}
-      <td className="text-center px-3 py-2">
+      <td className="text-center px-3 py-3">
         <input
           type="checkbox"
           checked={expense.cleared}
