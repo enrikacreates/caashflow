@@ -83,10 +83,10 @@ export default function SavingsAllocationSection({
   // Pool bar color
   const poolRatio = savingsPool > 0 ? totalAllocated / savingsPool : 0
   const poolBarColor = isOverAllocated
-    ? 'bg-orange'
+    ? 'bg-warning'
     : poolRatio > 0.9
-      ? 'bg-yellow'
-      : 'bg-green'
+      ? 'bg-[#ffd34f]'
+      : 'bg-primary-teal'
 
   // ─── Handlers ────────────────────────────────────────────────
 
@@ -170,14 +170,14 @@ export default function SavingsAllocationSection({
   // ─── Render ──────────────────────────────────────────────────
 
   return (
-    <div className="bg-white border border-line rounded-[20px] p-6">
+    <div className="bg-bg-white rounded-lg shadow-card p-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-black font-display text-ink">Savings Allocation</h2>
+        <h2 className="text-h3 font-bold text-text-heading">Savings Allocation</h2>
         <button
           onClick={handleContribute}
           disabled={isPending || !hasPendingDeltas}
-          className="text-xs bg-green text-white rounded-[8px] px-4 py-1.5 font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="bg-primary-teal text-text-inverse rounded-full px-5 py-1.5 text-caption font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
         >
           Contribute
         </button>
@@ -185,28 +185,28 @@ export default function SavingsAllocationSection({
 
       {/* Depleting Pool Bar */}
       <div className="mb-5">
-        <div className="flex justify-between text-xs mb-1">
-          <span className="font-bold text-muted">
+        <div className="flex justify-between text-caption mb-1">
+          <span className="font-bold text-text-muted">
             Allocated {formatCurrency(totalAllocated)} of {formatCurrency(savingsPool)}
           </span>
           {isOverAllocated ? (
-            <span className="font-bold text-orange">
+            <span className="font-bold text-warning">
               Over by {formatCurrency(totalAllocated - savingsPool)}
             </span>
           ) : (
-            <span className="text-muted">
+            <span className="text-text-muted">
               {formatCurrency(unallocated)} remaining
             </span>
           )}
         </div>
-        <div className="h-2 bg-cream-2 rounded-full overflow-hidden">
+        <div className="h-2 bg-surface-gray rounded-full overflow-hidden">
           <div
             className={`h-full rounded-full transition-all duration-300 ${poolBarColor}`}
             style={{ width: `${Math.min(poolRatio * 100, 100)}%` }}
           />
         </div>
         {isOverAllocated && (
-          <p className="text-[10px] text-orange mt-1">
+          <p className="text-[10px] text-warning mt-1">
             Over-allocation uses leftover budget ({formatCurrency(leftoverBudget)} available)
           </p>
         )}
@@ -228,29 +228,29 @@ export default function SavingsAllocationSection({
           return (
             <div
               key={goal.id}
-              className={`border rounded-[12px] p-3 ${isPurchase ? 'border-blue/20' : 'border-green/20'}`}
+              className={`rounded-sm p-3 ${isPurchase ? 'bg-primary/5' : 'bg-primary-teal/5'}`}
             >
               <div className="flex items-center gap-3">
                 {/* Goal info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-sm">{isPurchase ? '🎯' : '🌱'}</span>
-                    <span className="text-sm font-bold text-ink truncate">{goal.name}</span>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
-                      isPurchase ? 'bg-blue/10 text-blue' : 'bg-green/10 text-green'
+                    <span className="text-caption font-bold text-text-heading truncate">{goal.name}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                      isPurchase ? 'bg-primary/10 text-primary' : 'bg-primary-teal/10 text-primary-teal'
                     }`}>
                       {isPurchase ? 'Purchase' : 'Fund'}
                     </span>
                   </div>
                   {/* Mini progress bar */}
                   <div className="flex items-center gap-2">
-                    <div className="flex-1 h-1.5 bg-cream-2 rounded-full overflow-hidden">
+                    <div className="flex-1 h-1.5 bg-surface-gray rounded-full overflow-hidden">
                       <div
-                        className={`h-full rounded-full ${isPurchase ? 'bg-blue' : 'bg-green'}`}
+                        className={`h-full rounded-full ${isPurchase ? 'bg-primary' : 'bg-primary-teal'}`}
                         style={{ width: `${progressPct}%` }}
                       />
                     </div>
-                    <span className="text-[10px] text-muted whitespace-nowrap">
+                    <span className="text-[10px] text-text-muted whitespace-nowrap">
                       {formatCurrency(goal.current_amount)} / {formatCurrency(goal.target_amount)}
                     </span>
                   </div>
@@ -259,19 +259,19 @@ export default function SavingsAllocationSection({
                 {/* Allocation input */}
                 <div className="flex items-center gap-1.5">
                   {/* % | $ toggle */}
-                  <div className="flex rounded-[6px] border border-line overflow-hidden">
+                  <div className="flex rounded-full overflow-hidden bg-surface-beige">
                     <button
                       onClick={() => toggleMode(goal.id)}
-                      className={`px-1.5 py-0.5 text-[10px] font-bold transition-colors ${
-                        mode === '%' ? 'bg-ink text-white' : 'text-muted hover:text-ink'
+                      className={`px-2 py-0.5 text-[10px] font-bold transition-colors ${
+                        mode === '%' ? 'bg-text-heading text-white' : 'text-text-muted hover:text-text-heading'
                       }`}
                     >
                       %
                     </button>
                     <button
                       onClick={() => toggleMode(goal.id)}
-                      className={`px-1.5 py-0.5 text-[10px] font-bold transition-colors ${
-                        mode === '$' ? 'bg-ink text-white' : 'text-muted hover:text-ink'
+                      className={`px-2 py-0.5 text-[10px] font-bold transition-colors ${
+                        mode === '$' ? 'bg-text-heading text-white' : 'text-text-muted hover:text-text-heading'
                       }`}
                     >
                       $
@@ -284,7 +284,7 @@ export default function SavingsAllocationSection({
                     value={getInputValue(goal.id)}
                     placeholder={lastAmount ? (mode === '$' ? lastAmount.toString() : ((lastAmount / (savingsPool || 1)) * 100).toFixed(1)) : '0'}
                     onChange={(e) => handleAmountChange(goal.id, e.target.value)}
-                    className="w-20 text-right text-sm font-bold rounded-[8px] border border-line px-2 py-1 focus:outline-none focus:border-blue"
+                    className="w-20 text-right text-caption font-bold rounded-sm border border-border px-2 py-1 focus:outline-none focus:border-primary transition-colors"
                   />
 
                   {/* Remove button (only if has allocation) */}
@@ -292,7 +292,7 @@ export default function SavingsAllocationSection({
                     <button
                       onClick={() => handleRemoveAllocation(goal.id)}
                       disabled={isPending}
-                      className="text-[10px] text-orange font-bold hover:underline ml-1"
+                      className="text-caption text-text-muted hover:text-warning font-semibold transition-colors ml-1"
                     >
                       ✕
                     </button>
@@ -302,9 +302,9 @@ export default function SavingsAllocationSection({
 
               {/* Helper text row */}
               <div className="flex items-center justify-between mt-1">
-                <span className="text-[10px] text-muted">{getHelperText(goal.id)}</span>
+                <span className="text-[10px] text-text-muted">{getHelperText(goal.id)}</span>
                 {delta !== 0 && (
-                  <span className={`text-[10px] font-bold ${delta > 0 ? 'text-green' : 'text-orange'}`}>
+                  <span className={`text-[10px] font-bold ${delta > 0 ? 'text-success' : 'text-warning'}`}>
                     {delta > 0 ? '+' : ''}{formatCurrency(delta)} pending
                   </span>
                 )}
@@ -324,11 +324,11 @@ export default function SavingsAllocationSection({
                 placeholder="Search goals..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full text-sm rounded-[8px] border border-line px-3 py-1.5 focus:outline-none focus:border-blue"
+                className="w-full text-caption rounded-sm border border-border px-3 py-1.5 focus:outline-none focus:border-primary transition-colors"
               />
               <button
                 onClick={() => { setShowAll(false); setSearchTerm('') }}
-                className="text-xs text-blue font-bold hover:underline"
+                className="text-caption text-primary font-semibold hover:underline"
               >
                 Show less
               </button>
@@ -336,7 +336,7 @@ export default function SavingsAllocationSection({
           ) : (
             <button
               onClick={() => setShowAll(true)}
-              className="text-xs text-blue font-bold hover:underline"
+              className="text-caption text-primary font-semibold hover:underline"
             >
               + {filteredGoals.length - 3} more goals
             </button>
@@ -346,9 +346,9 @@ export default function SavingsAllocationSection({
 
       {/* Leftover callout */}
       {leftoverBudget > 0 && !isOverAllocated && totalAllocated >= savingsPool && savingsPool > 0 && (
-        <div className="mt-4 p-3 bg-cream-2 rounded-[10px]">
-          <p className="text-xs text-muted">
-            <span className="font-bold text-ink">{formatCurrency(leftoverBudget)}</span> unbudgeted — put it to work?
+        <div className="mt-4 p-3 bg-surface-beige rounded-sm">
+          <p className="text-caption text-text-muted">
+            <span className="font-bold text-text-heading">{formatCurrency(leftoverBudget)}</span> unbudgeted — put it to work?
           </p>
         </div>
       )}
