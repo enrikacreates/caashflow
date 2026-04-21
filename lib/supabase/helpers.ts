@@ -10,10 +10,18 @@ export async function getUserHouseholdId(): Promise<string> {
     .select('household_id')
     .eq('user_id', user.id)
     .limit(1)
-    .single()
+    .maybeSingle()
 
-  if (error || !data) throw new Error('No household found')
-  return data.household_id
+  if (error) throw error
+  if (data) return data.household_id
+
+  // Lazy-provision on first visit (shared-auth on theDailyStory means
+  // the user may exist in auth.users without a caashflow household yet).
+  const { data: provisioned, error: provisionError } = await supabase
+    .rpc('provision_household_for_current_user')
+
+  if (provisionError || !provisioned) throw provisionError ?? new Error('Failed to provision household')
+  return provisioned as string
 }
 
 export async function getAuthUser() {
