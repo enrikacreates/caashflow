@@ -32,6 +32,7 @@ export async function createBudgetRequest(formData: FormData) {
     notes: formData.get('notes') as string || null,
     requested_for: (formData.get('requested_for') as string)?.trim() || null,
     image_url: (formData.get('image_url') as string)?.trim() || null,
+    url: (formData.get('url') as string)?.trim() || null,
   }
 
   const { error } = await supabase
@@ -57,6 +58,7 @@ export async function updateBudgetRequest(formData: FormData) {
     notes: formData.get('notes') as string || null,
     requested_for: (formData.get('requested_for') as string)?.trim() || null,
     image_url: (formData.get('image_url') as string)?.trim() || null,
+    url: (formData.get('url') as string)?.trim() || null,
     updated_at: new Date().toISOString(),
   }
 
@@ -138,7 +140,7 @@ export async function allocateRequestToPeriod(requestId: string, periodId: strin
 
   const { data: req } = await supabase
     .from('budget_requests')
-    .select('name, amount, priority_category')
+    .select('name, amount, priority_category, url')
     .eq('id', requestId).eq('household_id', householdId).single()
   if (!req) throw new Error('Request not found')
 
@@ -149,6 +151,7 @@ export async function allocateRequestToPeriod(requestId: string, periodId: strin
     name: req.name,
     default_amount: Number(req.amount) || 0,
     priority_category: req.priority_category,
+    pay_url: req.url ?? null,
     frequency: 'One-Time',
     pay_now: false,
   })
@@ -183,6 +186,7 @@ export async function submitPublicRequest(formData: FormData) {
     p_requested_for: ((formData.get('requested_for') as string) || '').trim() || null,
     p_image_url: ((formData.get('image_url') as string) || '').trim() || null,
     p_notes: ((formData.get('notes') as string) || '').trim() || null,
+    p_url: ((formData.get('url') as string) || '').trim() || null,
   })
   if (error) throw new Error(error.message)
 }

@@ -109,6 +109,9 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
           {req.requested_for && (
             <div className="text-caption text-text-muted mb-2">for <span className="font-semibold text-text-heading">{req.requested_for}</span></div>
           )}
+          {req.url && (
+            <a href={req.url} target="_blank" rel="noopener noreferrer" className="inline-block text-caption text-primary font-semibold hover:underline mb-2">View item ↗</a>
+          )}
           {req.tags && req.tags.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mb-3">
               {req.tags.map((tag) => (

@@ -77,6 +77,10 @@ export default function PublicRequestForm({ slug }: { slug: string }) {
         <input type="number" name="amount" step="0.01" placeholder="0.00" className={inputClass} />
       </div>
       <div>
+        <label className="block text-caption font-semibold text-text-heading mb-1">Link</label>
+        <input type="url" name="url" placeholder="Where to buy it (optional)" className={inputClass} />
+      </div>
+      <div>
         <label className="block text-caption font-semibold text-text-heading mb-1">Photo</label>
         {imageUrl && <img src={imageUrl} alt="" className="w-full max-h-44 object-cover rounded-sm mb-2 border border-border" />}
         <input type="url" placeholder="Paste an image link" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} className={inputClass} />

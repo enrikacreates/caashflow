@@ -68,6 +68,10 @@ export default function RequestFormModal({
             <input type="number" name="amount" step="0.01" defaultValue={editItem?.amount || ''} className={inputClass} />
           </div>
           <div>
+            <label className="block text-caption font-semibold text-text-heading mb-1">Link</label>
+            <input type="url" name="url" placeholder="Where to buy it (optional)" defaultValue={editItem?.url || ''} className={inputClass} />
+          </div>
+          <div>
             <label className="block text-caption font-semibold text-text-heading mb-1">Image</label>
             {imageUrl && (
               <img src={imageUrl} alt="" className="w-full max-h-44 object-cover rounded-sm mb-2 border border-border" />
