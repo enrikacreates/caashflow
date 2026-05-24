@@ -14,7 +14,8 @@ export async function proxy(request: NextRequest) {
   const isPublicRoute =
     request.nextUrl.pathname === '/login' ||
     request.nextUrl.pathname.startsWith('/auth/') ||
-    request.nextUrl.pathname.startsWith('/join/')
+    request.nextUrl.pathname.startsWith('/join/') ||
+    request.nextUrl.pathname.startsWith('/request/')
 
   let supabaseResponse = NextResponse.next({ request })
 

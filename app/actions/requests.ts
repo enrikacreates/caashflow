@@ -162,3 +162,72 @@ export async function allocateRequestToPeriod(requestId: string, periodId: strin
   revalidatePath('/requests')
   revalidatePath(`/periods/${periodId}`)
 }
+
+/* ─── Public (no-login) family request submission ───────────────────── */
+
+/** Resolve a family slug → public-safe { id, name } (or null). */
+export async function getPublicHousehold(slug: string) {
+  const supabase = await createClient()
+  const { data } = await supabase.rpc('get_public_household', { p_slug: slug })
+  const row = Array.isArray(data) ? data[0] : data
+  return (row ?? null) as { id: string; name: string } | null
+}
+
+/** Public submit — routes through a locked-down definer fn that only inserts a request. */
+export async function submitPublicRequest(formData: FormData) {
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('submit_public_request', {
+    p_slug: formData.get('slug') as string,
+    p_name: formData.get('name') as string,
+    p_amount: parseFloat(formData.get('amount') as string) || 0,
+    p_requested_for: ((formData.get('requested_for') as string) || '').trim() || null,
+    p_image_url: ((formData.get('image_url') as string) || '').trim() || null,
+    p_notes: ((formData.get('notes') as string) || '').trim() || null,
+  })
+  if (error) throw new Error(error.message)
+}
+
+/** Anonymous image upload for the public form (no household scoping). */
+export async function uploadPublicRequestImage(formData: FormData): Promise<string> {
+  const supabase = await createClient()
+  const file = formData.get('file') as File | null
+  if (!file || file.size === 0) throw new Error('No file provided')
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
+  const path = `public/${crypto.randomUUID()}.${ext}`
+  const { error } = await supabase.storage
+    .from('request-images')
+    .upload(path, file, { upsert: true, contentType: file.type || undefined })
+  if (error) throw new Error(`Image upload failed: ${error.message}`)
+  return supabase.storage.from('request-images').getPublicUrl(path).data.publicUrl
+}
+
+/** Settings: set the family name + derive a unique shareable slug. */
+export async function setFamilyName(formData: FormData) {
+  const supabase = await createClient()
+  const householdId = await getUserHouseholdId()
+  const name = ((formData.get('name') as string) || '').trim() || 'My Family'
+  let slug =
+    name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'family'
+
+  const { data: clash } = await supabase
+    .from('households').select('id').eq('slug', slug).neq('id', householdId).maybeSingle()
+  if (clash) slug = `${slug}-${householdId.slice(0, 4)}`
+
+  const { error } = await supabase
+    .from('households')
+    .update({ name, slug, updated_at: new Date().toISOString() })
+    .eq('id', householdId)
+  if (error) throw new Error(`Failed to set family name: ${error.message}`)
+
+  revalidatePath('/settings')
+  revalidatePath('/requests')
+}
+
+/** Settings: current family name + share slug. */
+export async function getFamilyShareInfo() {
+  const supabase = await createClient()
+  const householdId = await getUserHouseholdId()
+  const { data } = await supabase
+    .from('households').select('name, slug').eq('id', householdId).maybeSingle()
+  return (data ?? null) as { name: string; slug: string | null } | null
+}
