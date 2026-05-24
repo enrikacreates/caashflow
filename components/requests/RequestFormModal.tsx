@@ -1,14 +1,32 @@
 'use client'
 
-import { useTransition } from 'react'
-import { createBudgetRequest, updateBudgetRequest } from '@/app/actions/requests'
+import { useState, useTransition } from 'react'
+import { createBudgetRequest, updateBudgetRequest, uploadRequestImage } from '@/app/actions/requests'
 import type { BudgetRequest, PriorityCategoryRecord } from '@/lib/types'
 
 export default function RequestFormModal({
-  editItem, onClose, categories,
-}: { editItem: BudgetRequest | null; onClose: () => void; categories: PriorityCategoryRecord[] }) {
+  editItem, onClose, categories, forWhoOptions,
+}: { editItem: BudgetRequest | null; onClose: () => void; categories: PriorityCategoryRecord[]; forWhoOptions: string[] }) {
   const [isPending, startTransition] = useTransition()
+  const [imageUrl, setImageUrl] = useState(editItem?.image_url ?? '')
+  const [uploading, setUploading] = useState(false)
   const inputClass = 'w-full bg-bg-white border border-border rounded-sm px-4 py-2.5 text-caption focus:outline-none focus:border-primary transition-colors'
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const fd = new FormData()
+    fd.append('file', file)
+    setUploading(true)
+    startTransition(async () => {
+      try {
+        const url = await uploadRequestImage(fd)
+        setImageUrl(url)
+      } finally {
+        setUploading(false)
+      }
+    })
+  }
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -34,8 +52,34 @@ export default function RequestFormModal({
             <input type="text" name="name" required defaultValue={editItem?.name || ''} className={inputClass} />
           </div>
           <div>
+            <label className="block text-caption font-semibold text-text-heading mb-1">For</label>
+            <input type="text" name="requested_for" list="for-who-options" placeholder="Who's it for? (type a name or pick one)" defaultValue={editItem?.requested_for || ''} className={inputClass} />
+            <datalist id="for-who-options">
+              {forWhoOptions.map((o) => <option key={o} value={o} />)}
+            </datalist>
+          </div>
+          <div>
             <label className="block text-caption font-semibold text-text-heading mb-1">Amount</label>
             <input type="number" name="amount" step="0.01" defaultValue={editItem?.amount || ''} className={inputClass} />
+          </div>
+          <div>
+            <label className="block text-caption font-semibold text-text-heading mb-1">Image</label>
+            {imageUrl && (
+              <img src={imageUrl} alt="" className="w-full max-h-44 object-cover rounded-sm mb-2 border border-border" />
+            )}
+            <input type="url" placeholder="Paste an image URL" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} className={inputClass} />
+            <div className="flex items-center gap-2 mt-2">
+              <label className="bg-bg-white text-text-heading border border-border rounded-full px-4 py-1.5 text-caption font-semibold hover:border-primary transition-colors cursor-pointer">
+                {uploading ? 'Uploading…' : '📷 Upload / Camera'}
+                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFile} disabled={uploading} />
+              </label>
+              {imageUrl && (
+                <button type="button" onClick={() => setImageUrl('')} className="text-caption text-text-muted hover:text-warning font-semibold transition-colors">
+                  Remove
+                </button>
+              )}
+            </div>
+            <input type="hidden" name="image_url" value={imageUrl} />
           </div>
           <div>
             <label className="block text-caption font-semibold text-text-heading mb-1">Priority</label>
