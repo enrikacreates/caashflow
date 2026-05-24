@@ -100,6 +100,15 @@ export async function updateAccount(id: string, name: string) {
   const supabase = await createClient()
   const householdId = await getUserHouseholdId()
 
+  // Old name → so we can propagate the rename across denormalized text columns.
+  const { data: existing } = await supabase
+    .from('accounts')
+    .select('name')
+    .eq('id', id)
+    .eq('household_id', householdId)
+    .single()
+  const from = existing?.name ?? null
+
   const { error } = await supabase
     .from('accounts')
     .update({ name, updated_at: new Date().toISOString() })
@@ -108,8 +117,36 @@ export async function updateAccount(id: string, name: string) {
 
   if (error) throw new Error(`Failed to update account: ${error.message}`)
 
+  // Account names are stored as text on expenses + settings — keep them in sync.
+  if (from && from !== name) {
+    const now = new Date().toISOString()
+    await supabase.from('base_budget_items')
+      .update({ account: name, updated_at: now })
+      .eq('household_id', householdId).eq('account', from)
+    await supabase.from('period_expenses')
+      .update({ account: name, updated_at: now })
+      .eq('household_id', householdId).eq('account', from)
+
+    const { data: s } = await supabase.from('settings')
+      .select('tithe_account, savings_account, tax_account, profit_account, fun_money_account')
+      .eq('household_id', householdId).single()
+    if (s) {
+      const patch: Record<string, string> = {}
+      for (const k of ['tithe_account', 'savings_account', 'tax_account', 'profit_account', 'fun_money_account'] as const) {
+        if (s[k] === from) patch[k] = name
+      }
+      if (Object.keys(patch).length) {
+        await supabase.from('settings')
+          .update({ ...patch, updated_at: now })
+          .eq('household_id', householdId)
+      }
+    }
+  }
+
   revalidatePath('/settings')
   revalidatePath('/base-budget')
+  revalidatePath('/periods')
+  revalidatePath('/')
 }
 
 export async function deleteAccount(id: string) {
@@ -189,6 +226,15 @@ export async function updatePriorityCategory(id: string, name: string, colorKey:
   const supabase = await createClient()
   const householdId = await getUserHouseholdId()
 
+  // Old name → so we can propagate the rename across denormalized text columns.
+  const { data: existing } = await supabase
+    .from('priority_categories')
+    .select('name')
+    .eq('id', id)
+    .eq('household_id', householdId)
+    .single()
+  const from = existing?.name ?? null
+
   const { error } = await supabase
     .from('priority_categories')
     .update({ name, color_key: colorKey, updated_at: new Date().toISOString() })
@@ -197,9 +243,24 @@ export async function updatePriorityCategory(id: string, name: string, colorKey:
 
   if (error) throw new Error(`Failed to update priority category: ${error.message}`)
 
+  // Category names are stored as text on expenses + requests — keep them in sync.
+  if (from && from !== name) {
+    const now = new Date().toISOString()
+    await supabase.from('base_budget_items')
+      .update({ priority_category: name, updated_at: now })
+      .eq('household_id', householdId).eq('priority_category', from)
+    await supabase.from('period_expenses')
+      .update({ priority_category: name, updated_at: now })
+      .eq('household_id', householdId).eq('priority_category', from)
+    await supabase.from('budget_requests')
+      .update({ priority_category: name, updated_at: now })
+      .eq('household_id', householdId).eq('priority_category', from)
+  }
+
   revalidatePath('/settings')
   revalidatePath('/base-budget')
   revalidatePath('/requests')
+  revalidatePath('/periods')
 }
 
 export async function deletePriorityCategory(id: string) {

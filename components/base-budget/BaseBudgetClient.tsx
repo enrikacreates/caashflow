@@ -43,6 +43,9 @@ export default function BaseBudgetClient({ items, accounts, categories }: Props)
   // Build a lookup map: category name → color_key
   const categoryColorMap = new Map(categories.map(c => [c.name, c.color_key]))
 
+  // Distinct tags already in use — offered as toggle chips in the form
+  const tagOptions = [...new Set(items.flatMap((i) => i.tags ?? []))].sort()
+
   const grouped = FREQUENCY_ORDER.map((freq) => ({
     frequency: freq,
     items: items.filter((i) => i.frequency === freq),
@@ -155,6 +158,7 @@ export default function BaseBudgetClient({ items, accounts, categories }: Props)
           onClose={() => { setModalOpen(false); setEditItem(null) }}
           accounts={accounts}
           categories={categories}
+          tagOptions={tagOptions}
         />
       )}
     </>

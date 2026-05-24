@@ -1,6 +1,6 @@
 'use client'
 
-import { useTransition } from 'react'
+import { useState, useTransition } from 'react'
 import { createBaseBudgetItem, updateBaseBudgetItem } from '@/app/actions/base-budget'
 import type { BaseBudgetItem, Account, PriorityCategoryRecord } from '@/lib/types'
 import { FREQUENCIES } from '@/lib/types'
@@ -10,13 +10,25 @@ export default function ExpenseFormModal({
   onClose,
   accounts,
   categories,
+  tagOptions,
 }: {
   editItem: BaseBudgetItem | null
   onClose: () => void
   accounts: Account[]
   categories: PriorityCategoryRecord[]
+  tagOptions: string[]
 }) {
   const [isPending, startTransition] = useTransition()
+  const [tags, setTags] = useState<string[]>(editItem?.tags ?? [])
+  const [newTag, setNewTag] = useState('')
+
+  const allTags = [...new Set([...tagOptions, ...tags])]
+  const toggleTag = (t: string) => setTags((ts) => (ts.includes(t) ? ts.filter((x) => x !== t) : [...ts, t]))
+  const addNewTag = () => {
+    const t = newTag.trim()
+    if (t && !tags.includes(t)) setTags([...tags, t])
+    setNewTag('')
+  }
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -83,8 +95,36 @@ export default function ExpenseFormModal({
           </div>
 
           <div>
-            <label className="block text-caption font-semibold text-text-heading mb-1">Tags</label>
-            <input type="text" name="tags" placeholder="Comma-separated" defaultValue={editItem?.tags?.join(', ') || ''} className={inputClass} />
+            <label className="block text-caption font-semibold text-text-heading mb-1">Tags <span className="font-normal text-text-muted">(tap to select)</span></label>
+            {allTags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {allTags.map((t) => {
+                  const on = tags.includes(t)
+                  return (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => toggleTag(t)}
+                      className={`px-2.5 py-1 rounded-full text-caption font-semibold transition-colors ${on ? 'bg-primary-teal text-text-inverse' : 'bg-surface-beige text-text-muted hover:text-text-heading'}`}
+                    >
+                      {on ? '✓ ' : ''}{t}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+            <div className="flex gap-2 mt-2">
+              <input
+                type="text"
+                value={newTag}
+                onChange={(e) => setNewTag(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addNewTag() } }}
+                placeholder="+ add a tag"
+                className={inputClass}
+              />
+              <button type="button" onClick={addNewTag} className="shrink-0 bg-bg-white text-text-heading border border-border rounded-full px-4 text-caption font-semibold hover:border-primary transition-colors">Add</button>
+            </div>
+            <input type="hidden" name="tags" value={tags.join(', ')} />
           </div>
 
           <div className="flex items-center gap-3">
