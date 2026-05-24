@@ -34,6 +34,7 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
     [requests]
   )
   const forWhoOptions = useMemo(() => [...new Set(['Home', 'Family', ...people])], [people])
+  const tagOptions = useMemo(() => [...new Set(requests.flatMap((r) => r.tags ?? []))].sort(), [requests])
 
   const filtered = useMemo(() => {
     let list = [...requests]
@@ -206,6 +207,7 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
           onClose={() => { setModalOpen(false); setEditItem(null) }}
           categories={categories}
           forWhoOptions={forWhoOptions}
+          tagOptions={tagOptions}
         />
       )}
     </>

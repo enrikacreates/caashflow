@@ -3,14 +3,22 @@
 import { useState, useTransition } from 'react'
 import { createBudgetRequest, updateBudgetRequest, uploadRequestImage } from '@/app/actions/requests'
 import type { BudgetRequest, PriorityCategoryRecord } from '@/lib/types'
+import Combobox from './Combobox'
+
+const DEFAULT_TAGS = ['Christmas Wishlist', 'B-Day GiftWish', 'One-day', 'Gift Idea', 'Back to School']
 
 export default function RequestFormModal({
-  editItem, onClose, categories, forWhoOptions,
-}: { editItem: BudgetRequest | null; onClose: () => void; categories: PriorityCategoryRecord[]; forWhoOptions: string[] }) {
+  editItem, onClose, categories, forWhoOptions, tagOptions,
+}: { editItem: BudgetRequest | null; onClose: () => void; categories: PriorityCategoryRecord[]; forWhoOptions: string[]; tagOptions: string[] }) {
   const [isPending, startTransition] = useTransition()
   const [imageUrl, setImageUrl] = useState(editItem?.image_url ?? '')
   const [uploading, setUploading] = useState(false)
+  const [tagsStr, setTagsStr] = useState(editItem?.tags?.join(', ') || '')
   const inputClass = 'w-full bg-bg-white border border-border rounded-sm px-4 py-2.5 text-caption focus:outline-none focus:border-primary transition-colors'
+
+  const tagList = tagsStr.split(',').map((t) => t.trim()).filter(Boolean)
+  const suggestedTags = [...new Set([...DEFAULT_TAGS, ...tagOptions])].filter((t) => !tagList.includes(t))
+  const addTag = (t: string) => setTagsStr(tagList.length ? `${tagList.join(', ')}, ${t}` : t)
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -53,10 +61,7 @@ export default function RequestFormModal({
           </div>
           <div>
             <label className="block text-caption font-semibold text-text-heading mb-1">For</label>
-            <input type="text" name="requested_for" list="for-who-options" placeholder="Who's it for? (type a name or pick one)" defaultValue={editItem?.requested_for || ''} className={inputClass} />
-            <datalist id="for-who-options">
-              {forWhoOptions.map((o) => <option key={o} value={o} />)}
-            </datalist>
+            <Combobox name="requested_for" defaultValue={editItem?.requested_for || ''} options={forWhoOptions} placeholder="Who's it for? (type or pick)" className={inputClass} />
           </div>
           <div>
             <label className="block text-caption font-semibold text-text-heading mb-1">Amount</label>
@@ -97,7 +102,16 @@ export default function RequestFormModal({
           </div>
           <div>
             <label className="block text-caption font-semibold text-text-heading mb-1">Tags</label>
-            <input type="text" name="tags" placeholder="Comma-separated" defaultValue={editItem?.tags?.join(', ') || ''} className={inputClass} />
+            <input type="text" name="tags" placeholder="Comma-separated" value={tagsStr} onChange={(e) => setTagsStr(e.target.value)} className={inputClass} />
+            {suggestedTags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {suggestedTags.map((t) => (
+                  <button key={t} type="button" onClick={() => addTag(t)} className="px-2.5 py-0.5 rounded-full text-caption font-medium bg-surface-beige text-text-muted hover:text-text-heading hover:bg-surface-gray transition-colors">
+                    + {t}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div>
             <label className="block text-caption font-semibold text-text-heading mb-1">Notes</label>
