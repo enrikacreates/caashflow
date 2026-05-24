@@ -180,6 +180,11 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
           <div className="flex gap-3">
             <button onClick={() => { setEditItem(req); setModalOpen(true) }} className="text-caption text-primary font-semibold hover:underline">Edit</button>
             <button onClick={() => handleDelete(req.id, req.name)} disabled={isPending} className="text-caption text-text-muted hover:text-warning font-semibold transition-colors">Delete</button>
+            {req.status === 'obtained' ? (
+              <button onClick={() => startTransition(() => setRequestStatus(req.id, 'requested'))} disabled={isPending} className="text-caption text-text-muted hover:text-text-heading font-semibold transition-colors">↩ Reopen</button>
+            ) : (
+              <button onClick={() => startTransition(() => setRequestStatus(req.id, 'obtained'))} disabled={isPending} className="text-caption text-primary font-semibold hover:underline">✓ Got it</button>
+            )}
           </div>
           <button onClick={() => cycleStatus(req)} disabled={isPending} title="Click to change status" className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${statusColor(req.status)}`}>
             {req.status}
