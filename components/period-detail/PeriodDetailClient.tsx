@@ -1123,7 +1123,7 @@ export default function PeriodDetailClient({
           <h2 className="text-h3 font-bold text-text-heading">
             <button type="button" onClick={() => toggleSection('extra')} className="inline-flex items-center gap-2 hover:text-primary transition-colors">
               <span className="text-text-muted text-base leading-none">{isOpen('extra') ? '▾' : '▸'}</span>
-              Extra Expenses ({period.period_name})
+              Extra Expenses
             </button>
             <span className="text-caption font-medium text-text-muted ml-2">(this budget only)</span>
           </h2>
