@@ -33,7 +33,7 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
     () => [...new Set(requests.map((r) => r.requested_for).filter(Boolean) as string[])].sort(),
     [requests]
   )
-  const forWhoOptions = useMemo(() => [...new Set(['Household', 'Everyone', ...people])], [people])
+  const forWhoOptions = useMemo(() => [...new Set(['Home', 'Family', ...people])], [people])
 
   const filtered = useMemo(() => {
     let list = [...requests]
