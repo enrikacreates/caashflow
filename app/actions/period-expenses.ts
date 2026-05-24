@@ -827,3 +827,145 @@ export async function toggleLinkedInvoiceDone(linkId: string, periodId: string, 
 
   await recalculatePeriodIncome(periodId)
 }
+
+/** Bulk-set "transferred" on every to-pay item (single expenses + pay-checked installments). */
+export async function bulkSetTransferred(periodId: string, value: boolean) {
+  const supabase = await createClient()
+  const householdId = await getUserHouseholdId()
+
+  await supabase
+    .from('period_expenses')
+    .update({ transferred: value, updated_at: new Date().toISOString() })
+    .eq('period_id', periodId).eq('household_id', householdId)
+    .eq('pay_now', true).eq('is_split', false).eq('is_complete', false)
+
+  const { data: splits } = await supabase
+    .from('period_expenses')
+    .select('id').eq('period_id', periodId).eq('household_id', householdId)
+    .eq('is_split', true).eq('is_complete', false)
+  const splitIds = (splits ?? []).map((e) => e.id)
+  if (splitIds.length) {
+    await supabase
+      .from('period_expense_payments')
+      .update({ transferred: value, updated_at: new Date().toISOString() })
+      .eq('household_id', householdId).eq('pay_now', true).in('period_expense_id', splitIds)
+  }
+
+  revalidatePath(`/periods/${periodId}`)
+}
+
+/** Bulk-mark "paid" on every unpaid to-pay item — applies debt/savings ripples per item. */
+export async function bulkMarkPaid(periodId: string) {
+  const supabase = await createClient()
+  const householdId = await getUserHouseholdId()
+
+  const { data: exps } = await supabase
+    .from('period_expenses')
+    .select('id').eq('period_id', periodId).eq('household_id', householdId)
+    .eq('pay_now', true).eq('is_split', false).eq('paid', false).eq('is_complete', false)
+  for (const e of exps ?? []) {
+    await markExpensePaid(e.id)
+  }
+
+  const { data: splits } = await supabase
+    .from('period_expenses')
+    .select('id').eq('period_id', periodId).eq('household_id', householdId)
+    .eq('is_split', true).eq('is_complete', false)
+  const splitIds = (splits ?? []).map((e) => e.id)
+  if (splitIds.length) {
+    const { data: pays } = await supabase
+      .from('period_expense_payments')
+      .select('id').eq('household_id', householdId)
+      .eq('pay_now', true).eq('paid', false).in('period_expense_id', splitIds)
+    for (const p of pays ?? []) {
+      await updateExpensePayment(p.id, periodId, { paid: true })
+    }
+  }
+
+  revalidatePath(`/periods/${periodId}`)
+  revalidatePath('/')
+}
+
+/**
+ * "Settle & reset" — the balanced-budget moment within a period.
+ * Clears every to-pay item (drops it from the live balance + locks it) and marks all
+ * active income as Budgeted (logging its deductions to the ledger). Nothing is deleted;
+ * rows can be reopened individually. Result: Pay Now → $0 and active income → $0, ready
+ * for the next check.
+ */
+export async function settleAndResetPeriod(periodId: string) {
+  const supabase = await createClient()
+  const householdId = await getUserHouseholdId()
+
+  // 1. Settle to-pay single expenses that have been PAID (unpaid ones stay live)
+  await supabase
+    .from('period_expenses')
+    .update({ cleared: true, is_complete: true, pay_now: false, updated_at: new Date().toISOString() })
+    .eq('period_id', periodId).eq('household_id', householdId)
+    .eq('pay_now', true).eq('paid', true).eq('is_split', false)
+
+  // 2. Settle PAID to-pay installments; seal a split only once it has no to-pay left
+  const { data: splits } = await supabase
+    .from('period_expenses')
+    .select('id').eq('period_id', periodId).eq('household_id', householdId).eq('is_split', true)
+  const splitIds = (splits ?? []).map((e) => e.id)
+  if (splitIds.length) {
+    const { data: paidSubs } = await supabase
+      .from('period_expense_payments')
+      .select('id, period_expense_id')
+      .eq('household_id', householdId).eq('pay_now', true).eq('paid', true).in('period_expense_id', splitIds)
+    if (paidSubs && paidSubs.length) {
+      await supabase
+        .from('period_expense_payments')
+        .update({ cleared: true, pay_now: false, updated_at: new Date().toISOString() })
+        .in('id', paidSubs.map((p) => p.id))
+      // Seal only the split parents that now have no remaining to-pay installments.
+      const affected = [...new Set(paidSubs.map((p) => p.period_expense_id))]
+      const { data: remaining } = await supabase
+        .from('period_expense_payments')
+        .select('period_expense_id')
+        .eq('household_id', householdId).eq('pay_now', true).in('period_expense_id', affected)
+      const stillActive = new Set((remaining ?? []).map((r) => r.period_expense_id))
+      const fullySettled = affected.filter((id) => !stillActive.has(id))
+      if (fullySettled.length) {
+        await supabase
+          .from('period_expenses')
+          .update({ is_complete: true, updated_at: new Date().toISOString() })
+          .eq('household_id', householdId).in('id', fullySettled)
+      }
+    }
+  }
+
+  // 3. Budget out active income — log each contribution (at the current full income) then mark done
+  const { data: activeManual } = await supabase
+    .from('period_manual_income')
+    .select('id, amount, description').eq('period_id', periodId).eq('household_id', householdId).eq('is_done', false)
+  for (const mi of activeManual ?? []) {
+    await logDeductionContribution(supabase, householdId, periodId, 'manual', mi.id, mi.description, Number(mi.amount) || 0)
+  }
+  if (activeManual && activeManual.length) {
+    await supabase.from('period_manual_income').update({ is_done: true })
+      .eq('period_id', periodId).eq('household_id', householdId).eq('is_done', false)
+  }
+
+  const { data: activeLinks } = await supabase
+    .from('period_linked_invoices')
+    .select('id, invoices(amount, client_name, status)').eq('period_id', periodId).eq('is_done', false)
+  for (const link of activeLinks ?? []) {
+    const inv = link.invoices as unknown as { amount: number | string; client_name: string; status: string } | null
+    if (inv && inv.status === 'received') {
+      await logDeductionContribution(supabase, householdId, periodId, 'invoice', link.id, inv.client_name, Number(inv.amount) || 0)
+    }
+  }
+  if (activeLinks && activeLinks.length) {
+    await supabase.from('period_linked_invoices').update({ is_done: true }).eq('period_id', periodId).eq('is_done', false)
+  }
+
+  // 4. Clear this check's income adjustments — they belonged to the check we just budgeted out.
+  await supabase.from('period_adjustments')
+    .delete().eq('period_id', periodId).eq('household_id', householdId)
+
+  await recalculatePeriodIncome(periodId)
+  revalidatePath(`/periods/${periodId}`)
+  revalidatePath('/')
+}

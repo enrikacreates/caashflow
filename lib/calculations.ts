@@ -32,11 +32,13 @@ export function getEffectiveDeduction(
   percentKey: keyof DeductionOverrides,
   amountKey: keyof DeductionOverrides
 ): EffectiveDeduction {
-  // 1. Check for dollar-amount override first
+  // 1. Check for dollar-amount override first.
+  //    A fixed $ deduction only applies when there's income to take it from — with
+  //    no active income (e.g. after a settle & reset) it's $0, not the standing override.
   const dollarOverride = overrides?.[amountKey]
   if (dollarOverride !== null && dollarOverride !== undefined) {
     return {
-      amount: dollarOverride,
+      amount: income > 0 ? dollarOverride : 0,
       mode: '$',
       value: dollarOverride,
       percentage: income > 0 ? (dollarOverride / income) * 100 : 0,

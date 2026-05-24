@@ -15,6 +15,9 @@ import {
   toggleExpenseSplit,
   toggleExpenseOverdue,
   setExpenseCleared,
+  bulkSetTransferred,
+  bulkMarkPaid,
+  settleAndResetPeriod,
   addExpensePayment,
   updateExpensePayment,
   removeExpensePayment,
@@ -467,6 +470,17 @@ export default function PeriodDetailClient({
       applyExpenseOpt({ kind: 'payment', id: paymentId, field: 'pay_now', value: !value })
       await updateExpensePayment(paymentId, period.id, { cleared: value, pay_now: !value })
     })
+
+  // ─── Bulk header actions (scoped to to-pay items) ───────────
+  const handleBulkXfer = () => startTransition(async () => { await bulkSetTransferred(period.id, true) })
+  const handleBulkPaid = () => {
+    if (!confirm('Mark all to-pay items as paid?')) return
+    startTransition(async () => { await bulkMarkPaid(period.id) })
+  }
+  const handleSettleReset = () => {
+    if (!confirm('Clear all PAID items and reset for the next check?\n\nSettles & locks every paid item, logs the active income to the ledger, and clears adjustments. Unpaid items stay live. Nothing is deleted — reopen any row individually.')) return
+    startTransition(async () => { await settleAndResetPeriod(period.id) })
+  }
 
   // ─── Budget complete / reopen ────────────────────────────────
   const handleComplete = () => {
@@ -1076,9 +1090,15 @@ export default function PeriodDetailClient({
                   <th className={thClass} onClick={() => handleSort('due_day')}>
                     Due<SortIcon col="due_day" />
                   </th>
-                  <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted">Xfer</th>
-                  <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted">Paid</th>
-                  <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted">Clear</th>
+                  <th className="text-center px-3 py-3">
+                    <button type="button" onClick={handleBulkXfer} disabled={isLocked} title="Mark all to-pay items transferred" className="text-caption font-bold uppercase text-text-muted hover:text-primary transition-colors disabled:opacity-50">Xfer</button>
+                  </th>
+                  <th className="text-center px-3 py-3">
+                    <button type="button" onClick={handleBulkPaid} disabled={isLocked} title="Mark all to-pay items paid" className="text-caption font-bold uppercase text-text-muted hover:text-primary transition-colors disabled:opacity-50">Paid</button>
+                  </th>
+                  <th className="text-center px-3 py-3">
+                    <button type="button" onClick={handleSettleReset} disabled={isLocked} title="Clear all paid items & reset income — zeroes the budget for the next check (unpaid items stay live)" className="text-[10px] font-bold uppercase bg-primary-teal/10 text-primary rounded-full px-2.5 py-1 hover:bg-primary-teal/20 transition-colors disabled:opacity-50">Clear all</button>
+                  </th>
                 </tr>
               </thead>
               <tbody>
