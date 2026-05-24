@@ -184,7 +184,7 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
             ) : (
               <button onClick={(e) => { e.stopPropagation(); startTransition(() => setRequestStatus(req.id, 'obtained')) }} disabled={isPending} className="bg-success/10 text-success rounded-full px-3 py-1 text-caption font-bold hover:bg-success/20 disabled:opacity-50 transition-colors">✓ Got it</button>
             )}
-            <button onClick={(e) => { e.stopPropagation(); setEditItem(req); setModalOpen(true) }} className="text-caption text-primary font-semibold hover:underline">Edit</button>
+            <button onClick={(e) => { e.stopPropagation(); setEditItem(req); setModalOpen(true) }} className="text-caption text-text-muted font-semibold hover:text-text-heading transition-colors">Edit</button>
             <button onClick={(e) => { e.stopPropagation(); handleDelete(req.id, req.name) }} disabled={isPending} className="text-caption text-text-muted hover:text-warning font-semibold transition-colors">Delete</button>
           </div>
           <button onClick={(e) => { e.stopPropagation(); cycleStatus(req) }} disabled={isPending} title="Click to change status" className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${statusColor(req.status)}`}>
@@ -229,7 +229,7 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
       ) : (
         <button onClick={(e) => { e.stopPropagation(); startTransition(() => setRequestStatus(req.id, 'obtained')) }} disabled={isPending} className="shrink-0 bg-success/10 text-success rounded-full px-3 py-1 text-caption font-bold hover:bg-success/20 disabled:opacity-50 transition-colors">✓ Got it</button>
       )}
-      <button onClick={(e) => { e.stopPropagation(); setEditItem(req); setModalOpen(true) }} className="shrink-0 text-caption text-primary font-semibold hover:underline">Edit</button>
+      <button onClick={(e) => { e.stopPropagation(); setEditItem(req); setModalOpen(true) }} className="shrink-0 text-caption text-text-muted font-semibold hover:text-text-heading transition-colors">Edit</button>
       <button onClick={(e) => { e.stopPropagation(); handleDelete(req.id, req.name) }} disabled={isPending} className="shrink-0 text-caption text-text-muted hover:text-warning font-semibold transition-colors">Delete</button>
     </div>
   )
