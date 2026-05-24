@@ -18,6 +18,23 @@ export async function getBudgetRequests() {
   return data
 }
 
+/** Fast brain-dump: create a request from just a name (defaults to P7 / requested). */
+export async function quickAddRequest(name: string) {
+  const supabase = await createClient()
+  const householdId = await getUserHouseholdId()
+  const trimmed = name.trim()
+  if (!trimmed) return
+  const { error } = await supabase.from('budget_requests').insert({
+    household_id: householdId,
+    name: trimmed.slice(0, 200),
+    amount: 0,
+    priority_category: 'P7: UpNext',
+    status: 'requested',
+  })
+  if (error) throw new Error(`Failed to add request: ${error.message}`)
+  revalidatePath('/requests')
+}
+
 export async function createBudgetRequest(formData: FormData) {
   const supabase = await createClient()
   const householdId = await getUserHouseholdId()

@@ -7,7 +7,7 @@ export default function PublicRequestForm({ slug }: { slug: string }) {
   const [isPending, startTransition] = useTransition()
   const [imageUrl, setImageUrl] = useState('')
   const [uploading, setUploading] = useState(false)
-  const [done, setDone] = useState(false)
+  const [submitted, setSubmitted] = useState<string[]>([])
   const [error, setError] = useState('')
 
   const inputClass = 'w-full bg-bg-white border border-border rounded-sm px-4 py-2.5 text-caption focus:outline-none focus:border-primary transition-colors'
@@ -32,34 +32,33 @@ export default function PublicRequestForm({ slug }: { slug: string }) {
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setError('')
-    const fd = new FormData(e.currentTarget)
+    const form = e.currentTarget
+    const fd = new FormData(form)
+    const name = ((fd.get('name') as string) || '').trim() || 'Item'
     startTransition(async () => {
       try {
         await submitPublicRequest(fd)
-        setDone(true)
+        setSubmitted((s) => [name, ...s])
+        form.reset()
+        setImageUrl('')
       } catch {
         setError('Something went wrong — please try again.')
       }
     })
   }
 
-  if (done) {
-    return (
-      <div className="bg-bg-white rounded-lg shadow-card p-8 text-center">
-        <div className="text-4xl mb-3">🎉</div>
-        <h2 className="text-h3 font-bold text-text-heading mb-1">Request sent!</h2>
-        <p className="text-caption text-text-muted mb-5">It’s on the family’s list.</p>
-        <button
-          onClick={() => { setImageUrl(''); setDone(false) }}
-          className="bg-primary-teal text-text-inverse rounded-full px-5 py-2.5 text-caption font-bold hover:opacity-90 transition-opacity"
-        >
-          Add another
-        </button>
-      </div>
-    )
-  }
-
   return (
+    <>
+      {submitted.length > 0 && (
+        <div className="bg-bg-white rounded-lg shadow-card p-4 mb-4">
+          <p className="text-caption font-bold text-text-heading mb-2">🎉 Added {submitted.length} — keep going!</p>
+          <div className="flex flex-wrap gap-1.5">
+            {submitted.map((s, i) => (
+              <span key={i} className="px-2.5 py-0.5 rounded-full text-caption font-medium bg-pill-green text-text-heading">✓ {s}</span>
+            ))}
+          </div>
+        </div>
+      )}
     <form onSubmit={handleSubmit} className="bg-bg-white rounded-lg shadow-card p-6 space-y-4">
       <input type="hidden" name="slug" value={slug} />
       <input type="hidden" name="image_url" value={imageUrl} />
@@ -102,8 +101,9 @@ export default function PublicRequestForm({ slug }: { slug: string }) {
         disabled={isPending || uploading}
         className="w-full bg-primary-teal text-text-inverse rounded-full px-5 py-3 text-label font-bold hover:opacity-90 disabled:opacity-50 transition-opacity"
       >
-        {isPending ? 'Sending…' : 'Send request'}
+        {isPending ? 'Sending…' : submitted.length > 0 ? 'Send another' : 'Send request'}
       </button>
     </form>
+    </>
   )
 }

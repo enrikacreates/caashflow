@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useTransition } from 'react'
 import { ShoppingCart, LayoutGrid, List, ImagePlus } from 'lucide-react'
-import { deleteBudgetRequest, setRequestStatus, allocateRequestToPeriod } from '@/app/actions/requests'
+import { deleteBudgetRequest, setRequestStatus, allocateRequestToPeriod, quickAddRequest } from '@/app/actions/requests'
 import { formatCurrency, getPillColor, getPriorityColor } from '@/lib/utils'
 import type { BudgetRequest, PriorityCategoryRecord } from '@/lib/types'
 import RequestFormModal from './RequestFormModal'
@@ -26,6 +26,14 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
   const [sortKey, setSortKey] = useState<SortKey>('priority')
   const [groupByPerson, setGroupByPerson] = useState(false)
   const [view, setView] = useState<'card' | 'list'>('card')
+  const [quickName, setQuickName] = useState('')
+
+  const quickAdd = () => {
+    const n = quickName.trim()
+    if (!n) return
+    setQuickName('')
+    startTransition(() => quickAddRequest(n))
+  }
 
   const categoryColorMap = useMemo(() => new Map(categories.map((c) => [c.name, c.color_key])), [categories])
 
@@ -196,6 +204,16 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
 
   return (
     <>
+      <form onSubmit={(e) => { e.preventDefault(); quickAdd() }} className="mb-4">
+        <input
+          type="text"
+          value={quickName}
+          onChange={(e) => setQuickName(e.target.value)}
+          placeholder="Quick add — type an item and press Enter (e.g. New towels)"
+          className="w-full bg-bg-white border border-border rounded-full px-5 py-3 text-caption focus:outline-none focus:border-primary transition-colors shadow-card"
+        />
+      </form>
+
       <div className="flex flex-wrap items-center gap-3 mb-6">
         <button
           onClick={() => { setEditItem(null); setModalOpen(true) }}
