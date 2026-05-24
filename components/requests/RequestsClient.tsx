@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useTransition } from 'react'
-import { ShoppingCart, LayoutGrid, List } from 'lucide-react'
+import { ShoppingCart, LayoutGrid, List, ImagePlus } from 'lucide-react'
 import { deleteBudgetRequest, setRequestStatus, allocateRequestToPeriod } from '@/app/actions/requests'
 import { formatCurrency, getPillColor, getPriorityColor } from '@/lib/utils'
 import type { BudgetRequest, PriorityCategoryRecord } from '@/lib/types'
@@ -92,8 +92,16 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
 
   const card = (req: BudgetRequest) => (
     <div key={req.id} className="bg-bg-white rounded-lg shadow-card overflow-hidden flex flex-col">
-      {req.image_url && (
+      {req.image_url ? (
         <img src={req.image_url} alt="" className="w-full h-40 object-cover" />
+      ) : (
+        <button
+          onClick={() => { setEditItem(req); setModalOpen(true) }}
+          title="Add an image"
+          className="w-full h-28 bg-surface-gray flex items-center justify-center text-text-muted/40 hover:text-text-muted/70 hover:bg-[#e4e4e4] transition-colors"
+        >
+          <ImagePlus size={28} />
+        </button>
       )}
       <div className="p-5 flex flex-col flex-1">
         <div className="flex items-start justify-between gap-2 mb-2">
@@ -147,7 +155,7 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
   )
 
   const row = (req: BudgetRequest) => (
-    <div key={req.id} className="flex items-center gap-3 px-4 py-3 odd:bg-bg-white even:bg-[#ebf0f0] hover:bg-[#f2e9e9] transition-colors">
+    <div key={req.id} className="flex items-center gap-3 px-4 py-3 hover:bg-[#f2e9e9] transition-colors">
       {req.image_url
         ? <img src={req.image_url} alt="" className="w-12 h-12 rounded object-cover shrink-0" />
         : <div className="w-12 h-12 rounded bg-surface-gray shrink-0" />}
@@ -178,7 +186,7 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
   const renderItems = (items: BudgetRequest[]) =>
     view === 'list' ? (
       <div className="bg-bg-white rounded-lg shadow-card overflow-hidden">
-        <div className="overflow-x-auto"><div className="min-w-[520px]">{items.map(row)}</div></div>
+        <div className="overflow-x-auto"><div className="min-w-[520px] divide-y divide-[#e9e9e9]">{items.map(row)}</div></div>
       </div>
     ) : (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{items.map(card)}</div>
