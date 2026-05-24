@@ -18,6 +18,44 @@ export async function getBudgetRequests() {
   return data
 }
 
+/** Rename (or clear, if `to` is empty) a "who/what" value across every request that uses it. */
+export async function renameRequestedFor(from: string, to: string) {
+  const supabase = await createClient()
+  const householdId = await getUserHouseholdId()
+  const t = to.trim()
+  const { error } = await supabase
+    .from('budget_requests')
+    .update({ requested_for: t || null, updated_at: new Date().toISOString() })
+    .eq('household_id', householdId)
+    .eq('requested_for', from)
+  if (error) throw new Error(`Failed to rename: ${error.message}`)
+  revalidatePath('/requests')
+}
+
+/** Rename (or remove, if `to` is empty) a tag across every request that has it. */
+export async function renameRequestTag(from: string, to: string) {
+  const supabase = await createClient()
+  const householdId = await getUserHouseholdId()
+  const t = to.trim()
+  const { data } = await supabase
+    .from('budget_requests')
+    .select('id, tags')
+    .eq('household_id', householdId)
+    .contains('tags', [from])
+  for (const r of data ?? []) {
+    const cur = (r.tags as string[]) ?? []
+    const next = t
+      ? [...new Set(cur.map((x) => (x === from ? t : x)))]
+      : cur.filter((x) => x !== from)
+    await supabase
+      .from('budget_requests')
+      .update({ tags: next, updated_at: new Date().toISOString() })
+      .eq('id', r.id)
+      .eq('household_id', householdId)
+  }
+  revalidatePath('/requests')
+}
+
 /** Fast brain-dump: create a request from a parsed quick-add line (defaults P7 / requested). */
 export async function quickAddRequest(name: string, requestedFor: string | null = null, amount = 0) {
   const supabase = await createClient()

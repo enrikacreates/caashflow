@@ -6,6 +6,7 @@ import { deleteBudgetRequest, setRequestStatus, allocateRequestToPeriod, quickAd
 import { formatCurrency, getPillColor, getPriorityColor } from '@/lib/utils'
 import type { BudgetRequest, PriorityCategoryRecord } from '@/lib/types'
 import RequestFormModal from './RequestFormModal'
+import ManageNamesModal from './ManageNamesModal'
 
 interface Props {
   requests: BudgetRequest[]
@@ -27,6 +28,7 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
   const [groupByPerson, setGroupByPerson] = useState(false)
   const [view, setView] = useState<'card' | 'list'>('card')
   const [quickName, setQuickName] = useState('')
+  const [manageOpen, setManageOpen] = useState(false)
 
   // Parse "Item for Who, $Amount" → { name, requestedFor, amount }. Amount must be $- or comma-flagged
   // so item names with numbers ("iPhone 15") aren't mistaken for prices.
@@ -301,6 +303,12 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
             <List size={15} />
           </button>
         </div>
+        <button
+          onClick={() => setManageOpen(true)}
+          className="rounded-full px-3 py-1.5 text-caption font-semibold border border-border bg-bg-white text-text-muted hover:border-primary hover:text-text-heading transition-colors"
+        >
+          Manage names
+        </button>
       </div>
 
       {filtered.length === 0 ? (
@@ -329,6 +337,10 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
           forWhoOptions={forWhoOptions}
           tagOptions={tagOptions}
         />
+      )}
+
+      {manageOpen && (
+        <ManageNamesModal people={people} tags={tagOptions} onClose={() => setManageOpen(false)} />
       )}
     </>
   )

@@ -13,12 +13,17 @@ export default function RequestFormModal({
   const [isPending, startTransition] = useTransition()
   const [imageUrl, setImageUrl] = useState(editItem?.image_url ?? '')
   const [uploading, setUploading] = useState(false)
-  const [tagsStr, setTagsStr] = useState(editItem?.tags?.join(', ') || '')
+  const [tags, setTags] = useState<string[]>(editItem?.tags ?? [])
+  const [newTag, setNewTag] = useState('')
   const inputClass = 'w-full bg-bg-white border border-border rounded-sm px-4 py-2.5 text-caption focus:outline-none focus:border-primary transition-colors'
 
-  const tagList = tagsStr.split(',').map((t) => t.trim()).filter(Boolean)
-  const suggestedTags = [...new Set([...DEFAULT_TAGS, ...tagOptions])].filter((t) => !tagList.includes(t))
-  const addTag = (t: string) => setTagsStr(tagList.length ? `${tagList.join(', ')}, ${t}` : t)
+  const allTags = [...new Set([...DEFAULT_TAGS, ...tagOptions, ...tags])]
+  const toggleTag = (t: string) => setTags((ts) => (ts.includes(t) ? ts.filter((x) => x !== t) : [...ts, t]))
+  const addNewTag = () => {
+    const t = newTag.trim()
+    if (t && !tags.includes(t)) setTags([...tags, t])
+    setNewTag('')
+  }
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -107,17 +112,34 @@ export default function RequestFormModal({
             </select>
           </div>
           <div>
-            <label className="block text-caption font-semibold text-text-heading mb-1">Tags</label>
-            <input type="text" name="tags" placeholder="Comma-separated" value={tagsStr} onChange={(e) => setTagsStr(e.target.value)} className={inputClass} />
-            {suggestedTags.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-2">
-                {suggestedTags.map((t) => (
-                  <button key={t} type="button" onClick={() => addTag(t)} className="px-2.5 py-0.5 rounded-full text-caption font-medium bg-surface-beige text-text-muted hover:text-text-heading hover:bg-surface-gray transition-colors">
-                    + {t}
+            <label className="block text-caption font-semibold text-text-heading mb-1">Tags <span className="font-normal text-text-muted">(tap to select)</span></label>
+            <div className="flex flex-wrap gap-1.5">
+              {allTags.map((t) => {
+                const on = tags.includes(t)
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => toggleTag(t)}
+                    className={`px-2.5 py-1 rounded-full text-caption font-semibold transition-colors ${on ? 'bg-primary-teal text-text-inverse' : 'bg-surface-beige text-text-muted hover:text-text-heading'}`}
+                  >
+                    {on ? '✓ ' : ''}{t}
                   </button>
-                ))}
-              </div>
-            )}
+                )
+              })}
+            </div>
+            <div className="flex gap-2 mt-2">
+              <input
+                type="text"
+                value={newTag}
+                onChange={(e) => setNewTag(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addNewTag() } }}
+                placeholder="+ add a tag"
+                className={inputClass}
+              />
+              <button type="button" onClick={addNewTag} className="shrink-0 bg-bg-white text-text-heading border border-border rounded-full px-4 text-caption font-semibold hover:border-primary transition-colors">Add</button>
+            </div>
+            <input type="hidden" name="tags" value={tags.join(', ')} />
           </div>
           <div>
             <label className="block text-caption font-semibold text-text-heading mb-1">Notes</label>
