@@ -13,7 +13,7 @@ interface Props {
   activePeriod: { id: string; period_name: string } | null
 }
 
-const STATUSES = ['requested', 'approved', 'purchased'] as const
+const STATUSES = ['requested', 'approved', 'purchased', 'obtained'] as const
 type SortKey = 'priority' | 'amount' | 'recent'
 
 export default function RequestsClient({ requests, categories, activePeriod }: Props) {
@@ -119,7 +119,8 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
   }
 
   const statusColor = (s: string) =>
-    s === 'purchased' ? 'bg-pill-green text-text-heading'
+    s === 'obtained' ? 'bg-pill-teal text-text-heading'
+    : s === 'purchased' ? 'bg-pill-green text-text-heading'
     : s === 'approved' ? 'bg-pill-blue text-text-heading'
     : 'bg-pill-yellow text-text-heading'
 

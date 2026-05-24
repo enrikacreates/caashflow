@@ -296,6 +296,6 @@ export interface UserProfile {
 export type Frequency = 'Monthly' | 'Weekly' | 'Annually' | 'One-Time'
 export type PeriodStatus = 'active' | 'complete'
 export type InvoiceStatus = 'projected' | 'sent' | 'received'
-export type RequestStatus = 'requested' | 'approved' | 'purchased'
+export type RequestStatus = 'requested' | 'approved' | 'purchased' | 'obtained'
 
 export const FREQUENCIES: Frequency[] = ['Monthly', 'Weekly', 'Annually', 'One-Time']
