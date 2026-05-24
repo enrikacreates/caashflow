@@ -126,17 +126,18 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
     : 'bg-pill-yellow text-text-heading'
 
   const card = (req: BudgetRequest) => (
-    <div key={req.id} className="bg-bg-white rounded-lg shadow-card overflow-hidden flex flex-col">
+    <div
+      key={req.id}
+      onClick={() => { setEditItem(req); setModalOpen(true) }}
+      title="Click to edit"
+      className="bg-bg-white rounded-lg shadow-card overflow-hidden flex flex-col cursor-pointer hover:shadow-lg transition-shadow"
+    >
       {req.image_url ? (
         <img src={req.image_url} alt="" className="w-full h-40 object-cover" />
       ) : (
-        <button
-          onClick={() => { setEditItem(req); setModalOpen(true) }}
-          title="Add an image"
-          className="w-full h-28 bg-surface-gray flex items-center justify-center text-text-muted/40 hover:text-text-muted/70 hover:bg-[#e4e4e4] transition-colors"
-        >
+        <div className="w-full h-28 bg-surface-gray flex items-center justify-center text-text-muted/40">
           <ImagePlus size={28} />
-        </button>
+        </div>
       )}
       <div className="p-5 flex flex-col flex-1">
         <div className="flex items-start justify-between gap-2 mb-2">
@@ -154,7 +155,7 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
             <div className="text-caption text-text-muted mb-2">for <span className="font-semibold text-text-heading">{req.requested_for}</span></div>
           )}
           {req.url && (
-            <a href={req.url} target="_blank" rel="noopener noreferrer" className="inline-block text-caption text-primary font-semibold hover:underline mb-2">View item ↗</a>
+            <a href={req.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="inline-block text-caption text-primary font-semibold hover:underline mb-2">View item ↗</a>
           )}
           {req.tags && req.tags.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mb-3">
@@ -168,7 +169,7 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
 
         {activePeriod && req.status !== 'purchased' && (
           <button
-            onClick={() => handleAllocate(req)}
+            onClick={(e) => { e.stopPropagation(); handleAllocate(req) }}
             disabled={isPending}
             className="mt-3 w-full bg-primary-teal/10 text-primary rounded-full px-4 py-1.5 text-caption font-bold hover:bg-primary-teal/20 disabled:opacity-50 transition-colors"
           >
@@ -178,16 +179,16 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
 
         <div className="flex items-center justify-between pt-3 mt-3 border-t border-border">
           <div className="flex gap-3">
-            <button onClick={() => { setEditItem(req); setModalOpen(true) }} className="text-caption text-primary font-semibold hover:underline">Edit</button>
-            <button onClick={() => handleDelete(req.id, req.name)} disabled={isPending} className="text-caption text-text-muted hover:text-warning font-semibold transition-colors">Delete</button>
             {req.status === 'obtained' ? (
-              <button onClick={() => startTransition(() => setRequestStatus(req.id, 'requested'))} disabled={isPending} className="text-caption text-text-muted hover:text-text-heading font-semibold transition-colors">↩ Reopen</button>
+              <button onClick={(e) => { e.stopPropagation(); startTransition(() => setRequestStatus(req.id, 'requested')) }} disabled={isPending} className="text-caption text-text-muted hover:text-text-heading font-semibold transition-colors">↩ Reopen</button>
             ) : (
-              <button onClick={() => startTransition(() => setRequestStatus(req.id, 'obtained'))} disabled={isPending} className="text-caption text-primary font-semibold hover:underline">✓ Got it</button>
+              <button onClick={(e) => { e.stopPropagation(); startTransition(() => setRequestStatus(req.id, 'obtained')) }} disabled={isPending} className="text-caption text-primary font-semibold hover:underline">✓ Got it</button>
             )}
+            <button onClick={(e) => { e.stopPropagation(); setEditItem(req); setModalOpen(true) }} className="text-caption text-primary font-semibold hover:underline">Edit</button>
+            <button onClick={(e) => { e.stopPropagation(); handleDelete(req.id, req.name) }} disabled={isPending} className="text-caption text-text-muted hover:text-warning font-semibold transition-colors">Delete</button>
           </div>
-          <button onClick={() => cycleStatus(req)} disabled={isPending} title="Click to change status" className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${statusColor(req.status)}`}>
-            {req.status}
+          <button onClick={(e) => { e.stopPropagation(); cycleStatus(req) }} disabled={isPending} title="Click to change status" className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${statusColor(req.status)}`}>
+            {statusLabel(req.status)}
           </button>
         </div>
       </div>
@@ -217,6 +218,11 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
       <button onClick={() => cycleStatus(req)} disabled={isPending} title="Change status" className={`shrink-0 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${statusColor(req.status)}`}>{statusLabel(req.status)}</button>
       {activePeriod && req.status !== 'purchased' && (
         <button onClick={() => handleAllocate(req)} disabled={isPending} title={`Add to ${activePeriod.period_name}`} className="shrink-0 bg-primary-teal/10 text-primary rounded-full px-3 py-1 text-caption font-bold hover:bg-primary-teal/20 disabled:opacity-50 transition-colors">+ Add</button>
+      )}
+      {req.status === 'obtained' ? (
+        <button onClick={() => startTransition(() => setRequestStatus(req.id, 'requested'))} disabled={isPending} className="shrink-0 text-caption text-text-muted hover:text-text-heading font-semibold transition-colors">↩ Reopen</button>
+      ) : (
+        <button onClick={() => startTransition(() => setRequestStatus(req.id, 'obtained'))} disabled={isPending} className="shrink-0 text-caption text-primary font-semibold hover:underline">✓ Got it</button>
       )}
       <button onClick={() => { setEditItem(req); setModalOpen(true) }} className="shrink-0 text-caption text-primary font-semibold hover:underline">Edit</button>
       <button onClick={() => handleDelete(req.id, req.name)} disabled={isPending} className="shrink-0 text-caption text-text-muted hover:text-warning font-semibold transition-colors">Delete</button>
