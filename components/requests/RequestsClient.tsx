@@ -34,7 +34,7 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
     () => [...new Set(requests.map((r) => r.requested_for).filter(Boolean) as string[])].sort(),
     [requests]
   )
-  const forWhoOptions = useMemo(() => [...new Set(['Home', 'Family', ...people])], [people])
+  const forWhoOptions = useMemo(() => [...new Set(['Home', 'Family', 'Guests', 'Giving', ...people])], [people])
   const tagOptions = useMemo(() => [...new Set(requests.flatMap((r) => r.tags ?? []))].sort(), [requests])
 
   const filtered = useMemo(() => {
@@ -229,7 +229,7 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
           onClick={() => setGroupByPerson((g) => !g)}
           className={`rounded-full px-3 py-1.5 text-caption font-semibold border transition-colors ${groupByPerson ? 'bg-text-heading text-white border-text-heading' : 'bg-bg-white text-text-muted border-border hover:border-primary'}`}
         >
-          Group by person
+          Group by Who/What
         </button>
         <div className="flex rounded-full border border-border overflow-hidden">
           <button onClick={() => setView('card')} title="Card view" className={`px-2.5 py-1.5 transition-colors ${view === 'card' ? 'bg-text-heading text-white' : 'bg-bg-white text-text-muted hover:text-text-heading'}`}>

@@ -69,8 +69,8 @@ export default function PublicRequestForm({ slug }: { slug: string }) {
         <input type="text" name="name" required placeholder="e.g. Lego Star Wars set" className={inputClass} />
       </div>
       <div>
-        <label className="block text-caption font-semibold text-text-heading mb-1">Who's it for?</label>
-        <input type="text" name="requested_for" placeholder="Your name" className={inputClass} />
+        <label className="block text-caption font-semibold text-text-heading mb-1">For (who or what)</label>
+        <input type="text" name="requested_for" placeholder="Your name, or Home / Guests…" className={inputClass} />
       </div>
       <div>
         <label className="block text-caption font-semibold text-text-heading mb-1">About how much?</label>
