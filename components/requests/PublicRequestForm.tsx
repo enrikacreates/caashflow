@@ -84,7 +84,8 @@ export default function PublicRequestForm({ slug }: { slug: string }) {
         <label className="block text-caption font-semibold text-text-heading mb-1">Photo</label>
         {imageUrl && <img src={imageUrl} alt="" className="w-full max-h-44 object-cover rounded-sm mb-2 border border-border" />}
         <input type="url" placeholder="Paste an image link" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} className={inputClass} />
-        <label className="inline-block mt-2 bg-bg-white text-text-heading border border-border rounded-full px-4 py-1.5 text-caption font-semibold hover:border-primary transition-colors cursor-pointer">
+        <div className="text-caption text-text-muted text-center my-1.5">or</div>
+        <label className="inline-block bg-bg-white text-text-heading border border-border rounded-full px-4 py-1.5 text-caption font-semibold hover:border-primary transition-colors cursor-pointer">
           {uploading ? 'Uploading…' : '📷 Take / upload a photo'}
           <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFile} disabled={uploading} />
         </label>

@@ -147,7 +147,7 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
   )
 
   const row = (req: BudgetRequest) => (
-    <div key={req.id} className="flex items-center gap-3 px-4 py-3 hover:bg-[#f2e9e9] transition-colors">
+    <div key={req.id} className="flex items-center gap-3 px-4 py-3 odd:bg-bg-white even:bg-[#ebf0f0] hover:bg-[#f2e9e9] transition-colors">
       {req.image_url
         ? <img src={req.image_url} alt="" className="w-12 h-12 rounded object-cover shrink-0" />
         : <div className="w-12 h-12 rounded bg-surface-gray shrink-0" />}
@@ -177,8 +177,8 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
 
   const renderItems = (items: BudgetRequest[]) =>
     view === 'list' ? (
-      <div className="bg-bg-white rounded-lg shadow-card overflow-x-auto divide-y divide-border">
-        <div className="min-w-[520px]">{items.map(row)}</div>
+      <div className="bg-bg-white rounded-lg shadow-card overflow-hidden">
+        <div className="overflow-x-auto"><div className="min-w-[520px]">{items.map(row)}</div></div>
       </div>
     ) : (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{items.map(card)}</div>

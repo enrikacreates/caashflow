@@ -77,7 +77,8 @@ export default function RequestFormModal({
               <img src={imageUrl} alt="" className="w-full max-h-44 object-cover rounded-sm mb-2 border border-border" />
             )}
             <input type="url" placeholder="Paste an image URL" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} className={inputClass} />
-            <div className="flex items-center gap-2 mt-2">
+            <div className="text-caption text-text-muted text-center my-1.5">or</div>
+            <div className="flex items-center gap-2">
               <label className="bg-bg-white text-text-heading border border-border rounded-full px-4 py-1.5 text-caption font-semibold hover:border-primary transition-colors cursor-pointer">
                 {uploading ? 'Uploading…' : '📷 Upload / Camera'}
                 <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFile} disabled={uploading} />
