@@ -18,8 +18,8 @@ export async function getBudgetRequests() {
   return data
 }
 
-/** Fast brain-dump: create a request from just a name (defaults to P7 / requested). */
-export async function quickAddRequest(name: string) {
+/** Fast brain-dump: create a request from a parsed quick-add line (defaults P7 / requested). */
+export async function quickAddRequest(name: string, requestedFor: string | null = null, amount = 0) {
   const supabase = await createClient()
   const householdId = await getUserHouseholdId()
   const trimmed = name.trim()
@@ -27,7 +27,8 @@ export async function quickAddRequest(name: string) {
   const { error } = await supabase.from('budget_requests').insert({
     household_id: householdId,
     name: trimmed.slice(0, 200),
-    amount: 0,
+    amount: amount || 0,
+    requested_for: requestedFor?.trim() || null,
     priority_category: 'P7: UpNext',
     status: 'requested',
   })

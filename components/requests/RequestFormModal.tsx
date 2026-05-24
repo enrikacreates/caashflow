@@ -61,7 +61,7 @@ export default function RequestFormModal({
           </div>
           <div>
             <label className="block text-caption font-semibold text-text-heading mb-1">For (who or what)</label>
-            <Combobox name="requested_for" defaultValue={editItem?.requested_for || ''} options={forWhoOptions} placeholder="Who or what is it for? (e.g. Daughter, Home, Guests)" className={inputClass} />
+            <Combobox name="requested_for" defaultValue={editItem?.requested_for || ''} options={forWhoOptions} placeholder="Who or what is this for? (e.g. Daughter, Home, Guests)" className={inputClass} />
           </div>
           <div>
             <label className="block text-caption font-semibold text-text-heading mb-1">Amount</label>

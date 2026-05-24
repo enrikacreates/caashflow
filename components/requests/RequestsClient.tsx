@@ -28,11 +28,36 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
   const [view, setView] = useState<'card' | 'list'>('card')
   const [quickName, setQuickName] = useState('')
 
+  // Parse "Item for Who, $Amount" → { name, requestedFor, amount }. Amount must be $- or comma-flagged
+  // so item names with numbers ("iPhone 15") aren't mistaken for prices.
+  const parseQuickAdd = (raw: string) => {
+    let s = raw.trim()
+    let amount = 0
+    const dollar = s.match(/\$\s*([\d,]+(?:\.\d{1,2})?)/)
+    if (dollar) {
+      amount = parseFloat(dollar[1].replace(/,/g, '')) || 0
+      s = (s.slice(0, dollar.index) + s.slice(dollar.index! + dollar[0].length))
+    } else {
+      const commaNum = s.match(/,\s*\$?([\d,]+(?:\.\d{1,2})?)\s*$/)
+      if (commaNum) { amount = parseFloat(commaNum[1].replace(/,/g, '')) || 0; s = s.slice(0, commaNum.index) }
+    }
+    s = s.replace(/[,\s]+$/, '').trim()
+    let requestedFor: string | null = null
+    const forMatch = s.match(/\bfor\s+(.+?)\s*$/i)
+    if (forMatch) {
+      requestedFor = forMatch[1].trim().replace(/^the\s+/i, '')
+      s = s.slice(0, forMatch.index).trim()
+    }
+    const name = s.replace(/[,\s]+$/, '').trim() || raw.trim()
+    return { name, requestedFor, amount }
+  }
+
   const quickAdd = () => {
-    const n = quickName.trim()
-    if (!n) return
+    const raw = quickName.trim()
+    if (!raw) return
+    const { name, requestedFor, amount } = parseQuickAdd(raw)
     setQuickName('')
-    startTransition(() => quickAddRequest(n))
+    startTransition(() => quickAddRequest(name, requestedFor, amount))
   }
 
   const categoryColorMap = useMemo(() => new Map(categories.map((c) => [c.name, c.color_key])), [categories])
@@ -209,9 +234,10 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
           type="text"
           value={quickName}
           onChange={(e) => setQuickName(e.target.value)}
-          placeholder="Quick add — type an item and press Enter (e.g. New towels)"
+          placeholder="Quick add — e.g. “Towels for Guests, $35” then press Enter"
           className="w-full bg-bg-white border border-border rounded-full px-5 py-3 text-caption focus:outline-none focus:border-primary transition-colors shadow-card"
         />
+        <p className="text-[11px] text-text-muted mt-1.5 ml-1">Type naturally — <span className="font-semibold">“Item for Who, $Amount”</span> auto-fills the fields.</p>
       </form>
 
       <div className="flex flex-wrap items-center gap-3 mb-6">
