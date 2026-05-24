@@ -34,6 +34,12 @@ export interface Settings {
   fun_money_percentage: number
   monthly_expense_goal: number | null
   monthly_income_goal: number | null
+  // Account each deduction is set aside into — feeds the Account Transfers breakdown
+  tithe_account: string | null
+  savings_account: string | null
+  tax_account: string | null
+  profit_account: string | null
+  fun_money_account: string | null
   updated_at: string
 }
 
@@ -64,6 +70,19 @@ export interface BudgetPeriod {
   period_month: string | null
   income_amount: number
   deduction_overrides: DeductionOverrides
+  status: PeriodStatus
+  completed_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface PeriodAdjustment {
+  id: string
+  household_id: string
+  period_id: string
+  amount: number
+  note: string | null
+  sort_order: number
   created_at: string
   updated_at: string
 }
@@ -87,11 +106,32 @@ export interface PeriodExpense {
   transferred: boolean
   paid: boolean
   cleared: boolean
+  is_split: boolean
+  is_complete: boolean
+  is_overdue: boolean
   amount_override: number | null
   override_notes: string | null
   paid_amount: number
   debt_id: string | null
   savings_goal_id: string | null
+  sort_order: number
+  created_at: string
+  updated_at: string
+  // Sub-payment rows when is_split is true (joined by getPeriodDetail)
+  payments?: PeriodExpensePayment[]
+}
+
+export interface PeriodExpensePayment {
+  id: string
+  household_id: string
+  period_expense_id: string
+  label: string | null
+  amount: number
+  due_day: number | null
+  pay_now: boolean
+  transferred: boolean
+  paid: boolean
+  cleared: boolean
   sort_order: number
   created_at: string
   updated_at: string
@@ -121,6 +161,7 @@ export interface PeriodLinkedInvoice {
   id: string
   period_id: string
   invoice_id: string
+  is_done: boolean
 }
 
 export interface PeriodManualIncome {
@@ -129,6 +170,23 @@ export interface PeriodManualIncome {
   household_id: string
   description: string
   amount: number
+  is_done: boolean
+  created_at: string
+}
+
+export interface PeriodDeductionContribution {
+  id: string
+  household_id: string
+  period_id: string
+  source_kind: 'manual' | 'invoice'
+  source_id: string
+  source_label: string | null
+  income_amount: number
+  tithe: number
+  savings: number
+  tax: number
+  profit: number
+  fun_money: number
   created_at: string
 }
 
@@ -233,6 +291,7 @@ export interface UserProfile {
 }
 
 export type Frequency = 'Monthly' | 'Weekly' | 'Annually' | 'One-Time'
+export type PeriodStatus = 'active' | 'complete'
 export type InvoiceStatus = 'projected' | 'sent' | 'received'
 export type RequestStatus = 'requested' | 'approved' | 'purchased'
 

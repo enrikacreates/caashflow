@@ -26,6 +26,9 @@ export default async function PeriodDetailPage({
         manualIncome={detail.manualIncome}
         allReceivedInvoices={detail.allReceivedInvoices}
         settings={detail.settings}
+        accounts={detail.accounts}
+        deductionContributions={detail.deductionContributions}
+        adjustments={detail.adjustments}
         categories={categories ?? []}
         savingsGoals={detail.savingsGoals}
         savingsAllocations={detail.savingsAllocations}

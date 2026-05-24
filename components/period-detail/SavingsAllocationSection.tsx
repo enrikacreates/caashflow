@@ -16,6 +16,7 @@ interface Props {
   savingsGoals: SavingsGoal[]
   savingsAllocations: PeriodSavingsAllocation[]
   lastPeriodAllocations: PeriodSavingsAllocation[]
+  locked?: boolean
 }
 
 export default function SavingsAllocationSection({
@@ -25,6 +26,7 @@ export default function SavingsAllocationSection({
   savingsGoals,
   savingsAllocations,
   lastPeriodAllocations,
+  locked = false,
 }: Props) {
   const [isPending, startTransition] = useTransition()
   const debounceTimers = useRef<Record<string, NodeJS.Timeout>>({})
@@ -42,6 +44,7 @@ export default function SavingsAllocationSection({
   // Show more goals toggle
   const [showAll, setShowAll] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
+  const [open, setOpen] = useState(true)
 
   // Build lookup for last period
   const lastAllocMap = new Map(lastPeriodAllocations.map((a) => [a.savings_goal_id, a.amount]))
@@ -173,15 +176,23 @@ export default function SavingsAllocationSection({
     <div className="bg-bg-white rounded-lg shadow-card p-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-h3 font-bold text-text-heading">Savings Allocation</h2>
+        <h2 className="text-h3 font-bold text-text-heading">
+          <button type="button" onClick={() => setOpen((o) => !o)} className="inline-flex items-center gap-2 hover:text-primary transition-colors">
+            <span className="text-text-muted text-base leading-none">{open ? '▾' : '▸'}</span>
+            Savings Allocation
+          </button>
+        </h2>
+        {open && (
         <button
           onClick={handleContribute}
-          disabled={isPending || !hasPendingDeltas}
+          disabled={isPending || !hasPendingDeltas || locked}
           className="bg-primary-teal text-text-inverse rounded-full px-5 py-1.5 text-caption font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
         >
           Contribute
         </button>
+        )}
       </div>
+      {open && (<>
 
       {/* Depleting Pool Bar */}
       <div className="mb-5">
@@ -228,7 +239,7 @@ export default function SavingsAllocationSection({
           return (
             <div
               key={goal.id}
-              className={`rounded-sm p-3 ${isPurchase ? 'bg-primary/5' : 'bg-primary-teal/5'}`}
+              className={`rounded-sm p-3 ${isPurchase ? 'bg-[#dcd5e9]' : 'bg-[#ebf0f0]'}`}
             >
               <div className="flex items-center gap-3">
                 {/* Goal info */}
@@ -284,11 +295,12 @@ export default function SavingsAllocationSection({
                     value={getInputValue(goal.id)}
                     placeholder={lastAmount ? (mode === '$' ? lastAmount.toString() : ((lastAmount / (savingsPool || 1)) * 100).toFixed(1)) : '0'}
                     onChange={(e) => handleAmountChange(goal.id, e.target.value)}
-                    className="w-20 text-right text-caption font-bold rounded-sm border border-border px-2 py-1 focus:outline-none focus:border-primary transition-colors"
+                    disabled={locked}
+                    className="w-20 text-right text-caption font-bold rounded-sm border border-border px-2 py-1 focus:outline-none focus:border-primary transition-colors disabled:opacity-60"
                   />
 
                   {/* Remove button (only if has allocation) */}
-                  {dollarAmount > 0 && (
+                  {dollarAmount > 0 && !locked && (
                     <button
                       onClick={() => handleRemoveAllocation(goal.id)}
                       disabled={isPending}
@@ -352,6 +364,7 @@ export default function SavingsAllocationSection({
           </p>
         </div>
       )}
+      </>)}
     </div>
   )
 }

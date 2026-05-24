@@ -26,12 +26,19 @@ export async function updateSettings(formData: FormData) {
   const expenseGoalRaw = formData.get('monthly_expense_goal') as string
   const incomeGoalRaw = formData.get('monthly_income_goal') as string
 
+  const acct = (key: string) => (formData.get(key) as string) || null
+
   const updates = {
     tithe_percentage: parseFloat(formData.get('tithe_percentage') as string) || 0,
     savings_percentage: parseFloat(formData.get('savings_percentage') as string) || 0,
     tax_percentage: parseFloat(formData.get('tax_percentage') as string) || 0,
     profit_percentage: parseFloat(formData.get('profit_percentage') as string) || 0,
     fun_money_percentage: parseFloat(formData.get('fun_money_percentage') as string) || 0,
+    tithe_account: acct('tithe_account'),
+    savings_account: acct('savings_account'),
+    tax_account: acct('tax_account'),
+    profit_account: acct('profit_account'),
+    fun_money_account: acct('fun_money_account'),
     monthly_expense_goal: expenseGoalRaw ? parseFloat(expenseGoalRaw) || null : null,
     monthly_income_goal: incomeGoalRaw ? parseFloat(incomeGoalRaw) || null : null,
     updated_at: new Date().toISOString(),
@@ -45,6 +52,8 @@ export async function updateSettings(formData: FormData) {
   if (error) throw new Error(`Failed to update settings: ${error.message}`)
 
   revalidatePath('/settings')
+  revalidatePath('/periods')
+  revalidatePath('/')
 }
 
 // ── Accounts CRUD ────────────────────────────────────────────────────────────

@@ -48,9 +48,16 @@ export default function PeriodsClient({ periods }: { periods: BudgetPeriod[] }) 
               onClick={() => router.push(`/periods/${period.id}`)}
               className="bg-bg-white rounded-lg shadow-card p-6 hover:shadow-lg transition-shadow cursor-pointer"
             >
-              <h3 className="font-bold text-text-heading text-h3 mb-2">
-                {displayName(period.period_name)}
-              </h3>
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <h3 className="font-bold text-text-heading text-h3">
+                  {displayName(period.period_name)}
+                </h3>
+                {period.status === 'complete' ? (
+                  <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-success/10 text-success px-2 py-0.5 rounded-full">🔒 Complete</span>
+                ) : (
+                  <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-primary-teal/10 text-primary-teal px-2 py-0.5 rounded-full">Active</span>
+                )}
+              </div>
               <div className="space-y-1 mb-3">
                 <div className="flex justify-between text-caption">
                   <span className="text-text-muted">Income</span>

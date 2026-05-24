@@ -33,7 +33,7 @@ export default async function SettingsPage() {
         email={user?.email ?? ''}
         households={households ?? []}
       />
-      <SettingsForm settings={settings} />
+      <SettingsForm settings={settings} accounts={accounts ?? []} />
       <AccountsPanel accounts={accounts ?? []} />
       <CategoriesPanel categories={categories ?? []} />
       <MembersPanel members={members ?? []} currentUserId={user?.id ?? ''} />

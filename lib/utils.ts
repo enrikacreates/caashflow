@@ -72,6 +72,15 @@ export function getPriorityColor(colorKey: string | null | undefined): string {
   return colorKey ? COLOR_KEY_MAP[colorKey] || 'bg-surface-gray text-text-muted' : 'bg-surface-gray text-text-muted'
 }
 
+/** Pill color class for a priority category — single-select, so use the category's own color. */
+export function getPriorityPill(
+  priorityCategory: string,
+  categoryColorMap: Map<string, string>
+): string {
+  const first = priorityCategory.split('|')[0].trim()
+  return getPriorityColor(categoryColorMap.get(first))
+}
+
 export function getStatusColor(status: string): string {
   const map: Record<string, string> = {
     pending:   'bg-pill-yellow text-text-heading',
@@ -89,19 +98,7 @@ export function cn(...classes: (string | false | null | undefined)[]): string {
   return classes.filter(Boolean).join(' ')
 }
 
-export function getEffectiveAmount(expense: {
-  amount_override: number | null
-  default_amount: number
-  paid_amount?: number
-}): number {
-  // paid_amount > 0 is the final word — it's what you're actually paying
-  if (expense.paid_amount && expense.paid_amount > 0) return expense.paid_amount
-  return expense.amount_override !== null && expense.amount_override !== undefined
-    ? expense.amount_override
-    : expense.default_amount
-}
-
-/** The "owed" amount before paid_amount override (amount_override ?? default_amount) */
+/** The amount owed/being paid this period — the flexible month amount (override of the average default). */
 export function getOwedAmount(expense: {
   amount_override: number | null
   default_amount: number
@@ -109,4 +106,12 @@ export function getOwedAmount(expense: {
   return expense.amount_override !== null && expense.amount_override !== undefined
     ? expense.amount_override
     : expense.default_amount
+}
+
+/** Alias kept for callers — same as getOwedAmount now that the Pay Amt field is retired. */
+export function getEffectiveAmount(expense: {
+  amount_override: number | null
+  default_amount: number
+}): number {
+  return getOwedAmount(expense)
 }

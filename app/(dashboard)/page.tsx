@@ -1,13 +1,14 @@
 import StatCard from '@/components/dashboard/StatCard'
 import { GAUGE_COLORS } from '@/components/dashboard/GaugeIcon'
 import PeriodSwitcherHeader from '@/components/dashboard/PeriodSwitcherHeader'
+import NewBudgetButton from '@/components/dashboard/NewBudgetButton'
 import { getBudgetPeriods } from '@/app/actions/periods'
 import { getInvoices } from '@/app/actions/invoices'
 import { getBaseBudgetItems } from '@/app/actions/base-budget'
 import { getSettings } from '@/app/actions/settings'
 import { getPeriodDetail } from '@/app/actions/periods'
 import { formatCurrency, formatCurrencyShort } from '@/lib/utils'
-import { calculateDeductions, calculatePayNowTotal, calculatePaidTotal, calculateAccountBreakdown, getNext6Months, calculateMonthlyEquivalent } from '@/lib/calculations'
+import { calculateDeductions, calculatePayNowTotal, calculateAccountBreakdown, getDeductionAccountAllocations, getNext6Months, calculateMonthlyEquivalent } from '@/lib/calculations'
 import type { Invoice } from '@/lib/types'
 import { ArrowRightLeft, TrendingUp, Wallet, Clock, Receipt } from 'lucide-react'
 
@@ -40,15 +41,17 @@ export default async function DashboardPage({
   if (selectedPeriod) {
     const detail = await getPeriodDetail(selectedPeriod.id)
     payNowTotal = calculatePayNowTotal(detail.expenses)
-    const paidTotal = calculatePaidTotal(detail.expenses)
-    accountBreakdown = calculateAccountBreakdown(detail.expenses)
     const deductions = calculateDeductions(
       selectedPeriod.income_amount,
       settings,
       selectedPeriod.deduction_overrides
     )
+    accountBreakdown = calculateAccountBreakdown(
+      detail.expenses,
+      getDeductionAccountAllocations(deductions, settings)
+    )
     incomeAfterDeductions = deductions.incomeAfterDeductions
-    amountLeft = deductions.incomeAfterDeductions - paidTotal
+    amountLeft = deductions.incomeAfterDeductions - payNowTotal
   }
 
   // 6-Month Cash Flow chart data
@@ -121,13 +124,16 @@ export default async function DashboardPage({
   }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-8">
+    <div className="space-y-8">
 
       {/* Page Header — period name acts as title with switcher dropdown */}
-      <PeriodSwitcherHeader
-        currentPeriod={selectedPeriod}
-        allPeriods={periods}
-      />
+      <div className="flex items-start justify-between gap-4">
+        <PeriodSwitcherHeader
+          currentPeriod={selectedPeriod}
+          allPeriods={periods}
+        />
+        <NewBudgetButton />
+      </div>
 
       {/* Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
@@ -198,7 +204,7 @@ export default async function DashboardPage({
           {/* "FLOW" watermark — Passion One, decorative only */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
             <span
-              className="font-display leading-none text-category-income opacity-30"
+              className="font-display leading-none text-[#ebf0f0]"
               style={{ fontSize: '20rem' }}
             >
               FLOW

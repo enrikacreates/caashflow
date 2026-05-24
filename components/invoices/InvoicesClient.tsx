@@ -53,7 +53,7 @@ export default function InvoicesClient({
       <div className="rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-[#c9e5e4]">
+            <thead className="bg-bg-white border-b border-[#e9e9e9]">
               <tr>
                 <th className="text-left text-caption font-bold uppercase text-text-muted px-4 py-3">Source</th>
                 <th className="text-left text-caption font-bold uppercase text-text-muted px-4 py-3">Description</th>
@@ -68,7 +68,7 @@ export default function InvoicesClient({
               {invoices.length === 0 ? (
                 <tr><td colSpan={7} className="px-4 py-8 text-center text-text-muted">No invoices yet</td></tr>
               ) : invoices.map((inv) => (
-                <tr key={inv.id} className="odd:bg-bg-white even:bg-[#E8F5F4] hover:bg-[#E1DEEC] transition-colors">
+                <tr key={inv.id} className="odd:bg-bg-white even:bg-[#ebf0f0] hover:bg-[#f2e9e9] transition-colors">
                   <td className="px-4 py-3 text-caption font-medium text-text-heading">{inv.client_name}</td>
                   <td className="px-4 py-3 text-caption text-text-muted">{inv.project_name || '—'}</td>
                   <td className="px-4 py-3 text-caption font-bold text-text-heading">{formatCurrency(inv.amount)}</td>

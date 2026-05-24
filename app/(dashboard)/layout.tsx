@@ -81,7 +81,7 @@ export default function DashboardLayout({
 
       {/* Main content — offset for floating nav on desktop */}
       <main className="px-6 py-6 md:pl-[220px] md:pr-10 md:py-6">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-3xl mx-auto">
           {children}
         </div>
       </main>

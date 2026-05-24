@@ -91,6 +91,40 @@ export async function createBudgetPeriod(formData: FormData) {
   revalidatePath('/periods')
 }
 
+export async function completePeriod(id: string) {
+  const supabase = await createClient()
+  const householdId = await getUserHouseholdId()
+
+  const { error } = await supabase
+    .from('budget_periods')
+    .update({ status: 'complete', completed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .eq('household_id', householdId)
+
+  if (error) throw new Error(`Failed to complete period: ${error.message}`)
+
+  revalidatePath(`/periods/${id}`)
+  revalidatePath('/periods')
+  revalidatePath('/')
+}
+
+export async function reopenPeriod(id: string) {
+  const supabase = await createClient()
+  const householdId = await getUserHouseholdId()
+
+  const { error } = await supabase
+    .from('budget_periods')
+    .update({ status: 'active', completed_at: null, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .eq('household_id', householdId)
+
+  if (error) throw new Error(`Failed to reopen period: ${error.message}`)
+
+  revalidatePath(`/periods/${id}`)
+  revalidatePath('/periods')
+  revalidatePath('/')
+}
+
 export async function deleteBudgetPeriod(id: string) {
   const supabase = await createClient()
   const householdId = await getUserHouseholdId()
@@ -128,6 +162,27 @@ export async function getPeriodDetail(periodId: string) {
 
   if (expensesError) throw new Error(`Failed to fetch period expenses: ${expensesError.message}`)
 
+  // Sub-payments for split expenses — attach to each expense
+  const expenseIds = (expenses ?? []).map((e) => e.id)
+  const paymentsByExpense: Record<string, unknown[]> = {}
+  if (expenseIds.length > 0) {
+    const { data: payments, error: paymentsError } = await supabase
+      .from('period_expense_payments')
+      .select('*')
+      .in('period_expense_id', expenseIds)
+      .order('sort_order', { ascending: true })
+
+    if (paymentsError) throw new Error(`Failed to fetch expense payments: ${paymentsError.message}`)
+
+    for (const p of payments ?? []) {
+      ;(paymentsByExpense[p.period_expense_id] ??= []).push(p)
+    }
+  }
+  const expensesWithPayments = (expenses ?? []).map((e) => ({
+    ...e,
+    payments: paymentsByExpense[e.id] ?? [],
+  }))
+
   const { data: linkedInvoices, error: linkedError } = await supabase
     .from('period_linked_invoices')
     .select('*, invoices(*)')
@@ -159,6 +214,30 @@ export async function getPeriodDetail(periodId: string) {
     .single()
 
   if (settingsError) throw new Error(`Failed to fetch settings: ${settingsError.message}`)
+
+  // Deduction contributions logged as income was settled (the ledger)
+  const { data: deductionContributions } = await supabase
+    .from('period_deduction_contributions')
+    .select('*')
+    .eq('period_id', periodId)
+    .eq('household_id', householdId)
+    .order('created_at', { ascending: true })
+
+  // Income adjustments ledger (fees, pre-budget cash spends, etc.)
+  const { data: adjustments } = await supabase
+    .from('period_adjustments')
+    .select('*')
+    .eq('period_id', periodId)
+    .eq('household_id', householdId)
+    .order('sort_order', { ascending: true })
+    .order('created_at', { ascending: true })
+
+  // Accounts for the one-time expense add form
+  const { data: accounts } = await supabase
+    .from('accounts')
+    .select('*')
+    .eq('household_id', householdId)
+    .order('sort_order', { ascending: true })
 
   // Fetch active (non-achieved) savings goals
   const { data: savingsGoals } = await supabase
@@ -198,11 +277,14 @@ export async function getPeriodDetail(periodId: string) {
 
   return {
     period,
-    expenses: expenses || [],
+    expenses: expensesWithPayments,
     linkedInvoices: linkedInvoices || [],
     manualIncome: manualIncome || [],
     allReceivedInvoices: allReceivedInvoices || [],
     settings,
+    accounts: accounts || [],
+    deductionContributions: deductionContributions || [],
+    adjustments: adjustments || [],
     savingsGoals: savingsGoals || [],
     savingsAllocations: savingsAllocations || [],
     lastPeriodAllocations: lastPeriodAllocations || [],

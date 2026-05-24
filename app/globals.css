@@ -355,15 +355,24 @@ body {
 
 
 /* ============================================================
- * 7. SCROLLBAR
+ * 7. SCROLLBAR — thin, transparent, warm cream/taupe
  * ============================================================ */
 ::-webkit-scrollbar {
   width: 6px;
+  height: 8px; /* horizontal bars — slim instead of the default chunky height */
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-border);
+  background: rgba(176, 158, 138, 0.3);
   border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(176, 158, 138, 0.5);
+}
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(176, 158, 138, 0.38) transparent;
 }

@@ -108,7 +108,7 @@ export default function BaseBudgetClient({ items, accounts, categories }: Props)
           <div className="rounded-lg overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-[#c9e5e4]">
+                <thead className="bg-bg-white border-b border-[#e9e9e9]">
                   <tr>
                     <th className={thClass('name')} onClick={() => toggleSort('name')}>Name {sortKey === 'name' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
                     <th className={thClass('default_amount')} onClick={() => toggleSort('default_amount')}>Amount {sortKey === 'default_amount' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
@@ -121,7 +121,7 @@ export default function BaseBudgetClient({ items, accounts, categories }: Props)
                 </thead>
                 <tbody>
                   {sortItems(group.items).map((item) => (
-                    <tr key={item.id} className="odd:bg-bg-white even:bg-[#E8F5F4] hover:bg-[#E1DEEC] transition-colors">
+                    <tr key={item.id} className="odd:bg-bg-white even:bg-[#ebf0f0] hover:bg-[#f2e9e9] transition-colors">
                       <td className="px-4 py-3 text-caption font-medium text-text-heading">{item.name}</td>
                       <td className="px-4 py-3 text-caption font-bold text-text-heading">{formatCurrency(item.default_amount)}</td>
                       <td className="px-4 py-3 text-caption text-text-muted">{item.due_day || '—'}</td>

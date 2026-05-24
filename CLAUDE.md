@@ -1,7 +1,7 @@
 # Caashflow — Claude Project Memory
 
 ## What This App Is
-Budget management system for modern creative/entrepreneurial families. App #1 in a ~5-app lifestyle suite. Each app is independent (separate repo, separate Supabase project) and connected via shared studio brand DNA — **not** a shared auth platform.
+Budget management system for modern creative/entrepreneurial families. Part of a personal-brand app suite that shares one Supabase project (**theDailyStory**) using **schema-per-app isolation**. Each app is its own repo and its own Postgres schema; they share `auth.users` and one Pro plan. Public-facing apps with different audiences (e.g. Create Space community) get their own Supabase projects.
 
 **Domain:** caashflow.app
 **Studio brand:** TBD (working name: Small Gorilla Creative)
@@ -12,6 +12,10 @@ Budget management system for modern creative/entrepreneurial families. App #1 in
 ## Tech Stack
 - **Framework:** Next.js 16.1.6 (App Router, Turbopack)
 - **Auth + DB:** Supabase (`@supabase/ssr` v0.8.0, `@supabase/supabase-js` v2.97.0)
+  - **Project:** `theDailyStory` (`bmwpqxsdarevgaznslcz`, us-east-1) — shared with other personal apps (signature_style, magic_list, knowledgenook, storykeepr, speak_up, reachout, workshop_blocks)
+  - **Schema:** `caashflow` (isolated namespace — all tables live here, not `public`)
+  - **Client config:** Supabase JS client is created with `{ db: { schema: 'caashflow' } }` in both `lib/supabase/server.ts` and `lib/supabase/client.ts` so `.from('table_name')` resolves to `caashflow.table_name`
+  - **API exposure:** `caashflow` is added to `pgrst.db_schemas` on the `authenticator` role so PostgREST exposes it (set via `ALTER ROLE authenticator SET pgrst.db_schemas = '...,caashflow'` + `NOTIFY pgrst, 'reload schema'`)
 - **Supabase key env var:** `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY` (not the usual ANON_KEY — this is the newer publishable key format)
 - **Styling:** Tailwind CSS v4
 - **Language:** TypeScript
@@ -45,7 +49,7 @@ Budget management system for modern creative/entrepreneurial families. App #1 in
 | `priority_categories` | User-defined priority categories with colors |
 
 **RLS:** Enabled on all tables. Users access data only through their `household_id`.
-**New user trigger:** `handle_new_user()` auto-creates household + settings + owner membership on signup.
+**Provisioning:** No `auth.users` trigger (shared-auth model — Daily Story users shouldn't get caashflow households). Instead, `getUserHouseholdId()` in `lib/supabase/helpers.ts` calls `caashflow.provision_household_for_current_user()` RPC on first visit if no household exists. The RPC is idempotent (advisory lock per user) and seeds default settings + 3 accounts + 6 priority categories.
 
 ## Incoming Caashflow (Invoices) Feature
 - **Route:** `/invoices` (also accessible at `/cashflow` — both render the same `InvoicesClient`)
@@ -96,6 +100,8 @@ Budget management system for modern creative/entrepreneurial families. App #1 in
 - `app/actions/periods.ts` and `app/actions/period-expenses.ts` have duplicate exports — consolidate into `period-expenses.ts` (it has proper `household_id` validation)
 - `middleware.ts` should be renamed to `proxy.ts` (Next.js 16 deprecation warning)
 - ~~Accounts and priority categories are hardcoded in `lib/constants.ts`~~ → ✅ Now DB-driven (accounts + priority_categories tables)
+- **Old Caashflow Supabase project** (`aqaenyxnpwkawdjvkkhk`) is **paused** — left as a read-only backup of the pre-consolidation DB. Safe to delete once you're confident theDailyStory migration is solid. Contains: 1 household, 2 members, 50 base_budget_items, 2 periods, 100 period_expenses (all copied to `caashflow` schema on theDailyStory with UUIDs preserved).
+- **`supabase/schema.sql` + `supabase/migrations/*.sql`** are now historical — migrations going forward should be applied to theDailyStory's `caashflow` schema directly via MCP `apply_migration` or the Supabase dashboard.
 
 ## Deployment
 - **Production URL:** caashflow.app (hosted on Vercel)
