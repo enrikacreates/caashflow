@@ -118,6 +118,7 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
     startTransition(() => allocateRequestToPeriod(req.id, activePeriod.id))
   }
 
+  const statusLabel = (s: string) => (s === 'obtained' ? 'Got it' : s)
   const statusColor = (s: string) =>
     s === 'obtained' ? 'bg-pill-teal text-text-heading'
     : s === 'purchased' ? 'bg-pill-green text-text-heading'
@@ -208,7 +209,7 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
         </div>
       </div>
       <div className="w-20 text-right shrink-0 text-caption font-bold text-text-heading">{req.amount > 0 ? formatCurrency(req.amount) : ''}</div>
-      <button onClick={() => cycleStatus(req)} disabled={isPending} title="Change status" className={`shrink-0 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${statusColor(req.status)}`}>{req.status}</button>
+      <button onClick={() => cycleStatus(req)} disabled={isPending} title="Change status" className={`shrink-0 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${statusColor(req.status)}`}>{statusLabel(req.status)}</button>
       {activePeriod && req.status !== 'purchased' && (
         <button onClick={() => handleAllocate(req)} disabled={isPending} title={`Add to ${activePeriod.period_name}`} className="shrink-0 bg-primary-teal/10 text-primary rounded-full px-3 py-1 text-caption font-bold hover:bg-primary-teal/20 disabled:opacity-50 transition-colors">+ Add</button>
       )}
@@ -257,7 +258,7 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
         />
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className={selectClass}>
           <option value="all">All statuses</option>
-          {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+          {STATUSES.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
         </select>
         {people.length > 0 && (
           <select value={personFilter} onChange={(e) => setPersonFilter(e.target.value)} className={selectClass}>

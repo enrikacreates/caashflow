@@ -103,7 +103,7 @@ export default function RequestFormModal({
               <option value="requested">Requested</option>
               <option value="approved">Approved</option>
               <option value="purchased">Purchased</option>
-              <option value="obtained">Obtained</option>
+              <option value="obtained">Got it</option>
             </select>
           </div>
           <div>
