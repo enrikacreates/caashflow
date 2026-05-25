@@ -17,7 +17,7 @@ import {
  * ------------------------------------------------------- */
 const NAV_ITEMS = [
   { name: 'Budgets',    href: '/periods',     icon: Calendar  },
-  { name: 'Cash',       href: '/cashflow',    icon: BarChart2 },
+  { name: 'Caashflow',  href: '/cashflow',    icon: BarChart2 },
   { name: 'Save Goals', href: '/savings',     icon: PiggyBank },
   { name: 'Baseline',   href: '/base-budget', icon: Layers    },
   { name: 'Debt Demo',  href: '/debts',       icon: Hammer    },
