@@ -1063,6 +1063,13 @@ export async function settleAndResetPeriod(periodId: string) {
   await supabase.from('period_adjustments')
     .delete().eq('period_id', periodId).eq('household_id', householdId)
 
+  // 5. Reset per-cycle completion checkmarks — next check starts fresh
+  await supabase.from('budget_periods')
+    .update({ deduction_paid: {}, updated_at: new Date().toISOString() })
+    .eq('id', periodId).eq('household_id', householdId)
+  await supabase.from('period_account_transfers')
+    .delete().eq('period_id', periodId).eq('household_id', householdId)
+
   await recalculatePeriodIncome(periodId)
   revalidatePath(`/periods/${periodId}`)
   revalidatePath('/')
