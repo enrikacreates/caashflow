@@ -174,6 +174,49 @@ export function calculateAccountBreakdown(
   return breakdown
 }
 
+export interface AccountTransferDetail {
+  /** Live amount still sitting against this account (uncleared pay-now + deductions). */
+  remaining: number
+  /** Zero-based starting amount — everything committed incl. items already cleared. */
+  original: number
+  /** Uncleared expense portion only — used to decide whether to show the "started" note. */
+  expenseRemaining: number
+}
+
+/**
+ * Per-account transfer figures. `remaining` draws down as expenses clear;
+ * `original` is the zero-based starting amount (kept for reference until the
+ * account's expenses are all cleared). Deductions count toward both and don't draw down.
+ */
+export function calculateAccountTransferDetail(
+  expenses: PeriodExpense[],
+  extraAllocations: AccountAllocation[] = []
+): Record<string, AccountTransferDetail> {
+  const out: Record<string, AccountTransferDetail> = {}
+  const slot = (a: string) => (out[a] ??= { remaining: 0, original: 0, expenseRemaining: 0 })
+
+  expenses.forEach((e) => {
+    const account = e.account || 'Unknown'
+    const remaining = getBudgetedAmount(e) // 0 once cleared (is_complete)
+    // Committed toward the transfer — counts cleared items at their owed amount.
+    const committed = e.is_complete ? getOwedAmount(e) : remaining
+    if (committed <= 0 && remaining <= 0) return
+    const s = slot(account)
+    s.remaining += remaining
+    s.original += committed
+    s.expenseRemaining += remaining
+  })
+
+  extraAllocations.forEach(({ account, amount }) => {
+    if (!account || amount <= 0) return
+    const s = slot(account)
+    s.remaining += amount
+    s.original += amount
+  })
+
+  return out
+}
+
 /** Map each deduction to the account it's set aside into (from settings). */
 export function getDeductionAccountAllocations(
   deductions: ReturnType<typeof calculateDeductions>,

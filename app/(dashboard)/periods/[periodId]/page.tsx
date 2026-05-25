@@ -36,6 +36,7 @@ export default async function PeriodDetailPage({
         savingsAllocations={detail.savingsAllocations}
         lastPeriodAllocations={detail.lastPeriodAllocations}
         requests={requests ?? []}
+        accountTransfersDone={detail.accountTransfersDone ?? []}
       />
     </div>
   )

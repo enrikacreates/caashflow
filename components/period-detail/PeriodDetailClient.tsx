@@ -26,11 +26,12 @@ import {
   removeAdjustment,
   addOneTimeExpense,
   removePeriodExpense,
+  setAccountTransferDone,
 } from '@/app/actions/period-expenses'
 import { completePeriod, reopenPeriod } from '@/app/actions/periods'
 import { smallConfetti, bigConfetti } from '@/lib/confetti'
 import { formatCurrency, getOwedAmount, getPriorityPill } from '@/lib/utils'
-import { calculateDeductions, calculatePayNowTotal, calculateAccountBreakdown, getDeductionAccountAllocations, getBudgetedAmount, isFullyPaid, calculatePeriodPaymentSummary } from '@/lib/calculations'
+import { calculateDeductions, calculatePayNowTotal, calculateAccountTransferDetail, getDeductionAccountAllocations, getBudgetedAmount, isFullyPaid, calculatePeriodPaymentSummary } from '@/lib/calculations'
 import type { DeductionMode } from '@/lib/calculations'
 import SavingsAllocationSection from '@/components/period-detail/SavingsAllocationSection'
 import PeriodRequestsPanel from '@/components/period-detail/PeriodRequestsPanel'
@@ -78,6 +79,7 @@ interface Props {
   savingsAllocations: PeriodSavingsAllocation[]
   lastPeriodAllocations: PeriodSavingsAllocation[]
   requests: BudgetRequest[]
+  accountTransfersDone: string[]
 }
 
 export default function PeriodDetailClient({
@@ -95,6 +97,7 @@ export default function PeriodDetailClient({
   savingsAllocations,
   lastPeriodAllocations,
   requests,
+  accountTransfersDone,
 }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -151,6 +154,22 @@ export default function PeriodDetailClient({
   // Optimistic overlay for deduction overrides — %/$ edits recompute the numbers instantly
   const [overridesLocal, setOverridesLocal] = useState<DeductionOverrides>(period.deduction_overrides ?? {})
 
+  // Which account transfers are marked done — flips instantly, server reconciles
+  const [doneTransfers, applyTransferOpt] = useOptimistic(
+    new Set(accountTransfersDone),
+    (state: Set<string>, u: { account: string; done: boolean }) => {
+      const next = new Set(state)
+      if (u.done) next.add(u.account)
+      else next.delete(u.account)
+      return next
+    }
+  )
+  const handleToggleTransfer = (account: string, done: boolean) =>
+    startTransition(async () => {
+      applyTransferOpt({ account, done })
+      await setAccountTransferDone(period.id, account, done)
+    })
+
   useEffect(() => {
     const el = summaryCardsRef.current
     if (!el) return
@@ -170,7 +189,7 @@ export default function PeriodDetailClient({
   )
   const payNowTotal = calculatePayNowTotal(optExpenses)
   const deductionAccountAllocations = getDeductionAccountAllocations(deductions, settings)
-  const accountBreakdown = calculateAccountBreakdown(optExpenses, deductionAccountAllocations)
+  const accountTransfers = calculateAccountTransferDetail(optExpenses, deductionAccountAllocations)
   // Adjustments reduce/raise what's left to budget — deductions stay on the full check
   const adjustment = adjustments.reduce((sum, a) => sum + (a.amount || 0), 0)
   const availableToBudget = deductions.incomeAfterDeductions + adjustment
@@ -581,8 +600,8 @@ export default function PeriodDetailClient({
         </div>
       )}
 
-      {/* ─── Account Transfers (overview — only when something is budgeted) ── */}
-      {payNowTotal > 0 && Object.keys(accountBreakdown).length > 0 && (
+      {/* ─── Account Transfers (overview — stays visible as it draws down) ── */}
+      {Object.keys(accountTransfers).length > 0 && (
         <div className="bg-bg-white rounded-lg shadow-card p-4 sm:p-5">
           <h2 className="text-h3 font-bold text-text-heading">
             <button
@@ -596,12 +615,35 @@ export default function PeriodDetailClient({
           </h2>
           {isOpen('transfers') && (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-3 gap-y-4 mt-4 sm:divide-x sm:divide-border/60">
-              {Object.entries(accountBreakdown).map(([account, total]) => (
-                <div key={account} className="@container sm:px-3 first:pl-0">
-                  <div className="text-caption font-bold uppercase text-text-muted mb-1">{account}</div>
-                  <div className="font-bold text-text-heading whitespace-nowrap leading-tight text-[clamp(0.78rem,15cqi,1.5rem)]">{formatCurrency(total)}</div>
-                </div>
-              ))}
+              {Object.entries(accountTransfers).map(([account, detail]) => {
+                const done = doneTransfers.has(account)
+                // Keep the zero-based starting amount visible until this account's expenses all clear
+                const showStarted = detail.expenseRemaining > 0
+                return (
+                  <div key={account} className="@container sm:px-3 first:pl-0">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleTransfer(account, !done)}
+                        disabled={isLocked}
+                        title={done ? 'Transfer completed — tap to undo' : 'Mark this transfer as completed'}
+                        className={`shrink-0 w-4 h-4 rounded-full border flex items-center justify-center text-[9px] leading-none transition-colors disabled:opacity-50 ${
+                          done ? 'bg-success border-success text-text-inverse' : 'border-border text-transparent hover:border-primary'
+                        }`}
+                      >
+                        ✓
+                      </button>
+                      <span className="text-caption font-bold uppercase text-text-muted truncate">{account}</span>
+                    </div>
+                    <div className={`font-bold whitespace-nowrap leading-tight text-[clamp(0.78rem,15cqi,1.5rem)] ${done ? 'text-success' : 'text-text-heading'}`}>
+                      {formatCurrency(detail.remaining)}
+                    </div>
+                    {showStarted && (
+                      <div className="text-[10px] text-text-muted/80 whitespace-nowrap">started {formatCurrency(detail.original)}</div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>

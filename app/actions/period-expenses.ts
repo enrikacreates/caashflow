@@ -249,6 +249,32 @@ export async function updateExpenseBulk(
   revalidatePath('/periods')
 }
 
+/** Mark (or clear) an account's transfer as completed for this period. */
+export async function setAccountTransferDone(periodId: string, accountName: string, done: boolean) {
+  const supabase = await createClient()
+  const householdId = await getUserHouseholdId()
+
+  if (done) {
+    const { error } = await supabase
+      .from('period_account_transfers')
+      .upsert(
+        { period_id: periodId, household_id: householdId, account_name: accountName, transferred: true, updated_at: new Date().toISOString() },
+        { onConflict: 'period_id,account_name' }
+      )
+    if (error) throw new Error(`Failed to mark transfer: ${error.message}`)
+  } else {
+    const { error } = await supabase
+      .from('period_account_transfers')
+      .delete()
+      .eq('period_id', periodId)
+      .eq('account_name', accountName)
+      .eq('household_id', householdId)
+    if (error) throw new Error(`Failed to unmark transfer: ${error.message}`)
+  }
+
+  revalidatePath(`/periods/${periodId}`)
+}
+
 export async function updateDeductionOverrides(
   periodId: string,
   overrides: Record<string, number | null>

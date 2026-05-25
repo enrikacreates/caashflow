@@ -239,6 +239,16 @@ export async function getPeriodDetail(periodId: string) {
     .eq('household_id', householdId)
     .order('sort_order', { ascending: true })
 
+  // Which account transfers have been marked completed this period
+  const { data: accountTransfers } = await supabase
+    .from('period_account_transfers')
+    .select('account_name, transferred')
+    .eq('period_id', periodId)
+    .eq('household_id', householdId)
+  const accountTransfersDone = (accountTransfers ?? [])
+    .filter((t) => t.transferred)
+    .map((t) => t.account_name as string)
+
   // Fetch active (non-achieved) savings goals
   const { data: savingsGoals } = await supabase
     .from('savings_goals')
@@ -288,5 +298,6 @@ export async function getPeriodDetail(periodId: string) {
     savingsGoals: savingsGoals || [],
     savingsAllocations: savingsAllocations || [],
     lastPeriodAllocations: lastPeriodAllocations || [],
+    accountTransfersDone,
   }
 }
