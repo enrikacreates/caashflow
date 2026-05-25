@@ -79,12 +79,12 @@ export default function CashFlowChart({
                     {expense > 0 && (
                       <div className="absolute bottom-0 inset-x-0 bg-warning/20 rounded-t-sm" style={{ height: pct(expense) }} />
                     )}
-                    {/* income goal (translucent blue) */}
+                    {/* income goal (translucent light green) */}
                     {goal > 0 && (
-                      <div className="absolute bottom-0 inset-x-0 bg-primary/20 rounded-t-sm" style={{ height: pct(goal) }} />
+                      <div className="absolute bottom-0 inset-x-0 bg-success/25 rounded-t-sm" style={{ height: pct(goal) }} />
                     )}
-                    {/* income (solid teal, most prominent, on top) */}
-                    <div className="absolute bottom-0 inset-x-0 bg-primary-teal rounded-t-sm min-h-[2px] transition-all" style={{ height: pct(val) }}>
+                    {/* income (prominent teal, slightly translucent so target bands show through on overshoot) */}
+                    <div className="absolute bottom-0 inset-x-0 bg-primary-teal/85 rounded-t-sm min-h-[2px] transition-all" style={{ height: pct(val) }}>
                       {val > 0 && (
                         <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-text-heading whitespace-nowrap">
                           {formatCurrencyShort(val)}
@@ -116,7 +116,7 @@ export default function CashFlowChart({
             )}
             {goal > 0 && (
               <span className="inline-flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-sm bg-primary/30" /> Income goal <span className="font-semibold text-text-heading">{formatCurrency(goal)}</span>
+                <span className="w-2.5 h-2.5 rounded-sm bg-success/40" /> Income goal <span className="font-semibold text-text-heading">{formatCurrency(goal)}</span>
               </span>
             )}
           </div>
