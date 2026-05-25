@@ -1,5 +1,6 @@
 import { getPeriodDetail } from '@/app/actions/periods'
 import { getPriorityCategories } from '@/app/actions/settings'
+import { getBudgetRequests } from '@/app/actions/requests'
 import PeriodDetailClient from '@/components/period-detail/PeriodDetailClient'
 
 export default async function PeriodDetailPage({
@@ -8,9 +9,10 @@ export default async function PeriodDetailPage({
   params: Promise<{ periodId: string }>
 }) {
   const { periodId } = await params
-  const [detail, categories] = await Promise.all([
+  const [detail, categories, requests] = await Promise.all([
     getPeriodDetail(periodId),
     getPriorityCategories(),
+    getBudgetRequests(),
   ])
 
   return (
@@ -33,6 +35,7 @@ export default async function PeriodDetailPage({
         savingsGoals={detail.savingsGoals}
         savingsAllocations={detail.savingsAllocations}
         lastPeriodAllocations={detail.lastPeriodAllocations}
+        requests={requests ?? []}
       />
     </div>
   )

@@ -34,6 +34,7 @@ import { formatCurrency, getOwedAmount, getPriorityPill } from '@/lib/utils'
 import { calculateDeductions, calculatePayNowTotal, calculateAccountBreakdown, getDeductionAccountAllocations, getBudgetedAmount, isFullyPaid, calculatePeriodPaymentSummary } from '@/lib/calculations'
 import type { DeductionMode } from '@/lib/calculations'
 import SavingsAllocationSection from '@/components/period-detail/SavingsAllocationSection'
+import PeriodRequestsPanel from '@/components/period-detail/PeriodRequestsPanel'
 import type {
   BudgetPeriod,
   PeriodExpense,
@@ -48,6 +49,7 @@ import type {
   PeriodDeductionContribution,
   PeriodAdjustment,
   Account,
+  BudgetRequest,
 } from '@/lib/types'
 
 type SortKey = 'name' | 'default_amount' | 'priority_category' | 'account' | 'due_day' | 'frequency'
@@ -75,6 +77,7 @@ interface Props {
   savingsGoals: SavingsGoal[]
   savingsAllocations: PeriodSavingsAllocation[]
   lastPeriodAllocations: PeriodSavingsAllocation[]
+  requests: BudgetRequest[]
 }
 
 export default function PeriodDetailClient({
@@ -91,6 +94,7 @@ export default function PeriodDetailClient({
   savingsGoals,
   savingsAllocations,
   lastPeriodAllocations,
+  requests,
 }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -1219,7 +1223,7 @@ export default function PeriodDetailClient({
                     <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted">Xfer</th>
                     <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted">Paid</th>
                     <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted">Clear</th>
-                    <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted">Done</th>
+                    <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted">Delete</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1250,7 +1254,7 @@ export default function PeriodDetailClient({
                     <td className="px-3 py-3" />
                     <td className="px-3 py-3 font-bold text-text-heading text-caption">Pay Now</td>
                     <td className="px-3 py-3 font-bold text-text-heading text-caption">{formatCurrency(oneTimePayNow)}</td>
-                    <td colSpan={6} />
+                    <td colSpan={7} />
                   </tr>
                 </tfoot>
               </table>
@@ -1259,6 +1263,9 @@ export default function PeriodDetailClient({
         )}
         </>)}
       </div>
+
+      {/* ─── Requests (wish list → pull into this budget) ──── */}
+      <PeriodRequestsPanel requests={requests} periodId={period.id} isLocked={isLocked} />
 
       {/* ─── Back Button ───────────────────────────────────── */}
       <div className="pt-4">
@@ -1380,19 +1387,7 @@ function ExpenseRow({
                 {expense.name}
               </Link>
             ) : (
-              <span className="inline-flex items-center gap-1">
-                <span className="text-caption font-medium text-text-heading">{expense.name}</span>
-                {onRemove && !rowDisabled && (
-                  <button
-                    onClick={() => onRemove(expense.id)}
-                    disabled={isPending}
-                    title="Remove this one-time expense"
-                    className="text-text-muted hover:text-warning text-[10px] disabled:opacity-50"
-                  >
-                    ✕
-                  </button>
-                )}
-              </span>
+              <span className="text-caption font-medium text-text-heading">{expense.name}</span>
             )}
             {expense.auto_pay && (
               <span className="text-[10px] bg-success/10 text-success px-1.5 py-0.5 rounded-full font-bold">AUTO</span>
@@ -1510,6 +1505,22 @@ function ExpenseRow({
             className="rounded"
           />
         </td>
+
+        {/* Delete (one-time / extra expenses only) */}
+        {onRemove && (
+          <td className="text-center px-3 py-3">
+            {!rowDisabled && (
+              <button
+                onClick={() => onRemove(expense.id)}
+                disabled={isPending}
+                title="Delete this expense from this budget"
+                className="text-caption font-semibold text-text-muted hover:text-warning transition-colors disabled:opacity-50"
+              >
+                Delete
+              </button>
+            )}
+          </td>
+        )}
       </tr>
 
       {/* Sub-payment rows */}
@@ -1531,7 +1542,7 @@ function ExpenseRow({
       {expense.is_split && !rowDisabled && (
         <tr className="bg-[#ebf0f0]">
           <td />
-          <td className="px-3 py-2 pl-8" colSpan={8}>
+          <td className="px-3 py-2 pl-8" colSpan={onRemove ? 9 : 8}>
             <button
               onClick={() => onAddPayment(expense.id)}
               disabled={isPending}
