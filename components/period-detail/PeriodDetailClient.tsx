@@ -124,10 +124,8 @@ export default function PeriodDetailClient({
   const [showManualIncomeForm, setShowManualIncomeForm] = useState(false)
   const [showOneTimeForm, setShowOneTimeForm] = useState(false)
   const [editExpense, setEditExpense] = useState<PeriodExpense | null>(null)
-  // Collapsible sections — collapsed by default; a key set true means collapsed.
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(SECTION_KEYS.map((k) => [k, true]))
-  )
+  // Collapsible sections — open by default; a key set true means collapsed.
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const isOpen = (k: string) => !collapsed[k]
   const toggleSection = (k: string) => setCollapsed((c) => ({ ...c, [k]: !c[k] }))
   const allCollapsed = SECTION_KEYS.every((k) => collapsed[k])
@@ -631,7 +629,7 @@ export default function PeriodDetailClient({
       )}
 
       {/* Expand / collapse all sections */}
-      <div className="flex justify-end -mb-4">
+      <div className="flex justify-end">
         <button
           type="button"
           onClick={() => setAllSections(!allCollapsed)}
