@@ -21,7 +21,7 @@ export default async function InvoicesPage() {
         <h1 className="text-h1 font-bold text-text-heading">Caashflow</h1>
         <p className="text-text-muted text-sm mt-1">Track all your income — invoices, sales, gifts &amp; more</p>
       </div>
-      <CashFlowChart invoices={invoices} incomeGoal={settings.monthly_income_goal} expenseNeed={expenseNeed} />
+      <CashFlowChart invoices={invoices} incomeGoal={settings.monthly_income_goal} expenseNeed={expenseNeed} periods={periods} />
       <InvoicesClient invoices={invoices} periods={periods} />
     </div>
   )

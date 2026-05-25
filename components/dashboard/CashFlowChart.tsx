@@ -1,9 +1,10 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { TrendingUp } from 'lucide-react'
 import { formatCurrency, formatCurrencyShort } from '@/lib/utils'
-import type { Invoice } from '@/lib/types'
+import type { Invoice, BudgetPeriod } from '@/lib/types'
 
 /** 6-month window spanning 2 months back → 3 months ahead, so both received (recent) and projected (upcoming) show. */
 function chartMonths(): string[] {
@@ -24,13 +25,22 @@ export default function CashFlowChart({
   invoices,
   incomeGoal,
   expenseNeed,
+  periods = [],
 }: {
   invoices: Invoice[]
   incomeGoal: number | null
   expenseNeed: number
+  periods?: BudgetPeriod[]
 }) {
+  const router = useRouter()
   const [mode, setMode] = useState<'projected' | 'received'>('projected')
   const months = chartMonths()
+
+  // Map "YYYY-MM" → budget id so each bar can jump into that month's budget
+  const periodByMonth = new Map<string, string>()
+  for (const p of periods) {
+    if (p.period_month) periodByMonth.set(p.period_month.slice(0, 7), p.id)
+  }
 
   const data = months.map((m) => {
     const inMonth = (inv: Invoice) =>
@@ -72,8 +82,14 @@ export default function CashFlowChart({
           <div className="flex items-end gap-3 h-48">
             {data.map((d) => {
               const val = valueFor(d)
+              const periodId = periodByMonth.get(d.month)
               return (
-                <div key={d.month} className="flex-1 h-full">
+                <div
+                  key={d.month}
+                  className={`flex-1 h-full ${periodId ? 'cursor-pointer group' : ''}`}
+                  onClick={periodId ? () => router.push(`/periods/${periodId}`) : undefined}
+                  title={periodId ? "Open this month's budget" : undefined}
+                >
                   <div className="relative w-full h-full">
                     {/* income goal (lightest teal tint) — behind; value floats above as the ceiling */}
                     {goal > 0 && (
@@ -92,7 +108,7 @@ export default function CashFlowChart({
                       </div>
                     )}
                     {/* income (prominent teal, slightly translucent so target bands show through on overshoot) */}
-                    <div className="absolute bottom-0 inset-x-0 bg-primary-teal/85 rounded-t-sm min-h-[2px] transition-all" style={{ height: pct(val) }}>
+                    <div className="absolute bottom-0 inset-x-0 bg-primary-teal/85 group-hover:bg-primary-teal rounded-t-sm min-h-[2px] transition-all" style={{ height: pct(val) }}>
                       {val > 0 && (
                         <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-text-heading whitespace-nowrap">
                           {formatCurrencyShort(val)}
@@ -107,7 +123,7 @@ export default function CashFlowChart({
           <div className="flex gap-3 mt-2">
             {data.map((d) => (
               <span key={d.month} className="flex-1 text-center text-caption text-text-muted font-medium">
-                {new Date(d.month + '-01').toLocaleDateString('en-US', { month: 'short' })}
+                {new Date(d.month + '-01T00:00:00').toLocaleDateString('en-US', { month: 'short' })}
               </span>
             ))}
           </div>
