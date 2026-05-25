@@ -14,7 +14,6 @@ import {
   toggleExpenseSplit,
   toggleExpenseOverdue,
   setExpenseCleared,
-  bulkSetTransferred,
   bulkMarkPaid,
   settleAndResetPeriod,
   addExpensePayment,
@@ -502,7 +501,6 @@ export default function PeriodDetailClient({
     })
 
   // ─── Bulk header actions (scoped to to-pay items) ───────────
-  const handleBulkXfer = () => startTransition(async () => { await bulkSetTransferred(period.id, true) })
   const handleBulkPaid = () => {
     if (!confirm('Mark all to-pay items as paid?')) return
     startTransition(async () => { await bulkMarkPaid(period.id) })
@@ -1143,13 +1141,10 @@ export default function PeriodDetailClient({
                     Due<SortIcon col="due_day" />
                   </th>
                   <th className="text-center px-3 py-3">
-                    <button type="button" onClick={handleBulkXfer} disabled={isLocked} title="Mark all to-pay items transferred" className="text-caption font-bold uppercase text-text-muted hover:text-primary transition-colors disabled:opacity-50">Xfer</button>
-                  </th>
-                  <th className="text-center px-3 py-3">
                     <button type="button" onClick={handleBulkPaid} disabled={isLocked} title="Mark all to-pay items paid" className="text-caption font-bold uppercase text-text-muted hover:text-primary transition-colors disabled:opacity-50">Paid</button>
                   </th>
                   <th className="text-center px-3 py-3">
-                    <button type="button" onClick={handleSettleReset} disabled={isLocked} title="Clear all paid items & reset income — zeroes the budget for the next check (unpaid items stay live)" className="text-[10px] font-bold uppercase bg-primary-teal/10 text-primary rounded-full px-2.5 py-1 hover:bg-primary-teal/20 transition-colors disabled:opacity-50">Clear all</button>
+                    <button type="button" onClick={handleSettleReset} disabled={isLocked} title="Clear all paid items & reset income — zeroes the budget for the next check (unpaid items stay live)" className="text-[10px] font-bold uppercase bg-primary-teal/10 text-primary rounded-full px-2.5 py-1 hover:bg-primary-teal/20 transition-colors disabled:opacity-50">Clear</button>
                   </th>
                 </tr>
               </thead>
@@ -1181,7 +1176,7 @@ export default function PeriodDetailClient({
                   <td className="px-3 py-3" />
                   <td className="px-3 py-3 font-bold text-text-heading text-caption">Pay Now</td>
                   <td className="px-3 py-3 font-bold text-text-heading text-caption">{formatCurrency(baselinePayNow)}</td>
-                  <td colSpan={6} />
+                  <td colSpan={5} />
                 </tr>
               </tfoot>
             </table>
@@ -1267,7 +1262,6 @@ export default function PeriodDetailClient({
                     <th className="text-left px-2 py-3 text-caption font-bold uppercase text-text-muted w-[1%]">Acct</th>
                     <th className="text-left px-2 py-3 text-caption font-bold uppercase text-text-muted w-[1%]">Pri</th>
                     <th className="text-left px-2 py-3 text-caption font-bold uppercase text-text-muted w-[1%]">Due</th>
-                    <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted">Xfer</th>
                     <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted">Paid</th>
                     <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted">Clear</th>
                     <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted">Delete</th>
@@ -1302,7 +1296,7 @@ export default function PeriodDetailClient({
                     <td className="px-3 py-3" />
                     <td className="px-3 py-3 font-bold text-text-heading text-caption">Pay Now</td>
                     <td className="px-3 py-3 font-bold text-text-heading text-caption">{formatCurrency(oneTimePayNow)}</td>
-                    <td colSpan={7} />
+                    <td colSpan={6} />
                   </tr>
                 </tfoot>
               </table>
@@ -1386,9 +1380,8 @@ function ExpenseRow({
   const fullyPaid = isFullyPaid(expense)
   const settled = fullyPaid || expense.is_complete
 
-  // When split, the parent's Pay/Xfer/Paid/Clear are derived (read-only) from its sub-payments
+  // When split, the parent's Pay/Paid/Clear are derived (read-only) from its sub-payments
   const splitPayNow = expense.is_split && payments.length > 0 && payments.some((p) => p.pay_now)
-  const splitXfer = expense.is_split && payments.length > 0 && payments.every((p) => p.transferred)
   const splitCleared = expense.is_split && payments.length > 0 && payments.every((p) => p.cleared)
 
   // Row is read-only when the budget is locked OR the line is marked complete
@@ -1535,17 +1528,6 @@ function ExpenseRow({
         {/* Due Day */}
         <td className="px-3 py-3 text-caption text-text-muted text-center">{expense.due_day || '—'}</td>
 
-        {/* Transferred */}
-        <td className="text-center px-3 py-3">
-          <input
-            type="checkbox"
-            checked={expense.is_split ? splitXfer : expense.transferred}
-            onChange={(e) => onCheckboxChange(expense.id, 'transferred', e.target.checked)}
-            disabled={expense.is_split || rowDisabled}
-            className="rounded"
-          />
-        </td>
-
         {/* Paid */}
         <td className="text-center px-3 py-3">
           <input
@@ -1605,7 +1587,7 @@ function ExpenseRow({
       {expense.is_split && !rowDisabled && (
         <tr className="bg-[#ebf0f0]">
           <td />
-          <td className="px-3 py-2 pl-8" colSpan={onRemove ? 9 : 8}>
+          <td className="px-3 py-2 pl-8" colSpan={onRemove ? 8 : 7}>
             <button
               onClick={() => onAddPayment(expense.id)}
               disabled={isPending}
@@ -1701,10 +1683,6 @@ function SubPaymentRow({
           onChange={(e) => onPaymentField(payment.id, 'due_day', e.target.value === '' ? null : parseInt(e.target.value, 10))}
           className={`w-12 text-center ${inputClass}`}
         />
-      </td>
-      {/* Xfer */}
-      <td className="text-center px-3 py-2">
-        <input type="checkbox" checked={payment.transferred} disabled={locked} onChange={(e) => onPaymentToggle(payment.id, 'transferred', e.target.checked)} className="rounded" />
       </td>
       {/* Paid */}
       <td className="text-center px-3 py-2">
