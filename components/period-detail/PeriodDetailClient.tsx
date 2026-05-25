@@ -281,6 +281,8 @@ export default function PeriodDetailClient({
   // Expenses with no income behind them yet — what new income should go toward
   const stillToFund = Math.max(0, totalExpenses - payNowTotal)
   const paymentSummary = calculatePeriodPaymentSummary(optExpenses)
+  // Total deducted off the gross (for the collapsed Deductions hint)
+  const totalDeductions = period.income_amount - deductions.incomeAfterDeductions
   const isLocked = period.status === 'complete'
 
   // Income split: active drives the math; settled (done) is sealed but still shown
@@ -339,6 +341,8 @@ export default function PeriodDetailClient({
   const oneTimeExpenses = sortedExpenses.filter((e) => e.base_item_id === null)
   const baselinePayNow = calculatePayNowTotal(baselineExpenses)
   const oneTimePayNow = calculatePayNowTotal(oneTimeExpenses)
+  const owedOf = (e: PeriodExpense) => (e.is_split ? (e.payments ?? []).reduce((s, p) => s + p.amount, 0) : getOwedAmount(e))
+  const oneTimeTotal = oneTimeExpenses.reduce((s, e) => s + owedOf(e), 0)
 
   const SortIcon = ({ col }: { col: SortKey }) => (
     <span className="ml-1 text-[10px] opacity-50">
@@ -684,16 +688,23 @@ export default function PeriodDetailClient({
       {/* ─── Account Transfers (overview — stays visible as it draws down) ── */}
       {Object.keys(accountTransfers).length > 0 && (
         <div className="bg-bg-white rounded-lg shadow-card p-4 sm:p-5">
-          <h2 className="text-h3 font-bold text-text-heading">
-            <button
-              type="button"
-              onClick={() => toggleSection('transfers')}
-              className="inline-flex items-center gap-2 hover:text-primary transition-colors"
-            >
-              <span className="text-text-muted text-base leading-none">{isOpen('transfers') ? '▾' : '▸'}</span>
-              Account Transfers
-            </button>
-          </h2>
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+            <h2 className="text-h3 font-bold text-text-heading">
+              <button
+                type="button"
+                onClick={() => toggleSection('transfers')}
+                className="inline-flex items-center gap-2 hover:text-primary transition-colors"
+              >
+                <span className="text-text-muted text-base leading-none">{isOpen('transfers') ? '▾' : '▸'}</span>
+                Account Transfers
+              </button>
+            </h2>
+            {!isOpen('transfers') && (
+              <span className="text-caption text-text-muted">
+                {Object.entries(accountTransfers).map(([account, d]) => `${account} ${formatCurrency(d.remaining)}`).join('  ·  ')}
+              </span>
+            )}
+          </div>
           {isOpen('transfers') && (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-3 gap-y-4 mt-4 sm:divide-x sm:divide-border/60">
               {Object.entries(accountTransfers).map(([account, detail]) => {
@@ -780,6 +791,11 @@ export default function PeriodDetailClient({
               + Manual
             </button>
           </div>
+          )}
+          {!isOpen('income') && (
+            <span className="text-caption text-text-muted">
+              {formatCurrency(period.income_amount)} received{stillProjectedIncome > 0 && ` · ${formatCurrency(stillProjectedIncome)} still projected`}
+            </span>
           )}
         </div>
         {isOpen('income') && (<>
@@ -944,12 +960,19 @@ export default function PeriodDetailClient({
 
       {/* ─── Deductions Grid ───────────────────────────────── */}
       <div className="bg-bg-white rounded-lg shadow-card p-6">
-        <h2 className="text-h3 font-bold text-text-heading mb-4">
-          <button type="button" onClick={() => toggleSection('deductions')} className="inline-flex items-center gap-2 hover:text-primary transition-colors">
-            <span className="text-text-muted text-base leading-none">{isOpen('deductions') ? '▾' : '▸'}</span>
-            Deductions
-          </button>
-        </h2>
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 mb-4">
+          <h2 className="text-h3 font-bold text-text-heading">
+            <button type="button" onClick={() => toggleSection('deductions')} className="inline-flex items-center gap-2 hover:text-primary transition-colors">
+              <span className="text-text-muted text-base leading-none">{isOpen('deductions') ? '▾' : '▸'}</span>
+              Deductions
+            </button>
+          </h2>
+          {!isOpen('deductions') && (
+            <span className="text-caption text-text-muted">
+              {formatCurrency(totalDeductions)} deducted · {formatCurrency(deductions.incomeAfterDeductions)} to budget
+            </span>
+          )}
+        </div>
         {isOpen('deductions') && (<>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mb-4">
           {([
@@ -1244,6 +1267,8 @@ export default function PeriodDetailClient({
             <span className="text-text-muted">Paid <span className="font-bold text-success">{formatCurrency(paymentSummary.paid)}</span></span>
             <span className="text-text-muted">·</span>
             <span className="text-text-muted"><span className="font-bold text-text-heading">{paymentSummary.scheduledBills}</span> {paymentSummary.scheduledBills === 1 ? 'bill' : 'bills'} scheduled</span>
+            <span className="text-text-muted">·</span>
+            <span className="text-text-muted">Total <span className="font-bold text-text-heading">{formatCurrency(totalExpenses)}</span></span>
           </div>
         </div>
 
@@ -1330,6 +1355,9 @@ export default function PeriodDetailClient({
             >
               + Add extra expense
             </button>
+          )}
+          {!isOpen('extra') && oneTimeExpenses.length > 0 && (
+            <span className="text-caption text-text-muted">{oneTimeExpenses.length} {oneTimeExpenses.length === 1 ? 'item' : 'items'} · {formatCurrency(oneTimeTotal)}</span>
           )}
         </div>
         {isOpen('extra') && (<>

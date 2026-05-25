@@ -182,7 +182,7 @@ export default function SavingsAllocationSection({
             Savings Allocation
           </button>
         </h2>
-        {open && (
+        {open ? (
         <button
           onClick={handleContribute}
           disabled={isPending || !hasPendingDeltas || locked}
@@ -190,6 +190,8 @@ export default function SavingsAllocationSection({
         >
           Contribute
         </button>
+        ) : (
+          <span className="text-caption text-text-muted">{formatCurrency(totalAllocated)} allocated of {formatCurrency(savingsPool)}</span>
         )}
       </div>
       {open && (<>
