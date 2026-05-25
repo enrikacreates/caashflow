@@ -279,6 +279,8 @@ export default function PeriodDetailClient({
     if (e.is_split) return sum + (e.payments ?? []).reduce((s, p) => s + p.amount, 0)
     return sum + getOwedAmount(e)
   }, 0)
+  // Expenses with no income behind them yet — what new income should go toward
+  const stillToFund = Math.max(0, totalExpenses - payNowTotal)
   const paymentSummary = calculatePeriodPaymentSummary(optExpenses)
   const isLocked = period.status === 'complete'
 
@@ -663,9 +665,6 @@ export default function PeriodDetailClient({
           <div className="@container sm:px-3">
             <div className="text-caption font-bold uppercase text-text-muted mb-1">To Budget</div>
             <div className="font-bold text-text-heading whitespace-nowrap leading-tight text-[clamp(0.78rem,15cqi,1.5rem)]">{formatCurrency(deductions.incomeAfterDeductions)}</div>
-            {totalExpenses > 0 && (
-              <div className="text-[10px] text-text-muted mt-0.5 leading-tight">of {formatCurrency(totalExpenses)} total expenses</div>
-            )}
           </div>
           <div className="@container sm:px-3">
             <div className="text-caption font-bold uppercase text-text-muted mb-1">Pay Now</div>
@@ -678,6 +677,18 @@ export default function PeriodDetailClient({
             </div>
           </div>
         </div>
+        {totalExpenses > 0 && (
+          <div className={`mt-4 rounded-md px-3 py-2.5 flex items-center justify-between ${stillToFund > 0 ? 'bg-warning/10' : 'bg-success/10'}`}>
+            <span className="text-caption font-bold uppercase tracking-wide text-text-muted">
+              {stillToFund > 0 ? 'Still to fund' : 'Fully funded'}
+            </span>
+            <span className={`text-label font-bold ${stillToFund > 0 ? 'text-warning' : 'text-success'}`}>
+              {stillToFund > 0
+                ? <>{formatCurrency(stillToFund)} <span className="font-medium text-text-muted">of {formatCurrency(totalExpenses)} expenses</span></>
+                : 'All expenses funded'}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* ─── Sticky Summary Bar (visible when scrolled past cards) ── */}
