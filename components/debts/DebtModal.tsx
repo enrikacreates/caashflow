@@ -38,6 +38,22 @@ export default function DebtModal({ debt, budgetItems, onClose }: Props) {
     currentLinkedItem?.id ?? ''
   )
 
+  // Only budget items categorized as debt (plus the currently-linked one, if any)
+  const debtItems = budgetItems.filter(
+    (b) => b.priority_category?.toLowerCase().includes('debt') || b.id === currentLinkedItem?.id
+  )
+
+  // Selecting a debt expense pulls its data into the debt form + connects them
+  const handleLinkChange = (id: string) => {
+    setLinkedBudgetItemId(id)
+    const item = budgetItems.find((b) => b.id === id)
+    if (item) {
+      if (!name.trim()) setName(item.name)
+      setMinimumPayment(item.default_amount ? String(item.default_amount) : '')
+      if (item.due_day != null) setDueDay(String(item.due_day))
+    }
+  }
+
   // When original balance changes on a new debt, keep current in sync
   const handleOriginalChange = (val: string) => {
     setOriginalBalance(val)
@@ -197,11 +213,11 @@ export default function DebtModal({ debt, budgetItems, onClose }: Props) {
             <label className={labelClass}>Linked Budget Item</label>
             <select
               value={linkedBudgetItemId}
-              onChange={(e) => setLinkedBudgetItemId(e.target.value)}
+              onChange={(e) => handleLinkChange(e.target.value)}
               className={inputClass}
             >
               <option value="">— None —</option>
-              {budgetItems.map((item) => (
+              {debtItems.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.name}
                   {item.debt_id && item.debt_id !== debt?.id ? ' (linked to another debt)' : ''}
@@ -209,7 +225,7 @@ export default function DebtModal({ debt, budgetItems, onClose }: Props) {
               ))}
             </select>
             <p className="text-[11px] text-muted mt-1">
-              When this budget expense is marked paid, the debt balance updates automatically.
+              Pick the matching debt expense — it fills in the payment &amp; due day, and links so the debt balance updates when that expense is marked paid.
             </p>
           </div>
 
