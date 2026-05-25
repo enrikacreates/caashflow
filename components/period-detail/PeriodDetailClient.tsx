@@ -32,7 +32,7 @@ import {
 } from '@/app/actions/period-expenses'
 import { completePeriod, reopenPeriod } from '@/app/actions/periods'
 import { smallConfetti, bigConfetti } from '@/lib/confetti'
-import { formatCurrency, formatCurrencyShort, getOwedAmount, getPriorityPill } from '@/lib/utils'
+import { formatCurrency, getOwedAmount, getPriorityPill } from '@/lib/utils'
 import { calculateDeductions, calculatePayNowTotal, calculateAccountTransferDetail, getDeductionAccountAllocations, getBudgetedAmount, isFullyPaid, calculatePeriodPaymentSummary } from '@/lib/calculations'
 import type { DeductionMode } from '@/lib/calculations'
 import SavingsAllocationSection from '@/components/period-detail/SavingsAllocationSection'
@@ -657,14 +657,14 @@ export default function PeriodDetailClient({
             <div className="text-caption font-bold uppercase text-text-muted mb-1">Total Income</div>
             <div className="font-bold text-text-heading whitespace-nowrap leading-tight text-[clamp(0.78rem,15cqi,1.5rem)]">{formatCurrency(period.income_amount)}</div>
             {monthProjectedIncome > 0 && (
-              <div className="text-[10px] text-text-muted mt-0.5 leading-tight">of {formatCurrencyShort(monthProjectedIncome)} projected this month</div>
+              <div className="text-[10px] text-text-muted mt-0.5 leading-tight">of {formatCurrency(monthProjectedIncome)} projected this month</div>
             )}
           </div>
           <div className="@container sm:px-3">
             <div className="text-caption font-bold uppercase text-text-muted mb-1">To Budget</div>
             <div className="font-bold text-text-heading whitespace-nowrap leading-tight text-[clamp(0.78rem,15cqi,1.5rem)]">{formatCurrency(deductions.incomeAfterDeductions)}</div>
             {totalExpenses > 0 && (
-              <div className="text-[10px] text-text-muted mt-0.5 leading-tight">of {formatCurrencyShort(totalExpenses)} total expenses</div>
+              <div className="text-[10px] text-text-muted mt-0.5 leading-tight">of {formatCurrency(totalExpenses)} total expenses</div>
             )}
           </div>
           <div className="@container sm:px-3">
