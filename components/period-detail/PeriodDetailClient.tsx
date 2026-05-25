@@ -26,6 +26,7 @@ import {
   addOneTimeExpense,
   removePeriodExpense,
   setAccountTransferDone,
+  setDeductionPaid,
 } from '@/app/actions/period-expenses'
 import { completePeriod, reopenPeriod } from '@/app/actions/periods'
 import { smallConfetti, bigConfetti } from '@/lib/confetti'
@@ -173,6 +174,22 @@ export default function PeriodDetailClient({
     startTransition(async () => {
       applyTransferOpt({ account, done })
       await setAccountTransferDone(period.id, account, done)
+    })
+
+  // Per-deduction "set aside / paid" checkmarks — flip instantly, server reconciles
+  const [deductionPaid, applyDeductionPaidOpt] = useOptimistic(
+    new Set(Object.entries(period.deduction_paid ?? {}).filter(([, v]) => v).map(([k]) => k)),
+    (state: Set<string>, u: { key: string; done: boolean }) => {
+      const next = new Set(state)
+      if (u.done) next.add(u.key)
+      else next.delete(u.key)
+      return next
+    }
+  )
+  const handleToggleDeductionPaid = (key: string, done: boolean) =>
+    startTransition(async () => {
+      applyDeductionPaidOpt({ key, done })
+      await setDeductionPaid(period.id, key, done)
     })
 
   useEffect(() => {
@@ -864,11 +881,13 @@ export default function PeriodDetailClient({
             const hasOverride =
               overridesLocal?.[pctKey as keyof DeductionOverrides] !== undefined ||
               overridesLocal?.[amtKey as keyof DeductionOverrides] !== undefined
+            const dkey = pctKey.replace('_percentage', '')
+            const paid = deductionPaid.has(dkey)
             return (
               <div key={pctKey} className="text-center">
                 <div className="text-caption font-bold text-text-muted uppercase mb-1">{label}</div>
-                {/* % | $ toggle */}
-                <div className="flex justify-center mb-1">
+                {/* % | $ toggle + paid checkmark */}
+                <div className="flex justify-center items-center gap-2 mb-1">
                   <div className="flex rounded-full overflow-hidden bg-surface-beige">
                     <button
                       onClick={() => handleDeductionModeToggle(pctKey, amtKey, detail, '%')}
@@ -889,6 +908,17 @@ export default function PeriodDetailClient({
                       $
                     </button>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleDeductionPaid(dkey, !paid)}
+                    disabled={isLocked}
+                    title={paid ? 'Marked set aside — tap to undo' : 'Mark this deduction as set aside / paid'}
+                    className={`shrink-0 w-4 h-4 rounded-full border flex items-center justify-center text-[9px] leading-none transition-colors disabled:opacity-50 ${
+                      paid ? 'bg-success border-success text-text-inverse' : 'border-border text-transparent hover:border-primary'
+                    }`}
+                  >
+                    ✓
+                  </button>
                 </div>
                 <div className="flex items-center justify-center gap-1 mb-1">
                   <input
@@ -908,7 +938,7 @@ export default function PeriodDetailClient({
                   <span className="text-caption text-text-muted">{detail.mode === '%' ? '%' : '$'}</span>
                 </div>
                 {detail.mode === '%' ? (
-                  <div className="text-caption font-bold text-text-heading">{formatCurrency(detail.amount)}</div>
+                  <div className={`text-caption font-bold ${paid ? 'text-success' : 'text-text-heading'}`}>{formatCurrency(detail.amount)}</div>
                 ) : (
                   <div className="text-[10px] text-text-muted">= {detail.percentage.toFixed(1)}%</div>
                 )}

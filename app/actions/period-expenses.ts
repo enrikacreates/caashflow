@@ -249,6 +249,32 @@ export async function updateExpenseBulk(
   revalidatePath('/periods')
 }
 
+/** Mark (or clear) a deduction type (tithe|savings|tax|profit|fun_money) as set aside/paid for this period. */
+export async function setDeductionPaid(periodId: string, key: string, done: boolean) {
+  const supabase = await createClient()
+  const householdId = await getUserHouseholdId()
+
+  const { data: row } = await supabase
+    .from('budget_periods')
+    .select('deduction_paid')
+    .eq('id', periodId)
+    .eq('household_id', householdId)
+    .single()
+
+  const next = { ...((row?.deduction_paid ?? {}) as Record<string, boolean>) }
+  if (done) next[key] = true
+  else delete next[key]
+
+  const { error } = await supabase
+    .from('budget_periods')
+    .update({ deduction_paid: next, updated_at: new Date().toISOString() })
+    .eq('id', periodId)
+    .eq('household_id', householdId)
+  if (error) throw new Error(`Failed to update deduction status: ${error.message}`)
+
+  revalidatePath(`/periods/${periodId}`)
+}
+
 /** Mark (or clear) an account's transfer as completed for this period. */
 export async function setAccountTransferDone(periodId: string, accountName: string, done: boolean) {
   const supabase = await createClient()

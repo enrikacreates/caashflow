@@ -70,6 +70,8 @@ export interface BudgetPeriod {
   period_month: string | null
   income_amount: number
   deduction_overrides: DeductionOverrides
+  // Per-deduction "set aside / paid" checkmarks, keyed by tithe|savings|tax|profit|fun_money
+  deduction_paid: Record<string, boolean>
   status: PeriodStatus
   completed_at: string | null
   created_at: string
