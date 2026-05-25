@@ -876,7 +876,7 @@ export default function PeriodDetailClient({
             { pctKey: 'savings_percentage', amtKey: 'savings_amount', label: 'Savings', detail: deductions.details.savingsD, accountKey: 'savings_account' },
             { pctKey: 'tax_percentage', amtKey: 'tax_amount', label: 'Tax', detail: deductions.details.taxD, accountKey: 'tax_account' },
             { pctKey: 'profit_percentage', amtKey: 'profit_amount', label: 'Profit', detail: deductions.details.profitD, accountKey: 'profit_account' },
-            { pctKey: 'fun_money_percentage', amtKey: 'fun_money_amount', label: 'Fun Money', detail: deductions.details.funMoneyD, accountKey: 'fun_money_account' },
+            { pctKey: 'fun_money_percentage', amtKey: 'fun_money_amount', label: 'Giving', detail: deductions.details.funMoneyD, accountKey: 'fun_money_account' },
           ] as const).map(({ pctKey, amtKey, label, detail, accountKey }) => {
             const hasOverride =
               overridesLocal?.[pctKey as keyof DeductionOverrides] !== undefined ||
@@ -1063,7 +1063,7 @@ export default function PeriodDetailClient({
           </div>
           {deductionContributions.length === 0 ? (
             <p className="text-caption text-text-muted">
-              Nothing set aside yet. As you mark income <span className="font-semibold">Done</span>, its tithe / savings / tax / profit / fun money get logged here and totaled for the period.
+              Nothing set aside yet. As you mark income <span className="font-semibold">Done</span>, its tithe / savings / tax / profit / giving get logged here and totaled for the period.
             </p>
           ) : (
             <>
@@ -1076,7 +1076,7 @@ export default function PeriodDetailClient({
                     <th className="text-right font-bold uppercase py-1 px-2">Savings</th>
                     <th className="text-right font-bold uppercase py-1 px-2">Tax</th>
                     <th className="text-right font-bold uppercase py-1 px-2">Profit</th>
-                    <th className="text-right font-bold uppercase py-1 px-2">Fun</th>
+                    <th className="text-right font-bold uppercase py-1 px-2">Giving</th>
                   </tr>
                 </thead>
                 <tbody>

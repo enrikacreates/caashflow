@@ -36,7 +36,7 @@ export default function SettingsForm({ settings, accounts }: { settings: Setting
               { pctName: 'savings_percentage', acctName: 'savings_account', label: 'Savings', pct: settings.savings_percentage, acct: settings.savings_account },
               { pctName: 'tax_percentage', acctName: 'tax_account', label: 'Tax', pct: settings.tax_percentage, acct: settings.tax_account },
               { pctName: 'profit_percentage', acctName: 'profit_account', label: 'Profit', pct: settings.profit_percentage, acct: settings.profit_account },
-              { pctName: 'fun_money_percentage', acctName: 'fun_money_account', label: 'Fun Money', pct: settings.fun_money_percentage, acct: settings.fun_money_account },
+              { pctName: 'fun_money_percentage', acctName: 'fun_money_account', label: 'Giving', pct: settings.fun_money_percentage, acct: settings.fun_money_account },
             ] as const).map(({ pctName, acctName, label, pct, acct }) => (
               <div key={pctName}>
                 <label className="block text-caption font-semibold text-text-heading mb-1">{label} %</label>
