@@ -4,7 +4,8 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { quickAddRequest, allocateRequestToPeriod } from '@/app/actions/requests'
 import { formatCurrency } from '@/lib/utils'
-import type { BudgetRequest, RequestStatus } from '@/lib/types'
+import RequestFormModal from '@/components/requests/RequestFormModal'
+import type { BudgetRequest, RequestStatus, PriorityCategoryRecord } from '@/lib/types'
 
 const STATUS_LABEL: Record<RequestStatus, string> = {
   requested: 'Requested',
@@ -20,17 +21,22 @@ const STATUS_PILL: Record<RequestStatus, string> = {
 }
 
 export default function PeriodRequestsPanel({
-  requests, periodId, isLocked,
-}: { requests: BudgetRequest[]; periodId: string; isLocked: boolean }) {
+  requests, periodId, isLocked, categories,
+}: { requests: BudgetRequest[]; periodId: string; isLocked: boolean; categories: PriorityCategoryRecord[] }) {
   const router = useRouter()
   const [open, setOpen] = useState(false) // default collapsed
   const [showDone, setShowDone] = useState(false) // "Got it" items hidden by default
   const [isPending, startTransition] = useTransition()
   const [name, setName] = useState('')
   const [amount, setAmount] = useState('')
+  const [editing, setEditing] = useState<BudgetRequest | null>(null)
 
   const doneCount = requests.filter((r) => r.status === 'obtained').length
   const visible = showDone ? requests : requests.filter((r) => r.status !== 'obtained')
+
+  // Suggestion options for the edit form, derived from existing requests
+  const forWhoOptions = [...new Set(['Home', 'Family', 'Guests', 'Giving', ...requests.map((r) => r.requested_for).filter((x): x is string => !!x)])]
+  const tagOptions = [...new Set(requests.flatMap((r) => r.tags ?? []))]
 
   const add = () => {
     const n = name.trim()
@@ -111,7 +117,14 @@ export default function PeriodRequestsPanel({
                 <div key={r.id} className="flex items-center gap-3 py-2.5">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-caption font-medium text-text-heading truncate">{r.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => setEditing(r)}
+                        title="Edit request details"
+                        className="text-caption font-medium text-text-heading truncate text-left hover:text-primary hover:underline transition-colors"
+                      >
+                        {r.name}
+                      </button>
                       <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${STATUS_PILL[r.status]}`}>
                         {STATUS_LABEL[r.status]}
                       </span>
@@ -149,6 +162,16 @@ export default function PeriodRequestsPanel({
             </button>
           )}
         </div>
+      )}
+
+      {editing && (
+        <RequestFormModal
+          editItem={editing}
+          categories={categories}
+          forWhoOptions={forWhoOptions}
+          tagOptions={tagOptions}
+          onClose={() => { setEditing(null); router.refresh() }}
+        />
       )}
     </div>
   )

@@ -1312,7 +1312,7 @@ export default function PeriodDetailClient({
       </div>
 
       {/* ─── Requests (wish list → pull into this budget) ──── */}
-      <PeriodRequestsPanel requests={requests} periodId={period.id} isLocked={isLocked} />
+      <PeriodRequestsPanel requests={requests} periodId={period.id} isLocked={isLocked} categories={categories} />
 
       {/* ─── In-place expense editor (stays on this budget) ── */}
       {editExpense && (
