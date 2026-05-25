@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { deleteInvoice } from '@/app/actions/invoices'
+import { deleteInvoice, addIncomeToBudget } from '@/app/actions/invoices'
 import { formatCurrency, formatDate, getStatusColor } from '@/lib/utils'
 import type { Invoice, BudgetPeriod } from '@/lib/types'
 import InvoiceFormModal from './InvoiceFormModal'
@@ -21,9 +21,22 @@ export default function InvoicesClient({
   const sent = invoices.filter((i) => i.status === 'sent')
   const received = invoices.filter((i) => i.status === 'received')
 
+  // Where "Add to budget" sends income: most recent active budget by month, else latest overall.
+  const byMonthDesc = (a: BudgetPeriod, b: BudgetPeriod) =>
+    (b.period_month ?? '').localeCompare(a.period_month ?? '')
+  const targetPeriod =
+    [...periods].filter((p) => p.status === 'active').sort(byMonthDesc)[0] ??
+    [...periods].sort(byMonthDesc)[0] ??
+    null
+
   const handleDelete = (id: string, name: string) => {
     if (!confirm(`Delete invoice for "${name}"?`)) return
     startTransition(() => deleteInvoice(id))
+  }
+
+  const handleAddToBudget = (id: string) => {
+    if (!targetPeriod) return
+    startTransition(() => addIncomeToBudget(id, targetPeriod.id))
   }
 
   return (
@@ -80,7 +93,16 @@ export default function InvoicesClient({
                   <td className="px-4 py-3 text-caption text-text-muted">{formatDate(inv.projected_date)}</td>
                   <td className="px-4 py-3 text-caption text-text-muted">{formatDate(inv.actual_received_date)}</td>
                   <td className="px-4 py-3">
-                    <div className="flex gap-2">
+                    <div className="flex items-center gap-3">
+                      {inv.budgeted ? (
+                        <span className="text-caption text-text-muted font-semibold">✓ Budgeted</span>
+                      ) : (
+                        <button onClick={() => handleAddToBudget(inv.id)} disabled={isPending || !targetPeriod}
+                          title={targetPeriod ? `Add to ${targetPeriod.period_name}` : 'Create a budget first'}
+                          className="text-caption text-primary-teal font-semibold hover:underline disabled:opacity-40 disabled:cursor-not-allowed">
+                          Add to budget
+                        </button>
+                      )}
                       <button onClick={() => { setEditItem(inv); setModalOpen(true) }}
                         className="text-caption text-primary font-semibold hover:underline">Edit</button>
                       <button onClick={() => handleDelete(inv.id, inv.client_name)} disabled={isPending}
