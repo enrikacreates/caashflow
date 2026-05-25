@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useCallback, useRef, useEffect, useOptimistic } from 'react'
 import { useRouter } from 'next/navigation'
+import { ChevronsDownUp, ChevronsUpDown } from 'lucide-react'
 import {
   updateExpenseField,
   markExpensePaid,
@@ -65,6 +66,9 @@ function priorityCode(name: string): string {
   return (m ? m[0] : name.split(':')[0]).replace(/\s+/g, '').toUpperCase().slice(0, 3)
 }
 
+// Collapsible period sections, in render order — drives the Expand/Collapse-all toggle
+const SECTION_KEYS = ['transfers', 'income', 'deductions', 'savings', 'expenses', 'extra'] as const
+
 interface LinkedInvoiceRow {
   id: string
   period_id: string
@@ -120,10 +124,14 @@ export default function PeriodDetailClient({
   const [showManualIncomeForm, setShowManualIncomeForm] = useState(false)
   const [showOneTimeForm, setShowOneTimeForm] = useState(false)
   const [editExpense, setEditExpense] = useState<PeriodExpense | null>(null)
-  // Collapsible sections — open by default; a key set true means collapsed.
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  // Collapsible sections — collapsed by default; a key set true means collapsed.
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(SECTION_KEYS.map((k) => [k, true]))
+  )
   const isOpen = (k: string) => !collapsed[k]
   const toggleSection = (k: string) => setCollapsed((c) => ({ ...c, [k]: !c[k] }))
+  const allCollapsed = SECTION_KEYS.every((k) => collapsed[k])
+  const setAllSections = (value: boolean) => setCollapsed(Object.fromEntries(SECTION_KEYS.map((k) => [k, value])))
   const debounceTimers = useRef<Record<string, NodeJS.Timeout>>({})
   const summaryCardsRef = useRef<HTMLDivElement>(null)
   const [showStickyBar, setShowStickyBar] = useState(false)
@@ -621,6 +629,19 @@ export default function PeriodDetailClient({
           Saving…
         </div>
       )}
+
+      {/* Expand / collapse all sections */}
+      <div className="flex justify-end -mb-4">
+        <button
+          type="button"
+          onClick={() => setAllSections(!allCollapsed)}
+          title={allCollapsed ? 'Expand all sections' : 'Collapse all sections'}
+          className="inline-flex items-center gap-1.5 bg-bg-white shadow-card rounded-full px-3.5 py-1.5 text-caption font-semibold text-text-muted hover:text-text-heading transition-colors"
+        >
+          {allCollapsed ? <ChevronsUpDown size={14} /> : <ChevronsDownUp size={14} />}
+          {allCollapsed ? 'Expand all' : 'Collapse all'}
+        </button>
+      </div>
 
       {/* ─── Status bar: complete / reopen ─────────────────── */}
       <div className={`flex items-center justify-between gap-4 rounded-lg px-5 py-3 ${isLocked ? 'bg-success/10 border border-success/30' : 'bg-bg-white shadow-card'}`}>
@@ -1240,6 +1261,8 @@ export default function PeriodDetailClient({
           savingsAllocations={savingsAllocations}
           lastPeriodAllocations={lastPeriodAllocations}
           locked={isLocked}
+          open={isOpen('savings')}
+          onToggleOpen={() => toggleSection('savings')}
         />
       )}
 

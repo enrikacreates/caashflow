@@ -17,6 +17,8 @@ interface Props {
   savingsAllocations: PeriodSavingsAllocation[]
   lastPeriodAllocations: PeriodSavingsAllocation[]
   locked?: boolean
+  open: boolean
+  onToggleOpen: () => void
 }
 
 export default function SavingsAllocationSection({
@@ -27,6 +29,8 @@ export default function SavingsAllocationSection({
   savingsAllocations,
   lastPeriodAllocations,
   locked = false,
+  open,
+  onToggleOpen,
 }: Props) {
   const [isPending, startTransition] = useTransition()
   const debounceTimers = useRef<Record<string, NodeJS.Timeout>>({})
@@ -44,7 +48,6 @@ export default function SavingsAllocationSection({
   // Show more goals toggle
   const [showAll, setShowAll] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
-  const [open, setOpen] = useState(true)
 
   // Build lookup for last period
   const lastAllocMap = new Map(lastPeriodAllocations.map((a) => [a.savings_goal_id, a.amount]))
@@ -177,7 +180,7 @@ export default function SavingsAllocationSection({
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-h3 font-bold text-text-heading">
-          <button type="button" onClick={() => setOpen((o) => !o)} className="inline-flex items-center gap-2 hover:text-primary transition-colors">
+          <button type="button" onClick={onToggleOpen} className="inline-flex items-center gap-2 hover:text-primary transition-colors">
             <span className="text-text-muted text-base leading-none">{open ? '▾' : '▸'}</span>
             Savings Allocation
           </button>
