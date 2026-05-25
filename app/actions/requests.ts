@@ -3,6 +3,17 @@
 import { createClient } from '@/lib/supabase/server'
 import { getUserHouseholdId } from '@/lib/supabase/helpers'
 import { revalidatePath } from 'next/cache'
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
+
+// Cloudflare R2 (S3-compatible) — stores request images
+const r2 = new S3Client({
+  region: 'auto',
+  endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+  credentials: {
+    accessKeyId: process.env.R2_ACCESS_KEY_ID ?? '',
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY ?? '',
+  },
+})
 
 export async function getBudgetRequests() {
   const supabase = await createClient()
@@ -144,23 +155,26 @@ export async function deleteBudgetRequest(id: string) {
   revalidatePath('/requests')
 }
 
-/** Upload a request image (file picker or camera) to storage; returns the public URL. */
+/** Upload a request image (file picker or camera) to Cloudflare R2; returns the public URL. */
 export async function uploadRequestImage(formData: FormData): Promise<string> {
-  const supabase = await createClient()
   const householdId = await getUserHouseholdId()
 
   const file = formData.get('file') as File | null
   if (!file || file.size === 0) throw new Error('No file provided')
 
   const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
-  const path = `${householdId}/${crypto.randomUUID()}.${ext}`
+  const key = `${householdId}/${crypto.randomUUID()}.${ext}`
 
-  const { error } = await supabase.storage
-    .from('request-images')
-    .upload(path, file, { upsert: true, contentType: file.type || undefined })
-  if (error) throw new Error(`Image upload failed: ${error.message}`)
+  await r2.send(
+    new PutObjectCommand({
+      Bucket: process.env.R2_BUCKET_NAME,
+      Key: key,
+      Body: Buffer.from(await file.arrayBuffer()),
+      ContentType: file.type || undefined,
+    })
+  )
 
-  return supabase.storage.from('request-images').getPublicUrl(path).data.publicUrl
+  return `${process.env.R2_PUBLIC_URL}/${key}`
 }
 
 /** Quick status change from the card. */
