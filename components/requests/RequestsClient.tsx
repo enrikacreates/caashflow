@@ -15,7 +15,15 @@ interface Props {
 }
 
 const STATUSES = ['requested', 'approved', 'purchased', 'obtained'] as const
-type SortKey = 'priority' | 'amount' | 'recent'
+type SortKey = 'priority' | 'amount' | 'recent' | 'name' | 'status'
+
+/** Compact a priority category name down to just its "P7"-style code. */
+function priorityCode(name: string): string {
+  const m = name.match(/p\s*\d+/i)
+  return (m ? m[0] : name.split(':')[0]).replace(/\s+/g, '').toUpperCase().slice(0, 3)
+}
+
+const defaultDir = (key: SortKey): 'asc' | 'desc' => (key === 'amount' || key === 'recent' ? 'desc' : 'asc')
 
 export default function RequestsClient({ requests, categories, activePeriod }: Props) {
   const [isPending, startTransition] = useTransition()
@@ -25,6 +33,7 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [personFilter, setPersonFilter] = useState<string>('all')
   const [sortKey, setSortKey] = useState<SortKey>('priority')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [groupByPerson, setGroupByPerson] = useState(false)
   const [view, setView] = useState<'card' | 'list'>('card')
   const [quickName, setQuickName] = useState('')
@@ -86,13 +95,16 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
     }
     if (statusFilter !== 'all') list = list.filter((r) => r.status === statusFilter)
     if (personFilter !== 'all') list = list.filter((r) => (r.requested_for ?? '') === personFilter)
+    const mul = sortDir === 'asc' ? 1 : -1
     list.sort((a, b) => {
-      if (sortKey === 'amount') return b.amount - a.amount
-      if (sortKey === 'recent') return (b.created_at ?? '').localeCompare(a.created_at ?? '')
-      return (a.priority_category ?? 'Z').localeCompare(b.priority_category ?? 'Z')
+      if (sortKey === 'amount') return (a.amount - b.amount) * mul
+      if (sortKey === 'recent') return (a.created_at ?? '').localeCompare(b.created_at ?? '') * mul
+      if (sortKey === 'name') return a.name.localeCompare(b.name) * mul
+      if (sortKey === 'status') return a.status.localeCompare(b.status) * mul
+      return (a.priority_category ?? 'Z').localeCompare(b.priority_category ?? 'Z') * mul
     })
     return list
-  }, [requests, search, statusFilter, personFilter, sortKey])
+  }, [requests, search, statusFilter, personFilter, sortKey, sortDir])
 
   const grouped = useMemo(() => {
     if (!groupByPerson) return null
@@ -104,6 +116,15 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
     }
     return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]))
   }, [filtered, groupByPerson])
+
+  const chooseSort = (key: SortKey) => { setSortKey(key); setSortDir(defaultDir(key)) }
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    else chooseSort(key)
+  }
+  const SortIcon = ({ col }: { col: SortKey }) => (
+    <span className="ml-1 text-[10px] opacity-50">{sortKey === col ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}</span>
+  )
 
   const handleDelete = (id: string, name: string) => {
     if (!confirm(`Delete "${name}"?`)) return
@@ -198,6 +219,17 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
     </div>
   )
 
+  const listHeader = (
+    <div className="flex items-center gap-3 px-4 py-2.5 bg-surface-beige/40 select-none text-caption font-bold uppercase text-text-muted">
+      <div className="w-12 shrink-0" />
+      <button onClick={() => handleSort('name')} className="flex-1 min-w-0 text-left hover:text-text-heading transition-colors">Item<SortIcon col="name" /></button>
+      <button onClick={() => handleSort('priority')} className="w-12 shrink-0 text-center hover:text-text-heading transition-colors">Pri<SortIcon col="priority" /></button>
+      <button onClick={() => handleSort('amount')} className="w-24 shrink-0 text-right hover:text-text-heading transition-colors">Amount<SortIcon col="amount" /></button>
+      <button onClick={() => handleSort('status')} className="w-24 shrink-0 text-center hover:text-text-heading transition-colors">Status<SortIcon col="status" /></button>
+      <div className="w-[248px] shrink-0" />
+    </div>
+  )
+
   const row = (req: BudgetRequest) => (
     <div
       key={req.id}
@@ -209,12 +241,7 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
         ? <img src={req.image_url} alt="" className="w-12 h-12 rounded object-cover shrink-0" />
         : <div className="w-12 h-12 rounded bg-surface-gray shrink-0" />}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="text-caption font-semibold text-text-heading truncate">{req.name}</span>
-          {req.priority_category && (
-            <span className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${getPriorityColor(categoryColorMap.get(req.priority_category))}`}>{req.priority_category}</span>
-          )}
-        </div>
+        <span className="text-caption font-semibold text-text-heading truncate block">{req.name}</span>
         <div className="text-[11px] text-text-muted truncate">
           {req.requested_for && <span>for <span className="font-semibold text-text-heading">{req.requested_for}</span></span>}
           {req.requested_for && (req.tags?.length || req.url) ? ' · ' : ''}
@@ -222,25 +249,39 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
           {req.url && <a href={req.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-primary font-semibold hover:underline ml-1">↗</a>}
         </div>
       </div>
-      <div className="w-20 text-right shrink-0 text-caption font-bold text-text-heading">{req.amount > 0 ? formatCurrency(req.amount) : ''}</div>
-      <button onClick={(e) => { e.stopPropagation(); cycleStatus(req) }} disabled={isPending} title="Change status" className={`shrink-0 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${statusColor(req.status)}`}>{statusLabel(req.status)}</button>
-      {activePeriod && req.status !== 'purchased' && (
-        <button onClick={(e) => { e.stopPropagation(); handleAllocate(req) }} disabled={isPending} title={`Add to ${activePeriod.period_name}`} className="shrink-0 bg-primary-teal/10 text-primary rounded-full px-3 py-1 text-caption font-bold hover:bg-primary-teal/20 disabled:opacity-50 transition-colors">+ Add</button>
-      )}
-      {req.status === 'obtained' ? (
-        <button onClick={(e) => { e.stopPropagation(); startTransition(() => setRequestStatus(req.id, 'requested')) }} disabled={isPending} className="shrink-0 text-caption text-text-muted hover:text-text-heading font-semibold transition-colors">↩ Reopen</button>
-      ) : (
-        <button onClick={(e) => { e.stopPropagation(); startTransition(() => setRequestStatus(req.id, 'obtained')) }} disabled={isPending} className="shrink-0 bg-success/10 text-success rounded-full px-3 py-1 text-caption font-bold hover:bg-success/20 disabled:opacity-50 transition-colors">✓ Got it</button>
-      )}
-      <button onClick={(e) => { e.stopPropagation(); setEditItem(req); setModalOpen(true) }} className="shrink-0 text-caption text-text-muted font-semibold hover:text-text-heading transition-colors">Edit</button>
-      <button onClick={(e) => { e.stopPropagation(); handleDelete(req.id, req.name) }} disabled={isPending} className="shrink-0 text-caption text-text-muted hover:text-warning font-semibold transition-colors">Delete</button>
+      <div className="w-12 shrink-0 flex justify-center">
+        {req.priority_category && (
+          <span title={req.priority_category} className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${getPriorityColor(categoryColorMap.get(req.priority_category))}`}>{priorityCode(req.priority_category)}</span>
+        )}
+      </div>
+      <div className="w-24 text-right shrink-0 text-caption font-bold text-text-heading">{req.amount > 0 ? formatCurrency(req.amount) : ''}</div>
+      <div className="w-24 shrink-0 flex justify-center">
+        <button onClick={(e) => { e.stopPropagation(); cycleStatus(req) }} disabled={isPending} title="Change status" className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${statusColor(req.status)}`}>{statusLabel(req.status)}</button>
+      </div>
+      <div className="w-[248px] shrink-0 flex items-center justify-end gap-2 whitespace-nowrap">
+        {activePeriod && req.status !== 'purchased' && (
+          <button onClick={(e) => { e.stopPropagation(); handleAllocate(req) }} disabled={isPending} title={`Add to ${activePeriod.period_name}`} className="bg-primary-teal/10 text-primary rounded-full px-3 py-1 text-caption font-bold hover:bg-primary-teal/20 disabled:opacity-50 transition-colors">+ Add</button>
+        )}
+        {req.status === 'obtained' ? (
+          <button onClick={(e) => { e.stopPropagation(); startTransition(() => setRequestStatus(req.id, 'requested')) }} disabled={isPending} className="text-caption text-text-muted hover:text-text-heading font-semibold transition-colors">↩ Reopen</button>
+        ) : (
+          <button onClick={(e) => { e.stopPropagation(); startTransition(() => setRequestStatus(req.id, 'obtained')) }} disabled={isPending} className="bg-success/10 text-success rounded-full px-3 py-1 text-caption font-bold hover:bg-success/20 disabled:opacity-50 transition-colors">✓ Got it</button>
+        )}
+        <button onClick={(e) => { e.stopPropagation(); setEditItem(req); setModalOpen(true) }} className="text-caption text-text-muted font-semibold hover:text-text-heading transition-colors">Edit</button>
+        <button onClick={(e) => { e.stopPropagation(); handleDelete(req.id, req.name) }} disabled={isPending} className="text-caption text-text-muted hover:text-warning font-semibold transition-colors">Delete</button>
+      </div>
     </div>
   )
 
   const renderItems = (items: BudgetRequest[]) =>
     view === 'list' ? (
       <div className="bg-bg-white rounded-lg shadow-card overflow-hidden">
-        <div className="overflow-x-auto"><div className="min-w-[520px] divide-y divide-[#e9e9e9]">{items.map(row)}</div></div>
+        <div className="overflow-x-auto">
+          <div className="min-w-[720px]">
+            {listHeader}
+            <div className="divide-y divide-[#e9e9e9]">{items.map(row)}</div>
+          </div>
+        </div>
       </div>
     ) : (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{items.map(card)}</div>
@@ -311,10 +352,12 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
               {people.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
           )}
-          <select value={sortKey} onChange={(e) => setSortKey(e.target.value as SortKey)} className={selectClass}>
+          <select value={sortKey} onChange={(e) => chooseSort(e.target.value as SortKey)} className={selectClass}>
             <option value="priority">Sort: Priority</option>
             <option value="amount">Sort: Amount</option>
             <option value="recent">Sort: Recent</option>
+            <option value="name">Sort: Name</option>
+            <option value="status">Sort: Status</option>
           </select>
           <button
             onClick={() => setGroupByPerson((g) => !g)}
