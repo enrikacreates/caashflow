@@ -56,6 +56,12 @@ import type {
 type SortKey = 'name' | 'default_amount' | 'priority_category' | 'account' | 'due_day' | 'frequency'
 type SortDir = 'asc' | 'desc'
 
+/** Compact priority label — "P1: Essentials" → "P1" (keeps the table narrow). */
+function priorityCode(name: string): string {
+  const m = name.match(/p\s*\d+/i)
+  return (m ? m[0] : name.split(':')[0]).replace(/\s+/g, '').toUpperCase().slice(0, 3)
+}
+
 interface LinkedInvoiceRow {
   id: string
   period_id: string
@@ -1127,13 +1133,13 @@ export default function PeriodDetailClient({
                   <th className={thClass} onClick={() => handleSort('default_amount')}>
                     Amount<SortIcon col="default_amount" />
                   </th>
-                  <th className={thClass} onClick={() => handleSort('account')}>
-                    Account<SortIcon col="account" />
+                  <th className={`${thClass} w-[1%]`} onClick={() => handleSort('account')}>
+                    Acct<SortIcon col="account" />
                   </th>
-                  <th className={thClass} onClick={() => handleSort('priority_category')}>
-                    Priority<SortIcon col="priority_category" />
+                  <th className={`${thClass} w-[1%]`} onClick={() => handleSort('priority_category')}>
+                    Pri<SortIcon col="priority_category" />
                   </th>
-                  <th className={thClass} onClick={() => handleSort('due_day')}>
+                  <th className={`${thClass} w-[1%]`} onClick={() => handleSort('due_day')}>
                     Due<SortIcon col="due_day" />
                   </th>
                   <th className="text-center px-3 py-3">
@@ -1258,9 +1264,9 @@ export default function PeriodDetailClient({
                     <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted w-10">Pay</th>
                     <th className="text-left px-3 py-3 text-caption font-bold uppercase text-text-muted">Name</th>
                     <th className="text-left px-3 py-3 text-caption font-bold uppercase text-text-muted">Amount</th>
-                    <th className="text-left px-3 py-3 text-caption font-bold uppercase text-text-muted">Account</th>
-                    <th className="text-left px-3 py-3 text-caption font-bold uppercase text-text-muted">Priority</th>
-                    <th className="text-left px-3 py-3 text-caption font-bold uppercase text-text-muted">Due</th>
+                    <th className="text-left px-2 py-3 text-caption font-bold uppercase text-text-muted w-[1%]">Acct</th>
+                    <th className="text-left px-2 py-3 text-caption font-bold uppercase text-text-muted w-[1%]">Pri</th>
+                    <th className="text-left px-2 py-3 text-caption font-bold uppercase text-text-muted w-[1%]">Due</th>
                     <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted">Xfer</th>
                     <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted">Paid</th>
                     <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted">Clear</th>
@@ -1512,14 +1518,16 @@ function ExpenseRow({
           )}
         </td>
 
-        {/* Account */}
-        <td className="px-3 py-3 text-caption text-text-muted whitespace-nowrap">{expense.account || '—'}</td>
+        {/* Account (compact — full name on hover) */}
+        <td className="px-2 py-3 text-caption text-text-muted">
+          <span className="block max-w-[64px] truncate" title={expense.account || ''}>{expense.account || '—'}</span>
+        </td>
 
-        {/* Priority */}
-        <td className="px-3 py-3">
+        {/* Priority (just the P# code — full name on hover) */}
+        <td className="px-2 py-3">
           {expense.priority_category && (
-            <span className={`inline-block max-w-[120px] truncate px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${getPriorityPill(expense.priority_category, categoryColorMap)}`}>
-              {expense.priority_category}
+            <span title={expense.priority_category} className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${getPriorityPill(expense.priority_category, categoryColorMap)}`}>
+              {priorityCode(expense.priority_category)}
             </span>
           )}
         </td>
