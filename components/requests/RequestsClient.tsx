@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useTransition } from 'react'
-import { ShoppingCart, LayoutGrid, List, ImagePlus, SlidersHorizontal } from 'lucide-react'
+import { ShoppingCart, LayoutGrid, List, ImagePlus, SlidersHorizontal, Mic } from 'lucide-react'
 import { deleteBudgetRequest, setRequestStatus, allocateRequestToPeriod, quickAddRequest } from '@/app/actions/requests'
 import { formatCurrency, getPillColor, getPriorityColor } from '@/lib/utils'
 import type { BudgetRequest, PriorityCategoryRecord } from '@/lib/types'
@@ -16,6 +16,18 @@ interface Props {
 
 const STATUSES = ['requested', 'approved', 'purchased', 'obtained'] as const
 type SortKey = 'priority' | 'amount' | 'recent' | 'name' | 'status'
+
+// Minimal Web Speech API shapes (not in lib.dom) for the quick-add mic
+type SpeechRecognitionEventLike = { results: { 0: { 0: { transcript: string } } } }
+interface SpeechRecognitionLike {
+  lang: string
+  interimResults: boolean
+  maxAlternatives: number
+  onresult: (e: SpeechRecognitionEventLike) => void
+  onend: () => void
+  onerror: () => void
+  start: () => void
+}
 
 /** Compact a priority category name down to just its "P7"-style code. */
 function priorityCode(name: string): string {
@@ -39,9 +51,29 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
   const [quickName, setQuickName] = useState('')
   const [manageOpen, setManageOpen] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
+  const [listening, setListening] = useState(false)
 
-  // Parse "Item for Who, $Amount" → { name, requestedFor, amount }. Amount must be $- or comma-flagged
-  // so item names with numbers ("iPhone 15") aren't mistaken for prices.
+  // Browser voice dictation → append spoken text into the quick-add box (no auto-submit, so you can review)
+  const startVoice = () => {
+    const SR = (window as typeof window & { SpeechRecognition?: new () => SpeechRecognitionLike; webkitSpeechRecognition?: new () => SpeechRecognitionLike }).SpeechRecognition
+      ?? (window as typeof window & { webkitSpeechRecognition?: new () => SpeechRecognitionLike }).webkitSpeechRecognition
+    if (!SR) { alert('Voice input isn’t supported in this browser. Try Chrome or Safari.'); return }
+    const rec = new SR()
+    rec.lang = 'en-US'
+    rec.interimResults = false
+    rec.maxAlternatives = 1
+    rec.onresult = (e: SpeechRecognitionEventLike) => {
+      const said = e.results[0][0].transcript.trim()
+      setQuickName((prev) => (prev ? `${prev} ${said}` : said))
+    }
+    rec.onend = () => setListening(false)
+    rec.onerror = () => setListening(false)
+    setListening(true)
+    rec.start()
+  }
+
+  // Parse "Item for Who Amount" → { name, requestedFor, amount }. A $-amount anywhere wins; otherwise
+  // a number at the END is taken as the amount (so "Towels for guest 45" → $45, while "2 day trip" stays a name).
   const parseQuickAdd = (raw: string) => {
     let s = raw.trim()
     let amount = 0
@@ -50,8 +82,9 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
       amount = parseFloat(dollar[1].replace(/,/g, '')) || 0
       s = (s.slice(0, dollar.index) + s.slice(dollar.index! + dollar[0].length))
     } else {
-      const commaNum = s.match(/,\s*\$?([\d,]+(?:\.\d{1,2})?)\s*$/)
-      if (commaNum) { amount = parseFloat(commaNum[1].replace(/,/g, '')) || 0; s = s.slice(0, commaNum.index) }
+      // Trailing number (with optional comma/$ before it) → amount
+      const trailing = s.match(/[,\s]\$?([\d,]+(?:\.\d{1,2})?)\s*$/)
+      if (trailing) { amount = parseFloat(trailing[1].replace(/,/g, '')) || 0; s = s.slice(0, trailing.index) }
     }
     s = s.replace(/[,\s]+$/, '').trim()
     let requestedFor: string | null = null
@@ -292,14 +325,25 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
   return (
     <>
       <form onSubmit={(e) => { e.preventDefault(); quickAdd() }} className="mb-4">
-        <input
-          type="text"
-          value={quickName}
-          onChange={(e) => setQuickName(e.target.value)}
-          placeholder="Quick add — e.g. “Towels for Guests, $35” then press Enter"
-          className="w-full bg-bg-white border border-border rounded-full px-5 py-3 text-caption focus:outline-none focus:border-primary transition-colors shadow-card"
-        />
-        <p className="text-[11px] text-text-muted mt-1.5 ml-1">Type naturally — <span className="font-semibold">“Item for Who, $Amount”</span> auto-fills the fields.</p>
+        <div className="relative">
+          <input
+            type="text"
+            value={quickName}
+            onChange={(e) => setQuickName(e.target.value)}
+            placeholder="Quick add — e.g. “Towels for Guests 35” then press Enter"
+            className="w-full bg-bg-white border border-border rounded-full pl-5 pr-14 py-3 text-caption focus:outline-none focus:border-primary transition-colors shadow-card"
+          />
+          <button
+            type="button"
+            onClick={startVoice}
+            title={listening ? 'Listening…' : 'Speak to add'}
+            aria-label="Voice input"
+            className={`absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-2 transition-colors ${listening ? 'bg-warning/15 text-warning animate-pulse' : 'text-text-muted hover:text-primary hover:bg-surface-beige'}`}
+          >
+            <Mic size={18} />
+          </button>
+        </div>
+        <p className="text-[11px] text-text-muted mt-1.5 ml-1">Type or speak — <span className="font-semibold">“Item for Who Amount”</span> auto-fills the fields (no $ needed).</p>
       </form>
 
       <div className="flex flex-wrap items-center gap-3 mb-6">

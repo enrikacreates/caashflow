@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useSearchParams } from 'next/navigation'
+import { Eye, EyeOff } from 'lucide-react'
 
 function LoginForm() {
   const searchParams = useSearchParams()
@@ -12,6 +13,7 @@ function LoginForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [mode, setMode] = useState<'login' | 'signup' | 'forgot'>(initialMode)
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null)
   const supabase = createClient()
@@ -201,15 +203,25 @@ function LoginForm() {
                 </div>
                 <div>
                   <label className="text-caption font-semibold text-text-heading block mb-1.5">Password</label>
-                  <input
-                    type="password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-bg-white border border-border rounded-sm px-4 py-2.5 text-caption focus:outline-none focus:border-primary transition-colors"
-                    placeholder={mode === 'signup' ? 'Create a password (6+ chars)' : 'Your password'}
-                    minLength={6}
-                  />
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full bg-bg-white border border-border rounded-sm px-4 py-2.5 pr-11 text-caption focus:outline-none focus:border-primary transition-colors"
+                      placeholder={mode === 'signup' ? 'Create a password (6+ chars)' : 'Your password'}
+                      minLength={6}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((v) => !v)}
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-heading transition-colors"
+                    >
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
                 </div>
 
                 {mode === 'login' && (
