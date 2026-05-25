@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useTransition } from 'react'
-import { ShoppingCart, LayoutGrid, List, ImagePlus, SlidersHorizontal, Mic } from 'lucide-react'
+import { ShoppingCart, LayoutGrid, List, ImagePlus, SlidersHorizontal, Mic, Trash2 } from 'lucide-react'
 import { deleteBudgetRequest, setRequestStatus, allocateRequestToPeriod, quickAddRequest } from '@/app/actions/requests'
 import { formatCurrency, getPillColor, getPriorityColor } from '@/lib/utils'
 import type { BudgetRequest, PriorityCategoryRecord } from '@/lib/types'
@@ -234,15 +234,15 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
           </button>
         )}
 
-        <div className="flex items-center justify-between pt-3 mt-3 border-t border-border">
-          <div className="flex gap-3">
+        <div className="flex items-center justify-between gap-2 pt-3 mt-3 border-t border-border">
+          <div className="flex items-center gap-3">
             {req.status === 'obtained' ? (
-              <button onClick={(e) => { e.stopPropagation(); startTransition(() => setRequestStatus(req.id, 'requested')) }} disabled={isPending} className="text-caption text-text-muted hover:text-text-heading font-semibold transition-colors">↩ Reopen</button>
+              <button onClick={(e) => { e.stopPropagation(); startTransition(() => setRequestStatus(req.id, 'requested')) }} disabled={isPending} className="whitespace-nowrap text-caption text-text-muted hover:text-text-heading font-semibold transition-colors">↩ Reopen</button>
             ) : (
-              <button onClick={(e) => { e.stopPropagation(); startTransition(() => setRequestStatus(req.id, 'obtained')) }} disabled={isPending} className="bg-success/10 text-success rounded-full px-3 py-1 text-caption font-bold hover:bg-success/20 disabled:opacity-50 transition-colors">✓ Got it</button>
+              <button onClick={(e) => { e.stopPropagation(); startTransition(() => setRequestStatus(req.id, 'obtained')) }} disabled={isPending} className="whitespace-nowrap bg-success/10 text-success rounded-full px-3 py-1 text-caption font-bold hover:bg-success/20 disabled:opacity-50 transition-colors">✓ Got it</button>
             )}
             <button onClick={(e) => { e.stopPropagation(); setEditItem(req); setModalOpen(true) }} className="text-caption text-text-muted font-semibold hover:text-text-heading transition-colors">Edit</button>
-            <button onClick={(e) => { e.stopPropagation(); handleDelete(req.id, req.name) }} disabled={isPending} className="text-caption text-text-muted hover:text-warning font-semibold transition-colors">Delete</button>
+            <button onClick={(e) => { e.stopPropagation(); handleDelete(req.id, req.name) }} disabled={isPending} aria-label="Delete" title="Delete" className="text-text-muted hover:text-warning transition-colors disabled:opacity-50"><Trash2 size={15} /></button>
           </div>
           <button onClick={(e) => { e.stopPropagation(); cycleStatus(req) }} disabled={isPending} title="Click to change status" className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${statusColor(req.status)}`}>
             {statusLabel(req.status)}
