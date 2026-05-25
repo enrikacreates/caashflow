@@ -26,7 +26,12 @@ export default async function DashboardPage({
     getSettings(),
   ])
 
-  const latestPeriod = periods.length > 0 ? periods[periods.length - 1] : null
+  // "Latest" = the budget for the most recent month (not just the most recently created row)
+  const latestPeriod = periods.length > 0
+    ? [...periods].sort((a: { period_month: string | null }, b: { period_month: string | null }) =>
+        (a.period_month ?? '').localeCompare(b.period_month ?? '')
+      )[periods.length - 1]
+    : null
 
   // Use URL param if valid, otherwise fall back to latest
   const selectedPeriod = periodParam

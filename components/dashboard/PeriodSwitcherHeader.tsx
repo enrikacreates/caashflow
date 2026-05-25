@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { ChevronDown } from 'lucide-react'
 
 type Period = { id: string; period_name: string }
@@ -33,21 +34,28 @@ export default function PeriodSwitcherHeader({
   return (
     <div className="relative inline-block">
       <h1 className="text-h1 font-bold text-text-heading">Latest</h1>
-      <button
-        onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 group mt-0.5"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-      >
-        <span className="text-sm font-medium text-text-muted">
+      <div className="flex items-center gap-1.5 mt-0.5">
+        <Link
+          href={`/periods/${currentPeriod.id}`}
+          className="text-sm font-medium text-text-muted hover:text-primary hover:underline transition-colors"
+          title="Open this budget"
+        >
           {currentPeriod.period_name}
-        </span>
-        <ChevronDown
-          size={14}
-          strokeWidth={2.5}
-          className={`text-text-muted transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
-        />
-      </button>
+        </Link>
+        <button
+          onClick={() => setOpen(!open)}
+          className="group"
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-label="Switch budget"
+        >
+          <ChevronDown
+            size={14}
+            strokeWidth={2.5}
+            className={`text-text-muted hover:text-text-heading transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+          />
+        </button>
+      </div>
 
       {open && (
         <>
