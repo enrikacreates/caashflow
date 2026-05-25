@@ -185,6 +185,37 @@ export async function updateExpenseField(
   revalidatePath('/')
 }
 
+/** Edit a period expense's details in place (this budget's copy only — doesn't touch the baseline master). */
+export async function updatePeriodExpenseDetails(
+  expenseId: string,
+  fields: {
+    name: string
+    default_amount: number
+    account: string | null
+    priority_category: string | null
+    due_day: number | null
+    pay_url: string | null
+    notes: string | null
+  }
+) {
+  const supabase = await createClient()
+  const householdId = await getUserHouseholdId()
+
+  const { data, error } = await supabase
+    .from('period_expenses')
+    .update({ ...fields, updated_at: new Date().toISOString() })
+    .eq('id', expenseId)
+    .eq('household_id', householdId)
+    .select('period_id')
+    .single()
+
+  if (error) throw new Error(`Failed to update expense: ${error.message}`)
+
+  revalidatePath('/periods')
+  if (data?.period_id) revalidatePath(`/periods/${data.period_id}`)
+  revalidatePath('/')
+}
+
 export async function updateExpenseBulk(
   expenseId: string,
   data: Record<string, unknown>

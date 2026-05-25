@@ -2,7 +2,6 @@
 
 import { useState, useTransition, useCallback, useRef, useEffect, useOptimistic } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import {
   updateExpenseField,
   markExpensePaid,
@@ -35,6 +34,7 @@ import { calculateDeductions, calculatePayNowTotal, calculateAccountBreakdown, g
 import type { DeductionMode } from '@/lib/calculations'
 import SavingsAllocationSection from '@/components/period-detail/SavingsAllocationSection'
 import PeriodRequestsPanel from '@/components/period-detail/PeriodRequestsPanel'
+import PeriodExpenseEditModal from '@/components/period-detail/PeriodExpenseEditModal'
 import type {
   BudgetPeriod,
   PeriodExpense,
@@ -105,6 +105,7 @@ export default function PeriodDetailClient({
   const [showInvoiceSelector, setShowInvoiceSelector] = useState(false)
   const [showManualIncomeForm, setShowManualIncomeForm] = useState(false)
   const [showOneTimeForm, setShowOneTimeForm] = useState(false)
+  const [editExpense, setEditExpense] = useState<PeriodExpense | null>(null)
   // Collapsible sections — open by default; a key set true means collapsed.
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const isOpen = (k: string) => !collapsed[k]
@@ -1122,6 +1123,7 @@ export default function PeriodDetailClient({
                     onPaymentToggle={handlePaymentToggle}
                     onPaymentCleared={handlePaymentCleared}
                     onRemovePayment={handleRemovePayment}
+                    onEdit={setEditExpense}
                     inputClass={inputClass}
                     categoryColorMap={categoryColorMap}
                   />
@@ -1244,6 +1246,7 @@ export default function PeriodDetailClient({
                       onPaymentCleared={handlePaymentCleared}
                       onRemovePayment={handleRemovePayment}
                       onRemove={handleRemoveOneTime}
+                      onEdit={setEditExpense}
                       inputClass={inputClass}
                       categoryColorMap={categoryColorMap}
                     />
@@ -1266,6 +1269,16 @@ export default function PeriodDetailClient({
 
       {/* ─── Requests (wish list → pull into this budget) ──── */}
       <PeriodRequestsPanel requests={requests} periodId={period.id} isLocked={isLocked} />
+
+      {/* ─── In-place expense editor (stays on this budget) ── */}
+      {editExpense && (
+        <PeriodExpenseEditModal
+          expense={editExpense}
+          accounts={accounts}
+          categories={categories}
+          onClose={() => setEditExpense(null)}
+        />
+      )}
 
       {/* ─── Back Button ───────────────────────────────────── */}
       <div className="pt-4">
@@ -1296,6 +1309,7 @@ function ExpenseRow({
   onPaymentCleared,
   onRemovePayment,
   onRemove,
+  onEdit,
   inputClass,
   categoryColorMap,
 }: {
@@ -1313,6 +1327,7 @@ function ExpenseRow({
   onPaymentCleared: (paymentId: string, value: boolean) => void
   onRemovePayment: (paymentId: string) => void
   onRemove?: (id: string) => void
+  onEdit?: (expense: PeriodExpense) => void
   inputClass: string
   categoryColorMap: Map<string, string>
 }) {
@@ -1379,13 +1394,15 @@ function ExpenseRow({
           )}
           <span className="inline-flex items-center gap-1 flex-wrap">
             {expense.is_overdue && <span title="Overdue — carried from a prior period">🚩</span>}
-            {expense.base_item_id ? (
-              <Link
-                href={`/base-budget?edit=${expense.base_item_id}`}
-                className="text-caption font-medium text-text-heading hover:text-primary hover:underline transition-colors"
+            {onEdit && !rowDisabled ? (
+              <button
+                type="button"
+                onClick={() => onEdit(expense)}
+                title="Edit this expense"
+                className="text-caption font-medium text-text-heading hover:text-primary hover:underline transition-colors text-left"
               >
                 {expense.name}
-              </Link>
+              </button>
             ) : (
               <span className="text-caption font-medium text-text-heading">{expense.name}</span>
             )}
