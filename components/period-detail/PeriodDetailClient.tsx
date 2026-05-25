@@ -1074,11 +1074,10 @@ export default function PeriodDetailClient({
         </div>
 
         {isOpen('expenses') && (
-        <div className="rounded-lg overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
+        <div className="rounded-lg overflow-auto max-h-[70vh]">
+            <table className="w-full border-separate border-spacing-0">
               <thead>
-                <tr className="bg-bg-white border-b border-[#e9e9e9]">
+                <tr className="bg-bg-white [&>th]:sticky [&>th]:top-0 [&>th]:z-20 [&>th]:bg-bg-white [&>th]:border-b [&>th]:border-[#e9e9e9]">
                   <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted w-10">Pay</th>
                   <th className={thClass} onClick={() => handleSort('name')}>
                     Name<SortIcon col="name" />
@@ -1138,7 +1137,6 @@ export default function PeriodDetailClient({
                 </tr>
               </tfoot>
             </table>
-          </div>
         </div>
         )}
       </div>
@@ -1211,11 +1209,10 @@ export default function PeriodDetailClient({
             No extra expenses yet. Add ad-hoc costs that apply to <span className="font-semibold">this budget only</span> — they won&apos;t touch your settings baseline.
           </div>
         ) : (
-          <div className="rounded-lg overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
+          <div className="rounded-lg overflow-auto max-h-[70vh]">
+              <table className="w-full border-separate border-spacing-0">
                 <thead>
-                  <tr className="bg-bg-white border-b border-[#e9e9e9]">
+                  <tr className="bg-bg-white [&>th]:sticky [&>th]:top-0 [&>th]:z-20 [&>th]:bg-bg-white [&>th]:border-b [&>th]:border-[#e9e9e9]">
                     <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted w-10">Pay</th>
                     <th className="text-left px-3 py-3 text-caption font-bold uppercase text-text-muted">Name</th>
                     <th className="text-left px-3 py-3 text-caption font-bold uppercase text-text-muted">Amount</th>
@@ -1261,7 +1258,6 @@ export default function PeriodDetailClient({
                   </tr>
                 </tfoot>
               </table>
-            </div>
           </div>
         )}
         </>)}
