@@ -53,7 +53,7 @@ export default function PeriodsClient({ periods }: { periods: BudgetPeriod[] }) 
               key={period.id}
               onClick={() => router.push(`/periods/${period.id}`)}
               className={`rounded-lg shadow-card p-6 hover:shadow-lg transition-shadow cursor-pointer ${
-                period.status === 'complete' ? 'bg-surface-beige opacity-60' : 'bg-bg-white'
+                period.status === 'complete' ? 'bg-surface-beige opacity-80' : 'bg-bg-white'
               }`}
             >
               <div className="flex items-center justify-between gap-2 mb-2">
