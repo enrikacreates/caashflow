@@ -1,6 +1,6 @@
 'use client'
 
-import { useTransition } from 'react'
+import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { createInvoice, updateInvoice } from '@/app/actions/invoices'
 import { linkInvoiceToPeriod } from '@/app/actions/period-expenses'
@@ -11,6 +11,14 @@ export default function InvoiceFormModal({
 }: { editItem: Invoice | null; periods: BudgetPeriod[]; onClose: () => void }) {
   const [isPending, startTransition] = useTransition()
   const [isAssigning, startAssigning] = useTransition()
+
+  // Month is derived from the entered date (received date wins, else expected)
+  const [projectedDate, setProjectedDate] = useState(editItem?.projected_date || '')
+  const [receivedDate, setReceivedDate] = useState(editItem?.actual_received_date || '')
+  const derivedMonth = (receivedDate || projectedDate || '').slice(0, 7)
+  const monthLabel = derivedMonth
+    ? new Date(`${derivedMonth}-01T00:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+    : null
 
   const handleAssignToPeriod = (periodId: string) => {
     if (!periodId || !editItem) return
@@ -64,17 +72,18 @@ export default function InvoiceFormModal({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-caption font-semibold text-text-heading mb-1">Expected Date</label>
-              <input type="date" name="projected_date" defaultValue={editItem?.projected_date || ''} className={inputClass} />
+              <input type="date" name="projected_date" value={projectedDate} onChange={(e) => setProjectedDate(e.target.value)} className={inputClass} />
             </div>
             <div>
               <label className="block text-caption font-semibold text-text-heading mb-1">Received Date</label>
-              <input type="date" name="actual_received_date" defaultValue={editItem?.actual_received_date || ''} className={inputClass} />
+              <input type="date" name="actual_received_date" value={receivedDate} onChange={(e) => setReceivedDate(e.target.value)} className={inputClass} />
             </div>
           </div>
-          <div>
-            <label className="block text-caption font-semibold text-text-heading mb-1">Month</label>
-            <input type="month" name="month" defaultValue={editItem?.month || ''} className={inputClass} />
-          </div>
+          {/* Month is derived from the date above — no separate field */}
+          <input type="hidden" name="month" value={derivedMonth} />
+          {monthLabel && (
+            <p className="text-caption text-text-muted">Filed under <span className="font-semibold text-text-heading">{monthLabel}</span></p>
+          )}
           {editItem?.status === 'received' && (
             <div className="border-t border-border pt-4">
               <label className="block text-caption font-semibold text-text-heading mb-1">Budget</label>
