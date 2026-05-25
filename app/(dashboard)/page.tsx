@@ -188,7 +188,7 @@ export default async function DashboardPage({
       )}
 
       {/* 6-Month Projected Income vs Goal */}
-      <CashFlowChart invoices={invoices} incomeGoal={settings.monthly_income_goal} />
+      <CashFlowChart invoices={invoices} incomeGoal={settings.monthly_income_goal} expenseNeed={monthlyExpenses} />
 
     </div>
   )

@@ -15,15 +15,19 @@ function chartMonths(): string[] {
 }
 
 /**
- * 6-month income chart. Each month shows a lighter goal "target" backdrop bar
- * that the income (projected or received — switchable) fills into.
+ * 6-month income chart. Each month layers three things, bottom-anchored:
+ *  - translucent orange = monthly expense need
+ *  - translucent blue = income goal
+ *  - solid teal (prominent) = income (projected or received, switchable)
  */
 export default function CashFlowChart({
   invoices,
   incomeGoal,
+  expenseNeed,
 }: {
   invoices: Invoice[]
   incomeGoal: number | null
+  expenseNeed: number
 }) {
   const [mode, setMode] = useState<'projected' | 'received'>('projected')
   const months = chartMonths()
@@ -39,29 +43,24 @@ export default function CashFlowChart({
   })
 
   const goal = incomeGoal && incomeGoal > 0 ? incomeGoal : 0
+  const expense = expenseNeed > 0 ? expenseNeed : 0
   const valueFor = (d: { projected: number; received: number }) => (mode === 'projected' ? d.projected : d.received)
-  const maxVal = Math.max(...data.map(valueFor), goal, 1)
+  const maxVal = Math.max(...data.map(valueFor), goal, expense, 1)
+  const pct = (v: number) => `${(v / maxVal) * 100}%`
 
   return (
     <div>
-      <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
-        <div className="flex items-center gap-2">
-          <TrendingUp size={16} className="text-text-muted" />
-          <h2 className="text-caption font-semibold text-text-muted uppercase tracking-wide">6-Month Income</h2>
-          <select
-            value={mode}
-            onChange={(e) => setMode(e.target.value as 'projected' | 'received')}
-            className="bg-bg-white border border-border rounded-full px-2.5 py-1 text-caption font-semibold focus:outline-none focus:border-primary transition-colors"
-          >
-            <option value="projected">Projected</option>
-            <option value="received">Received</option>
-          </select>
-        </div>
-        {goal > 0 && (
-          <span className="text-caption text-text-muted">
-            Goal <span className="font-bold text-text-heading">{formatCurrency(goal)}</span>/mo
-          </span>
-        )}
+      <div className="flex items-center gap-2 mb-3">
+        <TrendingUp size={16} className="text-text-muted" />
+        <h2 className="text-caption font-semibold text-text-muted uppercase tracking-wide">6-Month Income</h2>
+        <select
+          value={mode}
+          onChange={(e) => setMode(e.target.value as 'projected' | 'received')}
+          className="bg-bg-white border border-border rounded-full px-2.5 py-1 text-caption font-semibold focus:outline-none focus:border-primary transition-colors"
+        >
+          <option value="projected">Projected</option>
+          <option value="received">Received</option>
+        </select>
       </div>
       <div className="bg-bg-white rounded-lg p-6 shadow-card relative overflow-hidden">
         {/* "FLOW" watermark — decorative */}
@@ -75,21 +74,19 @@ export default function CashFlowChart({
               const val = valueFor(d)
               return (
                 <div key={d.month} className="flex-1 h-full">
-                  <div className="relative w-full h-full flex items-end">
-                    {/* Goal target backdrop (lighter green) */}
-                    {goal > 0 && (
-                      <div
-                        className="absolute bottom-0 left-0 right-0 bg-primary-teal/15 rounded-t-sm"
-                        style={{ height: `${(goal / maxVal) * 100}%` }}
-                      />
+                  <div className="relative w-full h-full">
+                    {/* expense need (translucent orange) */}
+                    {expense > 0 && (
+                      <div className="absolute bottom-0 inset-x-0 bg-warning/20 rounded-t-sm" style={{ height: pct(expense) }} />
                     )}
-                    {/* Income fills into the backdrop */}
-                    <div
-                      className="relative w-full bg-primary-teal rounded-t-sm min-h-[2px] transition-all"
-                      style={{ height: `${(val / maxVal) * 100}%` }}
-                    >
+                    {/* income goal (translucent blue) */}
+                    {goal > 0 && (
+                      <div className="absolute bottom-0 inset-x-0 bg-primary/20 rounded-t-sm" style={{ height: pct(goal) }} />
+                    )}
+                    {/* income (solid teal, most prominent, on top) */}
+                    <div className="absolute bottom-0 inset-x-0 bg-primary-teal rounded-t-sm min-h-[2px] transition-all" style={{ height: pct(val) }}>
                       {val > 0 && (
-                        <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[10px] font-bold text-text-heading whitespace-nowrap">
+                        <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-text-heading whitespace-nowrap">
                           {formatCurrencyShort(val)}
                         </span>
                       )}
@@ -105,6 +102,23 @@ export default function CashFlowChart({
                 {new Date(d.month + '-01').toLocaleDateString('en-US', { month: 'short' })}
               </span>
             ))}
+          </div>
+
+          {/* Key */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-4 text-[10px] text-text-muted">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-sm bg-primary-teal" /> Income ({mode})
+            </span>
+            {expense > 0 && (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-sm bg-warning/30" /> Expense need <span className="font-semibold text-text-heading">{formatCurrency(expense)}</span>
+              </span>
+            )}
+            {goal > 0 && (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-sm bg-primary/30" /> Income goal <span className="font-semibold text-text-heading">{formatCurrency(goal)}</span>
+              </span>
+            )}
           </div>
         </div>
       </div>
