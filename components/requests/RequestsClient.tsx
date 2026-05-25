@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useTransition } from 'react'
-import { ShoppingCart, LayoutGrid, List, ImagePlus } from 'lucide-react'
+import { ShoppingCart, LayoutGrid, List, ImagePlus, SlidersHorizontal } from 'lucide-react'
 import { deleteBudgetRequest, setRequestStatus, allocateRequestToPeriod, quickAddRequest } from '@/app/actions/requests'
 import { formatCurrency, getPillColor, getPriorityColor } from '@/lib/utils'
 import type { BudgetRequest, PriorityCategoryRecord } from '@/lib/types'
@@ -29,6 +29,7 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
   const [view, setView] = useState<'card' | 'list'>('card')
   const [quickName, setQuickName] = useState('')
   const [manageOpen, setManageOpen] = useState(false)
+  const [showFilters, setShowFilters] = useState(false)
 
   // Parse "Item for Who, $Amount" → { name, requestedFor, amount }. Amount must be $- or comma-flagged
   // so item names with numbers ("iPhone 15") aren't mistaken for prices.
@@ -267,33 +268,13 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
         >
           + Add to List
         </button>
-        <input
-          type="search"
-          placeholder="Search…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="flex-1 min-w-[140px] bg-bg-white border border-border rounded-full px-4 py-2 text-caption focus:outline-none focus:border-primary transition-colors"
-        />
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className={selectClass}>
-          <option value="all">All statuses</option>
-          {STATUSES.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
-        </select>
-        {people.length > 0 && (
-          <select value={personFilter} onChange={(e) => setPersonFilter(e.target.value)} className={selectClass}>
-            <option value="all">Everyone</option>
-            {people.map((p) => <option key={p} value={p}>{p}</option>)}
-          </select>
-        )}
-        <select value={sortKey} onChange={(e) => setSortKey(e.target.value as SortKey)} className={selectClass}>
-          <option value="priority">Sort: Priority</option>
-          <option value="amount">Sort: Amount</option>
-          <option value="recent">Sort: Recent</option>
-        </select>
         <button
-          onClick={() => setGroupByPerson((g) => !g)}
-          className={`rounded-full px-3 py-1.5 text-caption font-semibold border transition-colors ${groupByPerson ? 'bg-text-heading text-white border-text-heading' : 'bg-bg-white text-text-muted border-border hover:border-primary'}`}
+          onClick={() => setShowFilters((v) => !v)}
+          title="Filters & sorting"
+          className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-caption font-semibold border transition-colors ${showFilters ? 'bg-text-heading text-white border-text-heading' : 'bg-bg-white text-text-muted border-border hover:border-primary'}`}
         >
-          Group by Who/What
+          <SlidersHorizontal size={15} />
+          Filters
         </button>
         <div className="flex rounded-full border border-border overflow-hidden">
           <button onClick={() => setView('card')} title="Card view" className={`px-2.5 py-1.5 transition-colors ${view === 'card' ? 'bg-text-heading text-white' : 'bg-bg-white text-text-muted hover:text-text-heading'}`}>
@@ -310,6 +291,39 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
           Manage names
         </button>
       </div>
+
+      {showFilters && (
+        <div className="flex flex-wrap items-center gap-3 mb-6">
+          <input
+            type="search"
+            placeholder="Search…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="flex-1 min-w-[140px] bg-bg-white border border-border rounded-full px-4 py-2 text-caption focus:outline-none focus:border-primary transition-colors"
+          />
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className={selectClass}>
+            <option value="all">All statuses</option>
+            {STATUSES.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
+          </select>
+          {people.length > 0 && (
+            <select value={personFilter} onChange={(e) => setPersonFilter(e.target.value)} className={selectClass}>
+              <option value="all">Everyone</option>
+              {people.map((p) => <option key={p} value={p}>{p}</option>)}
+            </select>
+          )}
+          <select value={sortKey} onChange={(e) => setSortKey(e.target.value as SortKey)} className={selectClass}>
+            <option value="priority">Sort: Priority</option>
+            <option value="amount">Sort: Amount</option>
+            <option value="recent">Sort: Recent</option>
+          </select>
+          <button
+            onClick={() => setGroupByPerson((g) => !g)}
+            className={`rounded-full px-3 py-1.5 text-caption font-semibold border transition-colors ${groupByPerson ? 'bg-text-heading text-white border-text-heading' : 'bg-bg-white text-text-muted border-border hover:border-primary'}`}
+          >
+            Group by Who/What
+          </button>
+        </div>
+      )}
 
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-text-muted gap-3">
