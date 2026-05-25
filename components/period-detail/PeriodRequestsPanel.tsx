@@ -25,18 +25,38 @@ export default function PeriodRequestsPanel({
 }: { requests: BudgetRequest[]; periodId: string; isLocked: boolean; categories: PriorityCategoryRecord[] }) {
   const router = useRouter()
   const [open, setOpen] = useState(false) // default collapsed
-  const [showDone, setShowDone] = useState(false) // "Got it" items hidden by default
   const [isPending, startTransition] = useTransition()
   const [name, setName] = useState('')
   const [amount, setAmount] = useState('')
   const [editing, setEditing] = useState<BudgetRequest | null>(null)
 
-  const doneCount = requests.filter((r) => r.status === 'obtained').length
-  const visible = showDone ? requests : requests.filter((r) => r.status !== 'obtained')
+  // Filters mirror the Requests page; status defaults to "active" (hides Got it)
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('active')
+  const [personFilter, setPersonFilter] = useState('all')
+  const [sortKey, setSortKey] = useState<'priority' | 'amount' | 'recent'>('priority')
+
+  const people = [...new Set(requests.map((r) => r.requested_for).filter((x): x is string => !!x))].sort()
+
+  const visible = (() => {
+    const q = search.trim().toLowerCase()
+    let list = [...requests]
+    if (q) list = list.filter((r) => `${r.name} ${r.requested_for ?? ''} ${r.notes ?? ''}`.toLowerCase().includes(q))
+    if (statusFilter === 'active') list = list.filter((r) => r.status !== 'obtained')
+    else if (statusFilter !== 'all') list = list.filter((r) => r.status === statusFilter)
+    if (personFilter !== 'all') list = list.filter((r) => (r.requested_for ?? '') === personFilter)
+    list.sort((a, b) => {
+      if (sortKey === 'amount') return b.amount - a.amount
+      if (sortKey === 'recent') return (b.created_at ?? '').localeCompare(a.created_at ?? '')
+      return (a.priority_category ?? 'Z').localeCompare(b.priority_category ?? 'Z')
+    })
+    return list
+  })()
 
   // Suggestion options for the edit form, derived from existing requests
-  const forWhoOptions = [...new Set(['Home', 'Family', 'Guests', 'Giving', ...requests.map((r) => r.requested_for).filter((x): x is string => !!x)])]
+  const forWhoOptions = [...new Set(['Home', 'Family', 'Guests', 'Giving', ...people])]
   const tagOptions = [...new Set(requests.flatMap((r) => r.tags ?? []))]
+  const selectClass = 'bg-bg-white border border-border rounded-full px-3 py-1.5 text-caption focus:outline-none focus:border-primary transition-colors'
 
   const add = () => {
     const n = name.trim()
@@ -107,10 +127,41 @@ export default function PeriodRequestsPanel({
             </div>
           )}
 
+          {requests.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-3">
+              <input
+                type="search"
+                placeholder="Search…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="flex-1 min-w-[120px] bg-bg-white border border-border rounded-full px-3 py-1.5 text-caption focus:outline-none focus:border-primary transition-colors"
+              />
+              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className={selectClass}>
+                <option value="active">Active</option>
+                <option value="all">All statuses</option>
+                <option value="requested">Requested</option>
+                <option value="approved">Approved</option>
+                <option value="purchased">Purchased</option>
+                <option value="obtained">Got it</option>
+              </select>
+              {people.length > 0 && (
+                <select value={personFilter} onChange={(e) => setPersonFilter(e.target.value)} className={selectClass}>
+                  <option value="all">Everyone</option>
+                  {people.map((p) => <option key={p} value={p}>{p}</option>)}
+                </select>
+              )}
+              <select value={sortKey} onChange={(e) => setSortKey(e.target.value as 'priority' | 'amount' | 'recent')} className={selectClass}>
+                <option value="priority">Sort: Priority</option>
+                <option value="amount">Sort: Amount</option>
+                <option value="recent">Sort: Recent</option>
+              </select>
+            </div>
+          )}
+
           {requests.length === 0 ? (
             <p className="text-caption text-text-muted">No requests yet. Add one above — it lands on your wish list.</p>
           ) : visible.length === 0 ? (
-            <p className="text-caption text-text-muted">All caught up — nothing left on the list.</p>
+            <p className="text-caption text-text-muted">Nothing matches your filters.</p>
           ) : (
             <div className="divide-y divide-[#e9e9e9]">
               {visible.map((r) => (
@@ -148,18 +199,6 @@ export default function PeriodRequestsPanel({
                 </div>
               ))}
             </div>
-          )}
-
-          {doneCount > 0 && (
-            <button
-              type="button"
-              onClick={() => setShowDone((v) => !v)}
-              title={showDone ? 'Hide items you already got' : 'Show items you already got'}
-              className="mt-3 inline-flex items-center gap-1.5 text-caption text-text-muted hover:text-primary font-semibold transition-colors"
-            >
-              <span aria-hidden>👁</span>
-              {showDone ? 'Hide completed' : `Show completed (${doneCount})`}
-            </button>
           )}
         </div>
       )}
