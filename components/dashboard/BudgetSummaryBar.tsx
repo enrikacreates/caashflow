@@ -13,6 +13,8 @@ export default function BudgetSummaryBar({
   totalExpenses,
   stillToFund,
   stillProjected,
+  daysLeft,
+  bare = false,
 }: {
   income: number
   toBudget: number
@@ -21,9 +23,11 @@ export default function BudgetSummaryBar({
   totalExpenses: number
   stillToFund: number
   stillProjected: number
+  daysLeft?: number
+  bare?: boolean
 }) {
-  return (
-    <div className="bg-bg-white rounded-lg shadow-card p-4 sm:p-5">
+  const content = (
+    <>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-4 sm:divide-x sm:divide-border/60">
         <div className="@container sm:px-3 first:pl-0">
           <div className="text-caption font-bold uppercase text-text-muted mb-1">Total Income</div>
@@ -47,9 +51,14 @@ export default function BudgetSummaryBar({
       </div>
       {totalExpenses > 0 && (
         <div className={`mt-4 rounded-md px-3 py-2.5 flex items-center justify-between ${stillToFund > 0 ? 'bg-warning/10' : 'bg-success/10'}`}>
-          <span className="text-caption font-bold uppercase tracking-wide text-text-muted">
-            {stillToFund > 0 ? 'Still to fund' : 'Fully funded'}
-          </span>
+          <div>
+            <span className="text-caption font-bold uppercase tracking-wide text-text-muted">
+              {stillToFund > 0 ? 'Still to fund' : 'Fully funded'}
+            </span>
+            {daysLeft != null && stillToFund > 0 && (
+              <span className="block text-[10px] text-text-muted mt-0.5">{daysLeft} {daysLeft === 1 ? 'day' : 'days'} left this month</span>
+            )}
+          </div>
           <span className={`text-label font-bold ${stillToFund > 0 ? 'text-warning' : 'text-success'}`}>
             {stillToFund > 0
               ? <>{formatCurrency(stillToFund)} <span className="font-medium text-text-muted">of {formatCurrency(totalExpenses)} expenses</span></>
@@ -57,6 +66,9 @@ export default function BudgetSummaryBar({
           </span>
         </div>
       )}
-    </div>
+    </>
   )
+
+  if (bare) return content
+  return <div className="bg-bg-white rounded-lg shadow-card p-4 sm:p-5">{content}</div>
 }
