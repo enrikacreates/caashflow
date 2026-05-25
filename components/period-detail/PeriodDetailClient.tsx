@@ -56,7 +56,7 @@ import type {
   BudgetRequest,
 } from '@/lib/types'
 
-type SortKey = 'name' | 'default_amount' | 'priority_category' | 'account' | 'due_day' | 'frequency' | 'pay_now'
+type SortKey = 'name' | 'default_amount' | 'priority_category' | 'account' | 'due_day' | 'frequency' | 'pay_now' | 'is_cash'
 type SortDir = 'asc' | 'desc'
 
 /** Compact priority label — "P1: Essentials" → "P1" (keeps the table narrow). */
@@ -327,6 +327,7 @@ export default function PeriodDetailClient({
       const pb = getBudgetedAmount(b) > 0 ? 1 : 0
       return (pa - pb) * mul
     }
+    if (sortKey === 'is_cash') return (Number(a.is_cash) - Number(b.is_cash)) * mul
     const aVal = a[sortKey] ?? ''
     const bVal = b[sortKey] ?? ''
     if (typeof aVal === 'number' && typeof bVal === 'number') return (aVal - bVal) * mul
@@ -1261,7 +1262,7 @@ export default function PeriodDetailClient({
                   <th className={`${thClass} w-[1%]`} onClick={() => handleSort('account')}>
                     Acct<SortIcon col="account" />
                   </th>
-                  <th className="text-center px-1 py-3 text-caption font-bold uppercase text-text-muted w-[1%]" title="Withdraw as cash">💵</th>
+                  <th className="text-center px-1 py-3 text-caption font-bold uppercase text-text-muted w-[1%] cursor-pointer hover:text-text-heading select-none" onClick={() => handleSort('is_cash')} title="Sort by cash">💵<SortIcon col="is_cash" /></th>
                   <th className={`${thClass} w-[1%]`} onClick={() => handleSort('priority_category')}>
                     Pri<SortIcon col="priority_category" />
                   </th>
