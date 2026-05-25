@@ -760,10 +760,22 @@ export async function linkInvoiceToPeriod(periodId: string, invoiceId: string) {
 
   if (error) throw new Error(`Failed to link invoice to period: ${error.message}`)
 
-  // Auto-flag the invoice as budgeted — assigning it to any period marks it
+  // Assigning income to a period means the money has landed: promote it to received
+  // (set received date if missing) and flag it budgeted.
+  const { data: existing } = await supabase
+    .from('invoices')
+    .select('actual_received_date')
+    .eq('id', invoiceId)
+    .single()
+
   await supabase
     .from('invoices')
-    .update({ budgeted: true, updated_at: new Date().toISOString() })
+    .update({
+      status: 'received',
+      actual_received_date: existing?.actual_received_date ?? new Date().toISOString().slice(0, 10),
+      budgeted: true,
+      updated_at: new Date().toISOString(),
+    })
     .eq('id', invoiceId)
 
   revalidatePath(`/periods/${periodId}`)

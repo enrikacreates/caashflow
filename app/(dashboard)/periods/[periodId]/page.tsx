@@ -26,7 +26,7 @@ export default async function PeriodDetailPage({
         expenses={detail.expenses}
         linkedInvoices={detail.linkedInvoices}
         manualIncome={detail.manualIncome}
-        allReceivedInvoices={detail.allReceivedInvoices}
+        linkableInvoices={detail.linkableInvoices}
         settings={detail.settings}
         accounts={detail.accounts}
         deductionContributions={detail.deductionContributions}

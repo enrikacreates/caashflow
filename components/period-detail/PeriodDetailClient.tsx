@@ -77,7 +77,7 @@ interface Props {
   expenses: PeriodExpense[]
   linkedInvoices: LinkedInvoiceRow[]
   manualIncome: PeriodManualIncome[]
-  allReceivedInvoices: Invoice[]
+  linkableInvoices: Invoice[]
   settings: Settings
   accounts: Account[]
   deductionContributions: PeriodDeductionContribution[]
@@ -96,7 +96,7 @@ export default function PeriodDetailClient({
   expenses,
   linkedInvoices,
   manualIncome,
-  allReceivedInvoices,
+  linkableInvoices,
   settings,
   accounts,
   deductionContributions,
@@ -874,12 +874,12 @@ export default function PeriodDetailClient({
         {/* Invoice Selector Dropdown */}
         {showInvoiceSelector && (
           <div className="bg-surface-beige rounded-sm p-4 mb-4">
-            <div className="text-caption font-bold text-text-muted uppercase mb-2">Select Received Invoices to Link</div>
-            {allReceivedInvoices.filter((inv) => !linkedInvoiceIds.has(inv.id)).length === 0 ? (
-              <p className="text-caption text-text-muted">No unlinked received invoices available.</p>
+            <div className="text-caption font-bold text-text-muted uppercase mb-2">Select Income to Link</div>
+            {linkableInvoices.filter((inv) => !linkedInvoiceIds.has(inv.id)).length === 0 ? (
+              <p className="text-caption text-text-muted">No unlinked income available.</p>
             ) : (
               <div className="space-y-2 max-h-48 overflow-y-auto">
-                {allReceivedInvoices
+                {linkableInvoices
                   .filter((inv) => !linkedInvoiceIds.has(inv.id))
                   .map((inv) => (
                     <div key={inv.id} className="flex items-center justify-between py-1">
@@ -893,6 +893,9 @@ export default function PeriodDetailClient({
                         />
                         <span className="font-medium text-text-heading">{inv.client_name}</span>
                         {inv.project_name && <span className="text-text-muted">– {inv.project_name}</span>}
+                        {inv.status !== 'received' && (
+                          <span className="text-[10px] uppercase font-bold text-text-muted bg-bg-white px-1.5 py-0.5 rounded-full">{inv.status}</span>
+                        )}
                       </label>
                       <span className="text-caption font-bold text-text-heading">{formatCurrency(inv.amount)}</span>
                     </div>

@@ -231,12 +231,12 @@ export async function getPeriodDetail(periodId: string) {
 
   if (incomeError) throw new Error(`Failed to fetch manual income: ${incomeError.message}`)
 
-  const { data: allReceivedInvoices } = await supabase
+  // Any logged income is linkable — projected/sent rows get promoted to received on link.
+  const { data: linkableInvoices } = await supabase
     .from('invoices')
     .select('*')
     .eq('household_id', householdId)
-    .eq('status', 'received')
-    .order('actual_received_date', { ascending: false })
+    .order('created_at', { ascending: false })
 
   const { data: settings, error: settingsError } = await supabase
     .from('settings')
@@ -325,7 +325,7 @@ export async function getPeriodDetail(periodId: string) {
     expenses: expensesWithPayments,
     linkedInvoices: linkedInvoices || [],
     manualIncome: manualIncome || [],
-    allReceivedInvoices: allReceivedInvoices || [],
+    linkableInvoices: linkableInvoices || [],
     settings,
     accounts: accounts || [],
     deductionContributions: deductionContributions || [],
