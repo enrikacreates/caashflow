@@ -54,7 +54,11 @@ export default function CashFlowChart({
 
   const goal = incomeGoal && incomeGoal > 0 ? incomeGoal : 0
   const expense = expenseNeed > 0 ? expenseNeed : 0
-  const valueFor = (d: { projected: number; received: number }) => (mode === 'projected' ? d.projected : d.received)
+  // Projected view is smart per-month: past → received (actual), current/future → projected
+  // (all statuses, which already blends received + still-expected). Received view is always actual.
+  const nowMonth = (() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}` })()
+  const valueFor = (d: { month: string; projected: number; received: number }) =>
+    mode === 'received' ? d.received : d.month < nowMonth ? d.received : d.projected
   const maxVal = Math.max(...data.map(valueFor), goal, expense, 1)
   const pct = (v: number) => `${(v / maxVal) * 100}%`
 

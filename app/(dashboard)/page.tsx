@@ -117,6 +117,9 @@ export default async function DashboardPage({
         )}
       </div>
 
+      {/* 6-Month Income — primary cash-flow view, kept up top */}
+      <CashFlowChart invoices={invoices} incomeGoal={settings.monthly_income_goal} expenseNeed={monthlyExpenses} periods={periods} />
+
       {/* Insight cards */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {nextBills.length > 0 && (
@@ -178,9 +181,6 @@ export default async function DashboardPage({
           </div>
         )}
       </div>
-
-      {/* 6-Month Projected Income vs Goal */}
-      <CashFlowChart invoices={invoices} incomeGoal={settings.monthly_income_goal} expenseNeed={monthlyExpenses} periods={periods} />
 
     </div>
   )
