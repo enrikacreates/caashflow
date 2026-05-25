@@ -37,7 +37,7 @@ export default function PeriodSwitcherHeader({
       <div className="flex items-center gap-1.5 mt-0.5">
         <Link
           href={`/periods/${currentPeriod.id}`}
-          className="text-sm font-medium text-text-muted hover:text-primary hover:underline transition-colors"
+          className="text-sm font-semibold text-primary underline hover:opacity-80 transition-opacity"
           title="Open this budget"
         >
           {currentPeriod.period_name}
