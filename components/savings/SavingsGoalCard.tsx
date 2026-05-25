@@ -2,10 +2,10 @@
 
 import { useState, useTransition } from 'react'
 import { Target, Sprout, Trophy, PartyPopper } from 'lucide-react'
-import { addContribution, markAchieved, deleteSavingsGoal } from '@/app/actions/savings'
+import { addSavingsAdjustment, removeSavingsAdjustment, markAchieved, deleteSavingsGoal } from '@/app/actions/savings'
 import { bigConfetti, smallConfetti } from '@/lib/confetti'
 import { formatCurrency } from '@/lib/utils'
-import type { SavingsGoal } from '@/lib/types'
+import type { SavingsGoal, SavingsGoalAdjustment } from '@/lib/types'
 
 function daysUntil(dateStr: string): number {
   const target = new Date(dateStr + 'T00:00:00')
@@ -25,11 +25,13 @@ function formatShortDate(dateStr: string) {
 interface Props {
   goal: SavingsGoal
   onEdit: (goal: SavingsGoal) => void
+  adjustments: SavingsGoalAdjustment[]
 }
 
-export default function SavingsGoalCard({ goal, onEdit }: Props) {
+export default function SavingsGoalCard({ goal, onEdit, adjustments }: Props) {
   const [isPending, startTransition] = useTransition()
-  const [contributionInput, setContributionInput] = useState('')
+  const [amountInput, setAmountInput] = useState('')
+  const [noteInput, setNoteInput] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   const isPurchase = goal.goal_type === 'purchase'
@@ -41,24 +43,38 @@ export default function SavingsGoalCard({ goal, onEdit }: Props) {
 
   const days = goal.target_date ? daysUntil(goal.target_date) : null
 
-  const handleContribute = () => {
-    const amount = parseFloat(contributionInput)
-    if (isNaN(amount) || amount <= 0) return setError('Enter a valid amount.')
+  const handleAdjust = () => {
+    const amount = parseFloat(amountInput)
+    if (isNaN(amount) || amount === 0) return setError('Enter a non-zero amount (use − to withdraw).')
     setError(null)
     startTransition(async () => {
       try {
-        const { exceedsMonthly, isNowAchieved } = await addContribution(goal.id, amount)
-        setContributionInput('')
+        const { exceedsMonthly, isNowAchieved } = await addSavingsAdjustment(goal.id, amount, noteInput)
+        setAmountInput('')
+        setNoteInput('')
         if (isNowAchieved) {
           await bigConfetti()
         } else if (exceedsMonthly) {
           await smallConfetti()
         }
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to add contribution.')
+        setError(e instanceof Error ? e.message : 'Failed to adjust balance.')
       }
     })
   }
+
+  const handleRemoveAdjustment = (id: string) => {
+    startTransition(async () => {
+      try {
+        await removeSavingsAdjustment(id)
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to remove entry.')
+      }
+    })
+  }
+
+  const formatAdjDate = (iso: string) =>
+    new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 
   const handleMarkAchieved = () => {
     startTransition(async () => {
@@ -230,31 +246,63 @@ export default function SavingsGoalCard({ goal, onEdit }: Props) {
         </div>
       )}
 
-      {/* Add contribution */}
-      <div className="flex gap-2 mb-3">
-        <div className="relative flex-1">
+      {/* Adjust balance (+/−) with a note */}
+      <div className="flex gap-2 mb-1">
+        <div className="relative w-28 shrink-0">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-caption">$</span>
           <input
             type="number"
-            value={contributionInput}
-            onChange={(e) => setContributionInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleContribute()
-            }}
-            placeholder="Add contribution…"
-            min="0"
+            value={amountInput}
+            onChange={(e) => setAmountInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleAdjust() }}
+            placeholder="±0.00"
             step="0.01"
-            className="w-full bg-bg-white border border-border rounded-sm pl-7 pr-4 py-2.5 text-caption focus:outline-none focus:border-primary transition-colors"
+            className="w-full bg-bg-white border border-border rounded-sm pl-7 pr-3 py-2.5 text-caption focus:outline-none focus:border-primary transition-colors"
           />
         </div>
+        <input
+          type="text"
+          value={noteInput}
+          onChange={(e) => setNoteInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') handleAdjust() }}
+          placeholder="Note (e.g. vet bill, $100 from checking)"
+          className="flex-1 min-w-0 bg-bg-white border border-border rounded-sm px-3 py-2.5 text-caption focus:outline-none focus:border-primary transition-colors"
+        />
         <button
-          onClick={handleContribute}
-          disabled={isPending || !contributionInput}
+          onClick={handleAdjust}
+          disabled={isPending || !amountInput}
           className="bg-primary-teal text-text-inverse rounded-full px-4 py-2.5 text-caption font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity whitespace-nowrap"
         >
           {isPending ? '…' : 'Add'}
         </button>
       </div>
+      <p className="text-[10px] text-text-muted mb-3 ml-1">Use a negative amount to record a withdrawal.</p>
+
+      {/* History ledger */}
+      {adjustments.length > 0 && (
+        <div className="mb-4">
+          <p className="text-[10px] font-bold uppercase text-text-muted mb-1.5">History</p>
+          <div className="divide-y divide-[#e9e9e9] max-h-44 overflow-y-auto">
+            {adjustments.map((a) => (
+              <div key={a.id} className="flex items-center gap-2 py-1.5">
+                <span className="text-[10px] text-text-muted w-12 shrink-0">{formatAdjDate(a.created_at)}</span>
+                <span className={`text-caption font-bold w-20 shrink-0 ${a.amount < 0 ? 'text-warning' : 'text-success'}`}>
+                  {a.amount < 0 ? '−' : '+'}{formatCurrency(Math.abs(a.amount))}
+                </span>
+                <span className="flex-1 min-w-0 text-caption text-text-muted truncate">{a.note || '—'}</span>
+                <button
+                  onClick={() => handleRemoveAdjustment(a.id)}
+                  disabled={isPending}
+                  title="Undo this entry"
+                  className="shrink-0 text-text-muted hover:text-warning text-[10px] font-semibold disabled:opacity-50"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Mark as Achieved */}
       <button

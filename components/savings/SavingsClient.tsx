@@ -5,18 +5,25 @@ import { Sprout, Target, Trophy, ChevronDown, ChevronRight } from 'lucide-react'
 import SavingsGoalCard from './SavingsGoalCard'
 import SavingsGoalModal from './SavingsGoalModal'
 import { formatCurrency } from '@/lib/utils'
-import type { SavingsGoal, BaseBudgetItem } from '@/lib/types'
+import type { SavingsGoal, BaseBudgetItem, SavingsGoalAdjustment } from '@/lib/types'
 
 export default function SavingsClient({
   goals,
   budgetItems,
+  adjustments,
 }: {
   goals: SavingsGoal[]
   budgetItems: BaseBudgetItem[]
+  adjustments: SavingsGoalAdjustment[]
 }) {
   const [showModal, setShowModal] = useState(false)
   const [editingGoal, setEditingGoal] = useState<SavingsGoal | undefined>(undefined)
   const [showAchieved, setShowAchieved] = useState(false)
+
+  const adjByGoal = adjustments.reduce<Record<string, SavingsGoalAdjustment[]>>((acc, a) => {
+    ;(acc[a.savings_goal_id] ??= []).push(a)
+    return acc
+  }, {})
 
   const activeGoals = goals.filter((g) => !g.is_achieved)
   const achievedGoals = goals.filter((g) => g.is_achieved)
@@ -99,7 +106,7 @@ export default function SavingsClient({
           </div>
           <div className="space-y-4">
             {purchaseGoals.map((goal) => (
-              <SavingsGoalCard key={goal.id} goal={goal} onEdit={handleEdit} />
+              <SavingsGoalCard key={goal.id} goal={goal} onEdit={handleEdit} adjustments={adjByGoal[goal.id] ?? []} />
             ))}
           </div>
         </div>
@@ -116,7 +123,7 @@ export default function SavingsClient({
           </div>
           <div className="space-y-4">
             {fundGoals.map((goal) => (
-              <SavingsGoalCard key={goal.id} goal={goal} onEdit={handleEdit} />
+              <SavingsGoalCard key={goal.id} goal={goal} onEdit={handleEdit} adjustments={adjByGoal[goal.id] ?? []} />
             ))}
           </div>
         </div>
@@ -149,7 +156,7 @@ export default function SavingsClient({
           {showAchieved && (
             <div className="space-y-2 mt-3">
               {achievedGoals.map((goal) => (
-                <SavingsGoalCard key={goal.id} goal={goal} onEdit={handleEdit} />
+                <SavingsGoalCard key={goal.id} goal={goal} onEdit={handleEdit} adjustments={adjByGoal[goal.id] ?? []} />
               ))}
             </div>
           )}

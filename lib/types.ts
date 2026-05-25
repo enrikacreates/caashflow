@@ -261,6 +261,15 @@ export interface SavingsGoal {
   updated_at: string
 }
 
+export interface SavingsGoalAdjustment {
+  id: string
+  household_id: string
+  savings_goal_id: string
+  amount: number
+  note: string | null
+  created_at: string
+}
+
 export interface PeriodSavingsAllocation {
   id: string
   period_id: string
