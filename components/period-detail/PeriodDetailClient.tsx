@@ -26,6 +26,7 @@ import {
   addOneTimeExpense,
   removePeriodExpense,
   setAccountTransferDone,
+  setAccountCashDone,
   setDeductionPaid,
 } from '@/app/actions/period-expenses'
 import { completePeriod, reopenPeriod } from '@/app/actions/periods'
@@ -86,6 +87,7 @@ interface Props {
   lastPeriodAllocations: PeriodSavingsAllocation[]
   requests: BudgetRequest[]
   accountTransfersDone: string[]
+  accountsCashDone: string[]
 }
 
 export default function PeriodDetailClient({
@@ -104,6 +106,7 @@ export default function PeriodDetailClient({
   lastPeriodAllocations,
   requests,
   accountTransfersDone,
+  accountsCashDone,
 }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -176,6 +179,22 @@ export default function PeriodDetailClient({
       await setAccountTransferDone(period.id, account, done)
     })
 
+  // Which accounts have had their cash withdrawn — flips instantly
+  const [cashDone, applyCashDoneOpt] = useOptimistic(
+    new Set(accountsCashDone),
+    (state: Set<string>, u: { account: string; done: boolean }) => {
+      const next = new Set(state)
+      if (u.done) next.add(u.account)
+      else next.delete(u.account)
+      return next
+    }
+  )
+  const handleToggleCashDone = (account: string, done: boolean) =>
+    startTransition(async () => {
+      applyCashDoneOpt({ account, done })
+      await setAccountCashDone(period.id, account, done)
+    })
+
   // Per-deduction "set aside / paid" checkmarks — flip instantly, server reconciles
   const [deductionPaid, applyDeductionPaidOpt] = useOptimistic(
     new Set(Object.entries(period.deduction_paid ?? {}).filter(([, v]) => v).map(([k]) => k)),
@@ -221,6 +240,7 @@ export default function PeriodDetailClient({
     acc[account] = (acc[account] || 0) + amt
     return acc
   }, {})
+  const totalCash = Object.values(cashByAccount).reduce((s, v) => s + v, 0)
   // Adjustments reduce/raise what's left to budget — deductions stay on the full check
   const adjustment = adjustments.reduce((sum, a) => sum + (a.amount || 0), 0)
   const availableToBudget = deductions.incomeAfterDeductions + adjustment
@@ -678,11 +698,32 @@ export default function PeriodDetailClient({
                       <div className="text-[10px] text-text-muted/80 whitespace-nowrap">started {formatCurrency(detail.original)}</div>
                     )}
                     {cashByAccount[account] > 0 && (
-                      <div className="text-[10px] text-text-heading/80 whitespace-nowrap">💵 {formatCurrency(cashByAccount[account])} cash</div>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleCashDone(account, !cashDone.has(account))}
+                          disabled={isLocked}
+                          title={cashDone.has(account) ? 'Cash withdrawn — tap to undo' : 'Mark cash as withdrawn'}
+                          className={`shrink-0 w-3.5 h-3.5 rounded-full border flex items-center justify-center text-[8px] leading-none transition-colors disabled:opacity-50 ${
+                            cashDone.has(account) ? 'bg-success border-success text-text-inverse' : 'border-border text-transparent hover:border-primary'
+                          }`}
+                        >
+                          ✓
+                        </button>
+                        <span className={`text-[10px] whitespace-nowrap ${cashDone.has(account) ? 'text-success line-through' : 'text-text-heading/80'}`}>
+                          💵 {formatCurrency(cashByAccount[account])} cash
+                        </span>
+                      </div>
                     )}
                   </div>
                 )
               })}
+            </div>
+          )}
+          {isOpen('transfers') && totalCash > 0 && (
+            <div className="mt-4 flex items-center text-caption">
+              <span className="font-bold uppercase text-text-muted">💵 Total cash to pull</span>
+              <span className="font-bold text-text-heading ml-auto">{formatCurrency(totalCash)}</span>
             </div>
           )}
         </div>

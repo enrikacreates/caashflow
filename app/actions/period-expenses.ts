@@ -280,23 +280,30 @@ export async function setAccountTransferDone(periodId: string, accountName: stri
   const supabase = await createClient()
   const householdId = await getUserHouseholdId()
 
-  if (done) {
-    const { error } = await supabase
-      .from('period_account_transfers')
-      .upsert(
-        { period_id: periodId, household_id: householdId, account_name: accountName, transferred: true, updated_at: new Date().toISOString() },
-        { onConflict: 'period_id,account_name' }
-      )
-    if (error) throw new Error(`Failed to mark transfer: ${error.message}`)
-  } else {
-    const { error } = await supabase
-      .from('period_account_transfers')
-      .delete()
-      .eq('period_id', periodId)
-      .eq('account_name', accountName)
-      .eq('household_id', householdId)
-    if (error) throw new Error(`Failed to unmark transfer: ${error.message}`)
-  }
+  // Upsert (don't delete) so the row's cash_done flag is preserved.
+  const { error } = await supabase
+    .from('period_account_transfers')
+    .upsert(
+      { period_id: periodId, household_id: householdId, account_name: accountName, transferred: done, updated_at: new Date().toISOString() },
+      { onConflict: 'period_id,account_name' }
+    )
+  if (error) throw new Error(`Failed to update transfer: ${error.message}`)
+
+  revalidatePath(`/periods/${periodId}`)
+}
+
+/** Mark (or clear) that an account's cash has been withdrawn for this period. */
+export async function setAccountCashDone(periodId: string, accountName: string, done: boolean) {
+  const supabase = await createClient()
+  const householdId = await getUserHouseholdId()
+
+  const { error } = await supabase
+    .from('period_account_transfers')
+    .upsert(
+      { period_id: periodId, household_id: householdId, account_name: accountName, cash_done: done, updated_at: new Date().toISOString() },
+      { onConflict: 'period_id,account_name' }
+    )
+  if (error) throw new Error(`Failed to update cash status: ${error.message}`)
 
   revalidatePath(`/periods/${periodId}`)
 }
