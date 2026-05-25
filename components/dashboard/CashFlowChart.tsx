@@ -75,16 +75,16 @@ export default function CashFlowChart({
               return (
                 <div key={d.month} className="flex-1 h-full">
                   <div className="relative w-full h-full">
-                    {/* income goal (lightest green) — behind */}
+                    {/* income goal (lightest teal tint) — behind */}
                     {goal > 0 && (
-                      <div className="absolute bottom-0 inset-x-0 bg-[#cdebcd] rounded-t-sm" style={{ height: pct(goal) }} />
+                      <div className="absolute bottom-0 inset-x-0 bg-[#c4ebe5] rounded-t-sm" style={{ height: pct(goal) }} />
                     )}
-                    {/* expense need (medium green) — on top of goal */}
+                    {/* expense need (medium teal tint) — on top of goal */}
                     {expense > 0 && (
-                      <div className="absolute bottom-0 inset-x-0 bg-[#74c07a]/85 rounded-t-sm" style={{ height: pct(expense) }} />
+                      <div className="absolute bottom-0 inset-x-0 bg-[#66c8bb] rounded-t-sm" style={{ height: pct(expense) }} />
                     )}
-                    {/* income (prominent dark green, slightly translucent so target bands show through on overshoot) */}
-                    <div className="absolute bottom-0 inset-x-0 bg-success/90 rounded-t-sm min-h-[2px] transition-all" style={{ height: pct(val) }}>
+                    {/* income (prominent teal, slightly translucent so target bands show through on overshoot) */}
+                    <div className="absolute bottom-0 inset-x-0 bg-primary-teal/85 rounded-t-sm min-h-[2px] transition-all" style={{ height: pct(val) }}>
                       {val > 0 && (
                         <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-text-heading whitespace-nowrap">
                           {formatCurrencyShort(val)}
@@ -107,16 +107,16 @@ export default function CashFlowChart({
           {/* Key */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-4 text-[10px] text-text-muted">
             <span className="inline-flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-sm bg-success" /> Income ({mode})
+              <span className="w-2.5 h-2.5 rounded-sm bg-primary-teal" /> Income ({mode})
             </span>
             {expense > 0 && (
               <span className="inline-flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-sm bg-[#74c07a]" /> Expense need <span className="font-semibold text-text-heading">{formatCurrency(expense)}</span>
+                <span className="w-2.5 h-2.5 rounded-sm bg-[#66c8bb]" /> Expense need <span className="font-semibold text-text-heading">{formatCurrency(expense)}</span>
               </span>
             )}
             {goal > 0 && (
               <span className="inline-flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-sm bg-[#cdebcd]" /> Income goal <span className="font-semibold text-text-heading">{formatCurrency(goal)}</span>
+                <span className="w-2.5 h-2.5 rounded-sm bg-[#c4ebe5]" /> Income goal <span className="font-semibold text-text-heading">{formatCurrency(goal)}</span>
               </span>
             )}
           </div>
