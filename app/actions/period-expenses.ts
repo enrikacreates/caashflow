@@ -275,6 +275,32 @@ export async function setDeductionPaid(periodId: string, key: string, done: bool
   revalidatePath(`/periods/${periodId}`)
 }
 
+/** Toggle whether a deduction (e.g. Giving) is taken as cash this period. */
+export async function setDeductionCash(periodId: string, key: string, on: boolean) {
+  const supabase = await createClient()
+  const householdId = await getUserHouseholdId()
+
+  const { data: row } = await supabase
+    .from('budget_periods')
+    .select('deduction_cash')
+    .eq('id', periodId)
+    .eq('household_id', householdId)
+    .single()
+
+  const next = { ...((row?.deduction_cash ?? {}) as Record<string, boolean>) }
+  if (on) next[key] = true
+  else delete next[key]
+
+  const { error } = await supabase
+    .from('budget_periods')
+    .update({ deduction_cash: next, updated_at: new Date().toISOString() })
+    .eq('id', periodId)
+    .eq('household_id', householdId)
+  if (error) throw new Error(`Failed to update deduction cash flag: ${error.message}`)
+
+  revalidatePath(`/periods/${periodId}`)
+}
+
 /** Mark (or clear) an account's transfer as completed for this period. */
 export async function setAccountTransferDone(periodId: string, accountName: string, done: boolean) {
   const supabase = await createClient()

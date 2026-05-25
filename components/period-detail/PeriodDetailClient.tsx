@@ -28,6 +28,7 @@ import {
   setAccountTransferDone,
   setAccountCashDone,
   setDeductionPaid,
+  setDeductionCash,
 } from '@/app/actions/period-expenses'
 import { completePeriod, reopenPeriod } from '@/app/actions/periods'
 import { smallConfetti, bigConfetti } from '@/lib/confetti'
@@ -211,6 +212,22 @@ export default function PeriodDetailClient({
       await setDeductionPaid(period.id, key, done)
     })
 
+  // Which deductions are taken as cash (e.g. Giving) — flips instantly
+  const [deductionCash, applyDeductionCashOpt] = useOptimistic(
+    new Set(Object.entries(period.deduction_cash ?? {}).filter(([, v]) => v).map(([k]) => k)),
+    (state: Set<string>, u: { key: string; on: boolean }) => {
+      const next = new Set(state)
+      if (u.on) next.add(u.key)
+      else next.delete(u.key)
+      return next
+    }
+  )
+  const handleToggleDeductionCash = (key: string, on: boolean) =>
+    startTransition(async () => {
+      applyDeductionCashOpt({ key, on })
+      await setDeductionCash(period.id, key, on)
+    })
+
   useEffect(() => {
     const el = summaryCardsRef.current
     if (!el) return
@@ -240,6 +257,10 @@ export default function PeriodDetailClient({
     acc[account] = (acc[account] || 0) + amt
     return acc
   }, {})
+  // Giving taken as cash → fold its amount into its account's cash total
+  if (deductionCash.has('fun_money') && settings.fun_money_account && deductions.funMoney > 0) {
+    cashByAccount[settings.fun_money_account] = (cashByAccount[settings.fun_money_account] || 0) + deductions.funMoney
+  }
   const totalCash = Object.values(cashByAccount).reduce((s, v) => s + v, 0)
   // Adjustments reduce/raise what's left to budget — deductions stay on the full check
   const adjustment = adjustments.reduce((sum, a) => sum + (a.amount || 0), 0)
@@ -941,6 +962,17 @@ export default function PeriodDetailClient({
                 <div className="text-caption font-bold text-text-muted uppercase mb-1">{label}</div>
                 {/* % | $ toggle + paid checkmark */}
                 <div className="flex justify-center items-center gap-2 mb-1">
+                  {dkey === 'fun_money' && (
+                    <button
+                      type="button"
+                      onClick={() => handleToggleDeductionCash(dkey, !deductionCash.has(dkey))}
+                      disabled={isLocked}
+                      title={deductionCash.has(dkey) ? 'Taking as cash — tap to leave in account' : 'Take this as cash'}
+                      className={`text-base leading-none transition-opacity disabled:opacity-40 ${deductionCash.has(dkey) ? 'opacity-100' : 'opacity-25 hover:opacity-70'}`}
+                    >
+                      💵
+                    </button>
+                  )}
                   <div className="flex rounded-full overflow-hidden bg-surface-beige">
                     <button
                       onClick={() => handleDeductionModeToggle(pctKey, amtKey, detail, '%')}

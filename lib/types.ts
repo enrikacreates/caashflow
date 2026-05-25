@@ -72,6 +72,8 @@ export interface BudgetPeriod {
   deduction_overrides: DeductionOverrides
   // Per-deduction "set aside / paid" checkmarks, keyed by tithe|savings|tax|profit|fun_money
   deduction_paid: Record<string, boolean>
+  // Per-deduction "take as cash" flags (e.g. Giving), keyed the same way
+  deduction_cash: Record<string, boolean>
   status: PeriodStatus
   completed_at: string | null
   created_at: string
