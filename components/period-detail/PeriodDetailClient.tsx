@@ -33,6 +33,7 @@ import {
 import { completePeriod, reopenPeriod } from '@/app/actions/periods'
 import { smallConfetti, bigConfetti } from '@/lib/confetti'
 import { formatCurrency, getOwedAmount, getPriorityPill } from '@/lib/utils'
+import BudgetSummaryBar from '@/components/dashboard/BudgetSummaryBar'
 import { calculateDeductions, calculatePayNowTotal, calculateAccountTransferDetail, getDeductionAccountAllocations, getBudgetedAmount, isFullyPaid, calculatePeriodPaymentSummary } from '@/lib/calculations'
 import type { DeductionMode } from '@/lib/calculations'
 import SavingsAllocationSection from '@/components/period-detail/SavingsAllocationSection'
@@ -266,15 +267,13 @@ export default function PeriodDetailClient({
   const adjustment = adjustments.reduce((sum, a) => sum + (a.amount || 0), 0)
   const availableToBudget = deductions.incomeAfterDeductions + adjustment
   const amountLeft = availableToBudget - payNowTotal
-  // Context sub-brows: all income expected this month, and the full expense total (not just pay-now)
+  // Still projected = this month's invoices not yet received — income still expected to land
   const periodMonth = period.period_month?.slice(0, 7) ?? ''
-  const monthInvoiceIncome = periodMonth
+  const stillProjectedIncome = periodMonth
     ? linkableInvoices
-        .filter((inv) => inv.month === periodMonth || inv.projected_date?.startsWith(periodMonth) || inv.actual_received_date?.startsWith(periodMonth))
+        .filter((inv) => inv.status !== 'received' && (inv.month === periodMonth || inv.projected_date?.startsWith(periodMonth) || inv.actual_received_date?.startsWith(periodMonth)))
         .reduce((sum, inv) => sum + inv.amount, 0)
     : 0
-  // Projected = this month's invoices (any status) + manual income entered on this budget
-  const monthProjectedIncome = monthInvoiceIncome + manualIncome.reduce((sum, mi) => sum + (mi.amount || 0), 0)
   const totalExpenses = optExpenses.reduce((sum, e) => {
     if (e.is_split) return sum + (e.payments ?? []).reduce((s, p) => s + p.amount, 0)
     return sum + getOwedAmount(e)
@@ -653,42 +652,16 @@ export default function PeriodDetailClient({
       </div>
 
       {/* ─── Summary Cards ─────────────────────────────────── */}
-      <div ref={summaryCardsRef} className="bg-bg-white rounded-lg shadow-card p-4 sm:p-5">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-4 sm:divide-x sm:divide-border/60">
-          <div className="@container sm:px-3 first:pl-0">
-            <div className="text-caption font-bold uppercase text-text-muted mb-1">Total Income</div>
-            <div className="font-bold text-text-heading whitespace-nowrap leading-tight text-[clamp(0.78rem,15cqi,1.5rem)]">{formatCurrency(period.income_amount)}</div>
-            {monthProjectedIncome > 0 && (
-              <div className="text-[10px] text-text-muted mt-0.5 leading-tight">of {formatCurrency(monthProjectedIncome)} projected this month</div>
-            )}
-          </div>
-          <div className="@container sm:px-3">
-            <div className="text-caption font-bold uppercase text-text-muted mb-1">To Budget</div>
-            <div className="font-bold text-text-heading whitespace-nowrap leading-tight text-[clamp(0.78rem,15cqi,1.5rem)]">{formatCurrency(deductions.incomeAfterDeductions)}</div>
-          </div>
-          <div className="@container sm:px-3">
-            <div className="text-caption font-bold uppercase text-text-muted mb-1">Pay Now</div>
-            <div className="font-bold text-text-heading whitespace-nowrap leading-tight text-[clamp(0.78rem,15cqi,1.5rem)]">{formatCurrency(payNowTotal)}</div>
-          </div>
-          <div className="@container sm:px-3">
-            <div className="text-caption font-bold uppercase text-text-muted mb-1">Amount Left</div>
-            <div className={`font-bold whitespace-nowrap leading-tight text-[clamp(0.78rem,15cqi,1.5rem)] ${amountLeft >= 0 ? 'text-success' : 'text-warning'}`}>
-              {formatCurrency(amountLeft)}
-            </div>
-          </div>
-        </div>
-        {totalExpenses > 0 && (
-          <div className={`mt-4 rounded-md px-3 py-2.5 flex items-center justify-between ${stillToFund > 0 ? 'bg-warning/10' : 'bg-success/10'}`}>
-            <span className="text-caption font-bold uppercase tracking-wide text-text-muted">
-              {stillToFund > 0 ? 'Still to fund' : 'Fully funded'}
-            </span>
-            <span className={`text-label font-bold ${stillToFund > 0 ? 'text-warning' : 'text-success'}`}>
-              {stillToFund > 0
-                ? <>{formatCurrency(stillToFund)} <span className="font-medium text-text-muted">of {formatCurrency(totalExpenses)} expenses</span></>
-                : 'All expenses funded'}
-            </span>
-          </div>
-        )}
+      <div ref={summaryCardsRef}>
+        <BudgetSummaryBar
+          income={period.income_amount}
+          toBudget={deductions.incomeAfterDeductions}
+          payNow={payNowTotal}
+          amountLeft={amountLeft}
+          totalExpenses={totalExpenses}
+          stillToFund={stillToFund}
+          stillProjected={stillProjectedIncome}
+        />
       </div>
 
       {/* ─── Sticky Summary Bar (visible when scrolled past cards) ── */}
