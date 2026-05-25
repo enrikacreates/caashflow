@@ -52,7 +52,7 @@ import type {
   BudgetRequest,
 } from '@/lib/types'
 
-type SortKey = 'name' | 'default_amount' | 'priority_category' | 'account' | 'due_day' | 'frequency'
+type SortKey = 'name' | 'default_amount' | 'priority_category' | 'account' | 'due_day' | 'frequency' | 'pay_now'
 type SortDir = 'asc' | 'desc'
 
 /** Compact priority label — "P1: Essentials" → "P1" (keeps the table narrow). */
@@ -240,6 +240,12 @@ export default function PeriodDetailClient({
 
   const sortedExpenses = [...optExpenses].sort((a, b) => {
     const mul = sortDir === 'asc' ? 1 : -1
+    if (sortKey === 'pay_now') {
+      // Group by whether the item is set to pay (handles split via budgeted amount)
+      const pa = getBudgetedAmount(a) > 0 ? 1 : 0
+      const pb = getBudgetedAmount(b) > 0 ? 1 : 0
+      return (pa - pb) * mul
+    }
     const aVal = a[sortKey] ?? ''
     const bVal = b[sortKey] ?? ''
     if (typeof aVal === 'number' && typeof bVal === 'number') return (aVal - bVal) * mul
@@ -1124,7 +1130,7 @@ export default function PeriodDetailClient({
             <table className="w-full border-separate border-spacing-0">
               <thead>
                 <tr className="bg-bg-white [&>th]:sticky [&>th]:top-0 [&>th]:z-20 [&>th]:bg-bg-white [&>th]:border-b [&>th]:border-[#e9e9e9]">
-                  <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted w-10">Pay</th>
+                  <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted cursor-pointer hover:text-text-heading select-none whitespace-nowrap" onClick={() => handleSort('pay_now')} title="Sort by pay">Pay<SortIcon col="pay_now" /></th>
                   <th className={thClass} onClick={() => handleSort('name')}>
                     Name<SortIcon col="name" />
                   </th>
