@@ -55,7 +55,7 @@ function LoginForm() {
         window.location.href = '/'
       }
     } else {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -66,6 +66,12 @@ function LoginForm() {
       if (error) {
         setMessage({ type: 'error', text: error.message })
         setLoading(false)
+      } else if (data.session) {
+        // Email confirmation is off → the user is already signed in; go straight in
+        if (inviteToken) {
+          await fetch(`/api/join-household?token=${inviteToken}`, { method: 'POST' }).catch(() => {})
+        }
+        window.location.href = '/'
       } else {
         setMessage({
           type: 'success',
