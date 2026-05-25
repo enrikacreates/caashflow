@@ -24,9 +24,13 @@ export default function PeriodRequestsPanel({
 }: { requests: BudgetRequest[]; periodId: string; isLocked: boolean }) {
   const router = useRouter()
   const [open, setOpen] = useState(false) // default collapsed
+  const [showDone, setShowDone] = useState(false) // "Got it" items hidden by default
   const [isPending, startTransition] = useTransition()
   const [name, setName] = useState('')
   const [amount, setAmount] = useState('')
+
+  const doneCount = requests.filter((r) => r.status === 'obtained').length
+  const visible = showDone ? requests : requests.filter((r) => r.status !== 'obtained')
 
   const add = () => {
     const n = name.trim()
@@ -54,7 +58,7 @@ export default function PeriodRequestsPanel({
             <span className="text-text-muted text-base leading-none">{open ? '▾' : '▸'}</span>
             Requests
           </button>
-          <span className="text-caption font-medium text-text-muted ml-2">({requests.length})</span>
+          <span className="text-caption font-medium text-text-muted ml-2">({visible.length})</span>
         </h2>
         <span className="text-caption text-text-muted">Pull a wish-list item into this budget as an extra expense.</span>
       </div>
@@ -99,9 +103,11 @@ export default function PeriodRequestsPanel({
 
           {requests.length === 0 ? (
             <p className="text-caption text-text-muted">No requests yet. Add one above — it lands on your wish list.</p>
+          ) : visible.length === 0 ? (
+            <p className="text-caption text-text-muted">All caught up — nothing left on the list.</p>
           ) : (
             <div className="divide-y divide-[#e9e9e9]">
-              {requests.map((r) => (
+              {visible.map((r) => (
                 <div key={r.id} className="flex items-center gap-3 py-2.5">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -129,6 +135,18 @@ export default function PeriodRequestsPanel({
                 </div>
               ))}
             </div>
+          )}
+
+          {doneCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowDone((v) => !v)}
+              title={showDone ? 'Hide items you already got' : 'Show items you already got'}
+              className="mt-3 inline-flex items-center gap-1.5 text-caption text-text-muted hover:text-primary font-semibold transition-colors"
+            >
+              <span aria-hidden>👁</span>
+              {showDone ? 'Hide completed' : `Show completed (${doneCount})`}
+            </button>
           )}
         </div>
       )}
