@@ -185,7 +185,11 @@ export async function updateExpenseField(
   revalidatePath('/')
 }
 
-/** Edit a period expense's details in place (this budget's copy only — doesn't touch the baseline master). */
+/**
+ * Edit a period expense's details in place (this budget's copy).
+ * Pass `alsoMasterBaseItemId` to also apply the same edits to the recurring
+ * baseline template (base_budget_items) — so future budgets inherit them too.
+ */
 export async function updatePeriodExpenseDetails(
   expenseId: string,
   fields: {
@@ -196,7 +200,8 @@ export async function updatePeriodExpenseDetails(
     due_day: number | null
     pay_url: string | null
     notes: string | null
-  }
+  },
+  alsoMasterBaseItemId?: string | null
 ) {
   const supabase = await createClient()
   const householdId = await getUserHouseholdId()
@@ -210,6 +215,16 @@ export async function updatePeriodExpenseDetails(
     .single()
 
   if (error) throw new Error(`Failed to update expense: ${error.message}`)
+
+  if (alsoMasterBaseItemId) {
+    const { error: masterErr } = await supabase
+      .from('base_budget_items')
+      .update({ ...fields, updated_at: new Date().toISOString() })
+      .eq('id', alsoMasterBaseItemId)
+      .eq('household_id', householdId)
+    if (masterErr) throw new Error(`Failed to update baseline item: ${masterErr.message}`)
+    revalidatePath('/base-budget')
+  }
 
   revalidatePath('/periods')
   if (data?.period_id) revalidatePath(`/periods/${data.period_id}`)

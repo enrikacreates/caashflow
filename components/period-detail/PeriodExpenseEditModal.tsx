@@ -1,6 +1,6 @@
 'use client'
 
-import { useTransition } from 'react'
+import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { updatePeriodExpenseDetails } from '@/app/actions/period-expenses'
 import type { PeriodExpense, Account, PriorityCategoryRecord } from '@/lib/types'
@@ -14,6 +14,7 @@ export default function PeriodExpenseEditModal({
   onClose: () => void
 }) {
   const [isPending, startTransition] = useTransition()
+  const [alsoMaster, setAlsoMaster] = useState(false)
   const inputClass = 'w-full bg-bg-white border border-border rounded-sm px-4 py-2.5 text-caption focus:outline-none focus:border-primary transition-colors'
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -29,7 +30,7 @@ export default function PeriodExpenseEditModal({
         due_day: due ? parseInt(due, 10) : null,
         pay_url: ((fd.get('pay_url') as string) || '').trim() || null,
         notes: ((fd.get('notes') as string) || '').trim() || null,
-      })
+      }, alsoMaster ? expense.base_item_id : null)
       onClose()
     })
   }
@@ -86,6 +87,21 @@ export default function PeriodExpenseEditModal({
             <label className="block text-caption font-semibold text-text-heading mb-1">Notes</label>
             <textarea name="notes" rows={2} defaultValue={expense.notes || ''} className={inputClass + ' resize-y'} />
           </div>
+
+          {expense.base_item_id && (
+            <label className="flex items-start gap-2.5 bg-surface-beige rounded-sm p-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={alsoMaster}
+                onChange={(e) => setAlsoMaster(e.target.checked)}
+                className="mt-0.5 w-4 h-4 accent-primary-teal shrink-0"
+              />
+              <span className="text-caption text-text-heading">
+                <span className="font-semibold">Also save to master</span>
+                <span className="text-text-muted"> — apply these changes to the recurring template so future budgets inherit them.</span>
+              </span>
+            </label>
+          )}
 
           <div className="flex items-center justify-between gap-3 pt-2">
             {expense.base_item_id ? (
