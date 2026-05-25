@@ -3,10 +3,11 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { CalendarDays } from 'lucide-react'
-import { deleteBudgetPeriod } from '@/app/actions/periods'
+import { deleteBudgetPeriod, completePeriod, reopenPeriod } from '@/app/actions/periods'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BudgetPeriod } from '@/lib/types'
 import CreatePeriodModal from './CreatePeriodModal'
+import EditPeriodModal from './EditPeriodModal'
 
 /** Strip legacy " - Period" suffix from old period names */
 function displayName(name: string) {
@@ -17,10 +18,15 @@ export default function PeriodsClient({ periods }: { periods: BudgetPeriod[] }) 
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [modalOpen, setModalOpen] = useState(false)
+  const [editPeriod, setEditPeriod] = useState<BudgetPeriod | null>(null)
 
   const handleDelete = (id: string, name: string) => {
     if (!confirm(`Delete budget "${displayName(name)}"? This will remove all expenses in this budget.`)) return
     startTransition(() => deleteBudgetPeriod(id))
+  }
+
+  const handleToggleComplete = (period: BudgetPeriod) => {
+    startTransition(() => (period.status === 'complete' ? reopenPeriod(period.id) : completePeriod(period.id)))
   }
 
   return (
@@ -69,7 +75,7 @@ export default function PeriodsClient({ periods }: { periods: BudgetPeriod[] }) 
               <div className="text-caption text-text-muted">
                 Created {formatDate(period.created_at)}
               </div>
-              <div className="flex gap-3 pt-3 mt-3">
+              <div className="flex flex-wrap gap-3 pt-3 mt-3">
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
@@ -78,6 +84,25 @@ export default function PeriodsClient({ periods }: { periods: BudgetPeriod[] }) 
                   className="text-caption text-primary-teal font-semibold hover:underline"
                 >
                   Open
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setEditPeriod(period)
+                  }}
+                  className="text-caption text-primary font-semibold hover:underline"
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleToggleComplete(period)
+                  }}
+                  disabled={isPending}
+                  className="text-caption text-text-muted hover:text-success font-semibold transition-colors disabled:opacity-50"
+                >
+                  {period.status === 'complete' ? 'Reopen' : 'Mark complete'}
                 </button>
                 <button
                   onClick={(e) => {
@@ -96,6 +121,7 @@ export default function PeriodsClient({ periods }: { periods: BudgetPeriod[] }) 
       )}
 
       {modalOpen && <CreatePeriodModal onClose={() => setModalOpen(false)} />}
+      {editPeriod && <EditPeriodModal period={editPeriod} onClose={() => setEditPeriod(null)} />}
     </>
   )
 }
