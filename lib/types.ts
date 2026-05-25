@@ -108,6 +108,7 @@ export interface PeriodExpense {
   transferred: boolean
   paid: boolean
   cleared: boolean
+  is_cash: boolean
   is_split: boolean
   is_complete: boolean
   is_overdue: boolean

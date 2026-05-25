@@ -212,6 +212,15 @@ export default function PeriodDetailClient({
   const payNowTotal = calculatePayNowTotal(optExpenses)
   const deductionAccountAllocations = getDeductionAccountAllocations(deductions, settings)
   const accountTransfers = calculateAccountTransferDetail(optExpenses, deductionAccountAllocations)
+  // Cash to withdraw per account — sum of amounts flagged 💵
+  const cashByAccount = optExpenses.reduce<Record<string, number>>((acc, e) => {
+    if (!e.is_cash) return acc
+    const amt = getOwedAmount(e)
+    if (amt <= 0) return acc
+    const account = e.account || 'Unknown'
+    acc[account] = (acc[account] || 0) + amt
+    return acc
+  }, {})
   // Adjustments reduce/raise what's left to budget — deductions stay on the full check
   const adjustment = adjustments.reduce((sum, a) => sum + (a.amount || 0), 0)
   const availableToBudget = deductions.incomeAfterDeductions + adjustment
@@ -667,6 +676,9 @@ export default function PeriodDetailClient({
                     </div>
                     {showStarted && (
                       <div className="text-[10px] text-text-muted/80 whitespace-nowrap">started {formatCurrency(detail.original)}</div>
+                    )}
+                    {cashByAccount[account] > 0 && (
+                      <div className="text-[10px] text-text-heading/80 whitespace-nowrap">💵 {formatCurrency(cashByAccount[account])} cash</div>
                     )}
                   </div>
                 )
@@ -1160,7 +1172,7 @@ export default function PeriodDetailClient({
             <table className="w-full border-separate border-spacing-0">
               <thead>
                 <tr className="bg-bg-white [&>th]:sticky [&>th]:top-0 [&>th]:z-20 [&>th]:bg-bg-white [&>th]:border-b [&>th]:border-[#e9e9e9]">
-                  <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted cursor-pointer hover:text-text-heading select-none whitespace-nowrap" onClick={() => handleSort('pay_now')} title="Sort by pay">Pay<SortIcon col="pay_now" /></th>
+                  <th className="text-center px-1.5 py-3 text-caption font-bold uppercase text-text-muted cursor-pointer hover:text-text-heading select-none whitespace-nowrap" onClick={() => handleSort('pay_now')} title="Sort by pay">Pay<SortIcon col="pay_now" /></th>
                   <th className={thClass} onClick={() => handleSort('name')}>
                     Name<SortIcon col="name" />
                   </th>
@@ -1170,16 +1182,17 @@ export default function PeriodDetailClient({
                   <th className={`${thClass} w-[1%]`} onClick={() => handleSort('account')}>
                     Acct<SortIcon col="account" />
                   </th>
+                  <th className="text-center px-1 py-3 text-caption font-bold uppercase text-text-muted w-[1%]" title="Withdraw as cash">💵</th>
                   <th className={`${thClass} w-[1%]`} onClick={() => handleSort('priority_category')}>
                     Pri<SortIcon col="priority_category" />
                   </th>
                   <th className={`${thClass} w-[1%]`} onClick={() => handleSort('due_day')}>
                     Due<SortIcon col="due_day" />
                   </th>
-                  <th className="text-center px-3 py-3">
+                  <th className="text-center px-1.5 py-3">
                     <button type="button" onClick={handleBulkPaid} disabled={isLocked} title="Mark all to-pay items paid" className="text-caption font-bold uppercase text-text-muted hover:text-primary transition-colors disabled:opacity-50">Paid</button>
                   </th>
-                  <th className="text-center px-3 py-3">
+                  <th className="text-center px-1.5 py-3">
                     <button type="button" onClick={handleSettleReset} disabled={isLocked} title="Clear all paid items & reset income — zeroes the budget for the next check (unpaid items stay live)" className="text-[10px] font-bold uppercase bg-primary-teal/10 text-primary rounded-full px-2.5 py-1 hover:bg-primary-teal/20 transition-colors disabled:opacity-50">Clear</button>
                   </th>
                 </tr>
@@ -1212,7 +1225,7 @@ export default function PeriodDetailClient({
                   <td className="px-3 py-3" />
                   <td className="px-3 py-3 font-bold text-text-heading text-caption">Pay Now</td>
                   <td className="px-3 py-3 font-bold text-text-heading text-caption">{formatCurrency(baselinePayNow)}</td>
-                  <td colSpan={5} />
+                  <td colSpan={6} />
                 </tr>
               </tfoot>
             </table>
@@ -1296,6 +1309,7 @@ export default function PeriodDetailClient({
                     <th className="text-left px-3 py-3 text-caption font-bold uppercase text-text-muted">Name</th>
                     <th className="text-left px-3 py-3 text-caption font-bold uppercase text-text-muted">Amount</th>
                     <th className="text-left px-2 py-3 text-caption font-bold uppercase text-text-muted w-[1%]">Acct</th>
+                    <th className="text-center px-1 py-3 text-caption font-bold uppercase text-text-muted w-[1%]" title="Withdraw as cash">💵</th>
                     <th className="text-left px-2 py-3 text-caption font-bold uppercase text-text-muted w-[1%]">Pri</th>
                     <th className="text-left px-2 py-3 text-caption font-bold uppercase text-text-muted w-[1%]">Due</th>
                     <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted">Paid</th>
@@ -1332,7 +1346,7 @@ export default function PeriodDetailClient({
                     <td className="px-3 py-3" />
                     <td className="px-3 py-3 font-bold text-text-heading text-caption">Pay Now</td>
                     <td className="px-3 py-3 font-bold text-text-heading text-caption">{formatCurrency(oneTimePayNow)}</td>
-                    <td colSpan={6} />
+                    <td colSpan={7} />
                   </tr>
                 </tfoot>
               </table>
@@ -1441,7 +1455,7 @@ function ExpenseRow({
     <>
       <tr className={`transition-colors ${rowBg} ${settled ? 'opacity-60' : ''}`}>
         {/* PayNow */}
-        <td className="text-center px-3 py-3">
+        <td className="text-center px-1.5 py-3">
           <input
             type="checkbox"
             checked={expense.is_split ? splitPayNow : expense.pay_now}
@@ -1552,6 +1566,19 @@ function ExpenseRow({
           <span className="block max-w-[64px] truncate" title={expense.account || ''}>{expense.account || '—'}</span>
         </td>
 
+        {/* Cash — withdraw this amount as cash from the account */}
+        <td className="text-center px-1 py-3">
+          <button
+            type="button"
+            onClick={() => onCheckboxChange(expense.id, 'is_cash', !expense.is_cash)}
+            disabled={rowDisabled}
+            title={expense.is_cash ? 'Withdrawing as cash — tap to undo' : 'Mark to withdraw as cash'}
+            className={`text-base leading-none transition-opacity disabled:opacity-40 ${expense.is_cash ? 'opacity-100' : 'opacity-25 hover:opacity-70'}`}
+          >
+            💵
+          </button>
+        </td>
+
         {/* Priority (just the P# code — full name on hover) */}
         <td className="px-2 py-3">
           {expense.priority_category && (
@@ -1565,7 +1592,7 @@ function ExpenseRow({
         <td className="px-3 py-3 text-caption text-text-muted text-center">{expense.due_day || '—'}</td>
 
         {/* Paid */}
-        <td className="text-center px-3 py-3">
+        <td className="text-center px-1.5 py-3">
           <input
             type="checkbox"
             checked={expense.is_split ? fullyPaid : expense.paid}
@@ -1576,7 +1603,7 @@ function ExpenseRow({
         </td>
 
         {/* Cleared */}
-        <td className="text-center px-3 py-3">
+        <td className="text-center px-1.5 py-3">
           <input
             type="checkbox"
             checked={expense.is_split ? splitCleared : expense.cleared}
@@ -1589,7 +1616,7 @@ function ExpenseRow({
 
         {/* Delete (one-time / extra expenses only) */}
         {onRemove && (
-          <td className="text-center px-3 py-3">
+          <td className="text-center px-1.5 py-3">
             {!rowDisabled && (
               <button
                 onClick={() => onRemove(expense.id)}
@@ -1623,7 +1650,7 @@ function ExpenseRow({
       {expense.is_split && !rowDisabled && (
         <tr className="bg-[#ebf0f0]">
           <td />
-          <td className="px-3 py-2 pl-8" colSpan={onRemove ? 8 : 7}>
+          <td className="px-3 py-2 pl-8" colSpan={onRemove ? 9 : 8}>
             <button
               onClick={() => onAddPayment(expense.id)}
               disabled={isPending}
@@ -1707,6 +1734,8 @@ function SubPaymentRow({
       </td>
       {/* Account (inherits parent) */}
       <td className="px-3 py-2 text-[10px] text-text-muted whitespace-nowrap">{parentAccount || '—'}</td>
+      {/* Cash (n/a for sub-payments) */}
+      <td />
       {/* Priority (none) */}
       <td />
       {/* Due */}
