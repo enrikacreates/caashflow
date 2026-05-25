@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { deleteInvoice, addIncomeToBudget } from '@/app/actions/invoices'
+import { deleteInvoice, addIncomeToBudget, updateInvoiceStatus } from '@/app/actions/invoices'
 import { formatCurrency, formatDate, getStatusColor } from '@/lib/utils'
 import type { Invoice, BudgetPeriod } from '@/lib/types'
 import InvoiceFormModal from './InvoiceFormModal'
@@ -37,6 +37,10 @@ export default function InvoicesClient({
   const handleAddToBudget = (id: string) => {
     if (!targetPeriod) return
     startTransition(() => addIncomeToBudget(id, targetPeriod.id))
+  }
+
+  const handleStatusChange = (id: string, status: 'projected' | 'sent' | 'received') => {
+    startTransition(() => updateInvoiceStatus(id, status))
   }
 
   return (
@@ -86,9 +90,17 @@ export default function InvoicesClient({
                   <td className="px-4 py-3 text-caption text-text-muted">{inv.project_name || '—'}</td>
                   <td className="px-4 py-3 text-caption font-bold text-text-heading">{formatCurrency(inv.amount)}</td>
                   <td className="px-4 py-3">
-                    <span className={`inline-block px-3 py-1 rounded-full text-caption font-bold uppercase ${getStatusColor(inv.status)}`}>
-                      {inv.status}
-                    </span>
+                    <select
+                      value={inv.status}
+                      disabled={isPending}
+                      onChange={(e) => handleStatusChange(inv.id, e.target.value as 'projected' | 'sent' | 'received')}
+                      className={`appearance-none cursor-pointer px-3 py-1 pr-6 rounded-full text-caption font-bold uppercase focus:outline-none bg-[right_0.5rem_center] bg-no-repeat ${getStatusColor(inv.status)}`}
+                      style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='6' viewBox='0 0 8 6'%3E%3Cpath fill='%23333' d='M0 0l4 5 4-5z'/%3E%3C/svg%3E\")" }}
+                    >
+                      <option value="projected">Projected</option>
+                      <option value="sent">Sent</option>
+                      <option value="received">Received</option>
+                    </select>
                   </td>
                   <td className="px-4 py-3 text-caption text-text-muted">{formatDate(inv.projected_date)}</td>
                   <td className="px-4 py-3 text-caption text-text-muted">{formatDate(inv.actual_received_date)}</td>

@@ -125,6 +125,34 @@ export async function addIncomeToBudget(invoiceId: string, periodId: string) {
   revalidatePath('/')
 }
 
+export async function updateInvoiceStatus(id: string, status: 'projected' | 'sent' | 'received') {
+  const supabase = await createClient()
+  const householdId = await getUserHouseholdId()
+
+  const updates: Record<string, unknown> = { status, updated_at: new Date().toISOString() }
+  // Stamp a received date when moving to received and one isn't set yet.
+  if (status === 'received') {
+    const { data: existing } = await supabase
+      .from('invoices')
+      .select('actual_received_date')
+      .eq('id', id)
+      .eq('household_id', householdId)
+      .single()
+    if (!existing?.actual_received_date) updates.actual_received_date = new Date().toISOString().slice(0, 10)
+  }
+
+  const { error } = await supabase
+    .from('invoices')
+    .update(updates)
+    .eq('id', id)
+    .eq('household_id', householdId)
+
+  if (error) throw new Error(`Failed to update status: ${error.message}`)
+
+  revalidatePath('/cashflow')
+  revalidatePath('/invoices')
+}
+
 export async function deleteInvoice(id: string) {
   const supabase = await createClient()
   const householdId = await getUserHouseholdId()
