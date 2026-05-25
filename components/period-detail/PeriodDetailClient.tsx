@@ -1270,7 +1270,7 @@ export default function PeriodDetailClient({
                     <th className="text-left px-2 py-3 text-caption font-bold uppercase text-text-muted w-[1%]">Due</th>
                     <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted">Paid</th>
                     <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted">Clear</th>
-                    <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted">Delete</th>
+                    <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted">Remove</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1564,10 +1564,10 @@ function ExpenseRow({
               <button
                 onClick={() => onRemove(expense.id)}
                 disabled={isPending}
-                title="Delete this expense from this budget"
+                title="Remove this expense from this budget"
                 className="text-caption font-semibold text-text-muted hover:text-warning transition-colors disabled:opacity-50"
               >
-                Delete
+                Remove
               </button>
             )}
           </td>
