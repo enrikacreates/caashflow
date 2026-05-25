@@ -55,8 +55,11 @@ export default async function DashboardPage({
       detail.expenses,
       getDeductionAccountAllocations(deductions, settings)
     )
+    // Period adjustments (e.g. misc +/-) raise or lower what's left to budget,
+    // matching the period-detail Amount Left calc.
+    const adjustment = (detail.adjustments ?? []).reduce((sum, a) => sum + (a.amount || 0), 0)
     incomeAfterDeductions = deductions.incomeAfterDeductions
-    amountLeft = deductions.incomeAfterDeductions - payNowTotal
+    amountLeft = deductions.incomeAfterDeductions + adjustment - payNowTotal
   }
 
   // Monthly-equivalent total — normalizes Weekly (×52/12), Annual (÷12), excludes One-Time
