@@ -138,7 +138,7 @@ export default function DashboardLayout({
             <img
               src="/logo.svg"
               alt="Caashflow"
-              className="pointer-events-none select-none absolute left-[5%] bottom-[20%] w-[26%] max-w-[220px] h-auto brightness-0 invert"
+              className="pointer-events-none select-none absolute left-[5%] bottom-[20%] w-[26%] max-w-[220px] h-auto"
             />
           </div>
         </footer>
