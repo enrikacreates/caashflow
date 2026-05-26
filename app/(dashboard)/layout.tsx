@@ -126,17 +126,9 @@ export default function DashboardLayout({
             <span className="font-display leading-none whitespace-nowrap text-white/10 text-[40vw]">CAA$H</span>
           </div>
 
-          {/* Blue line-waves — small accent resting on the band surface, bottom-right */}
-          <img
-            src="/shapes/bluelinewaves.svg"
-            alt=""
-            aria-hidden="true"
-            className="pointer-events-none select-none absolute bottom-4 right-[7%] w-16 md:w-24 opacity-70"
-          />
-
           <div className="relative h-40 md:h-44">
             <img
-              src="/logo.svg"
+              src="/logo-footer.svg"
               alt="Caashflow"
               className="pointer-events-none select-none absolute left-[5%] bottom-[20%] w-[26%] max-w-[220px] h-auto"
             />
