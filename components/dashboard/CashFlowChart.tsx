@@ -30,6 +30,24 @@ function WaveLayer({ levelPct, color }: { levelPct: number; color: string }) {
   )
 }
 
+/** Smooth (Catmull-Rom → cubic bezier) path through points, for the connected income wave. */
+function smoothPath(pts: { x: number; y: number }[]): string {
+  if (pts.length < 2) return ''
+  let d = `M ${pts[0].x},${pts[0].y}`
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] ?? pts[i]
+    const p1 = pts[i]
+    const p2 = pts[i + 1]
+    const p3 = pts[i + 2] ?? p2
+    const c1x = p1.x + (p2.x - p0.x) / 6
+    const c1y = p1.y + (p2.y - p0.y) / 6
+    const c2x = p2.x - (p3.x - p1.x) / 6
+    const c2y = p2.y - (p3.y - p1.y) / 6
+    d += ` C ${c1x},${c1y} ${c2x},${c2y} ${p2.x},${p2.y}`
+  }
+  return d
+}
+
 /** A wave-shaped line marking a waterline (e.g. the income goal) — no fill. */
 function WaveLine({ levelPct, color }: { levelPct: number; color: string }) {
   return (
@@ -91,6 +109,16 @@ export default function CashFlowChart({
   const maxVal = Math.max(...data.map(valueFor), goal, expense, 1)
   const pct = (v: number) => `${(v / maxVal) * 100}%`
 
+  // Income as one connected wave (area) across the months — viewBox 0..100, stretched to fit.
+  const vals = data.map(valueFor)
+  const cy = (v: number) => 100 - (v / maxVal) * 100
+  const incomePoints = [
+    { x: 0, y: cy(vals[0]) },
+    ...vals.map((v, i) => ({ x: ((i + 0.5) / vals.length) * 100, y: cy(v) })),
+    { x: 100, y: cy(vals[vals.length - 1]) },
+  ]
+  const incomeArea = `${smoothPath(incomePoints)} L 100,100 L 0,100 Z`
+
   return (
     <div>
       <div className="flex items-center gap-2 mb-3">
@@ -141,7 +169,15 @@ export default function CashFlowChart({
         <div className="relative z-10">
           {/* Continuous "water" backdrop: expense filled + crested, goal as a waterline; income bars rise through it */}
           <div className="relative h-48">
+            {/* Expense "water" — continuous, crested */}
             {expense > 0 && <WaveLayer levelPct={(expense / maxVal) * 100} color="rgba(34,182,219,0.16)" />}
+
+            {/* Income — one connected wave across all months (no gutters) */}
+            <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+              <path d={incomeArea} fill="rgba(34,182,219,0.85)" />
+            </svg>
+
+            {/* Income goal — waterline */}
             {goal > 0 && <WaveLine levelPct={(goal / maxVal) * 100} color="rgba(34,182,219,0.5)" />}
 
             {/* Waterline amounts — labeled once, on the left */}
@@ -156,31 +192,29 @@ export default function CashFlowChart({
               </span>
             )}
 
-            {/* Income bars */}
-            <div className="absolute inset-0 flex items-end gap-3">
+            {/* Per-month overlay: click targets + income value labels (no gutters) */}
+            <div className="absolute inset-0 flex">
               {data.map((d) => {
                 const val = valueFor(d)
                 const periodId = periodByMonth.get(d.month)
                 return (
                   <div
                     key={d.month}
-                    className={`relative flex-1 h-full ${periodId ? 'cursor-pointer group' : ''}`}
+                    className={`relative flex-1 h-full ${periodId ? 'cursor-pointer' : ''}`}
                     onClick={periodId ? () => router.push(`/periods/${periodId}`) : undefined}
                     title={periodId ? "Open this month's budget" : undefined}
                   >
-                    <div className="absolute bottom-0 inset-x-0 bg-income/90 group-hover:bg-income rounded-t-sm min-h-[2px] transition-all" style={{ height: pct(val) }}>
-                      {val > 0 && (
-                        <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-text-heading whitespace-nowrap">
-                          {formatCurrencyShort(val)}
-                        </span>
-                      )}
-                    </div>
+                    {val > 0 && (
+                      <span className="absolute left-1/2 -translate-x-1/2 -translate-y-1.5 text-[9px] font-bold text-text-heading whitespace-nowrap" style={{ bottom: pct(val) }}>
+                        {formatCurrencyShort(val)}
+                      </span>
+                    )}
                   </div>
                 )
               })}
             </div>
           </div>
-          <div className="flex gap-3 mt-2">
+          <div className="flex mt-2">
             {data.map((d) => (
               <span key={d.month} className="flex-1 text-center text-caption text-text-muted font-medium">
                 {new Date(d.month + '-01T00:00:00').toLocaleDateString('en-US', { month: 'short' })}
