@@ -8,6 +8,29 @@ import { revalidatePath } from 'next/cache'
 // Period-level operations only. For expense/income/invoice actions within a
 // period, see period-expenses.ts. For data export/import, see household.ts.
 
+/** Manual income summed by "YYYY-MM" (a period's month), excluding rows flagged out of reports. Feeds the income chart. */
+export async function getMonthlyManualIncome(): Promise<Record<string, number>> {
+  const supabase = await createClient()
+  const householdId = await getUserHouseholdId()
+
+  const { data, error } = await supabase
+    .from('period_manual_income')
+    .select('amount, budget_periods ( period_month )')
+    .eq('household_id', householdId)
+    .eq('exclude_from_reports', false)
+
+  if (error) throw new Error(`Failed to fetch manual income: ${error.message}`)
+
+  const byMonth: Record<string, number> = {}
+  for (const row of data ?? []) {
+    const period = row.budget_periods as unknown as { period_month: string | null } | null
+    const month = period?.period_month?.slice(0, 7)
+    if (!month) continue
+    byMonth[month] = (byMonth[month] ?? 0) + (Number(row.amount) || 0)
+  }
+  return byMonth
+}
+
 export async function getBudgetPeriods() {
   const supabase = await createClient()
   const householdId = await getUserHouseholdId()

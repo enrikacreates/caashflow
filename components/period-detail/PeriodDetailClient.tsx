@@ -21,6 +21,7 @@ import {
   updateExpensePayment,
   removeExpensePayment,
   toggleManualIncomeDone,
+  setManualIncomeExcluded,
   toggleLinkedInvoiceDone,
   addAdjustment,
   removeAdjustment,
@@ -165,8 +166,8 @@ export default function PeriodDetailClient({
   )
   const [optManual, applyManualOpt] = useOptimistic(
     manualIncome,
-    (state: PeriodManualIncome[], u: { id: string; value: boolean }) =>
-      state.map((mi) => (mi.id === u.id ? { ...mi, is_done: u.value } : mi))
+    (state: PeriodManualIncome[], u: { id: string } & Partial<PeriodManualIncome>) =>
+      state.map((mi) => (mi.id === u.id ? { ...mi, ...u } : mi))
   )
   // Optimistic overlay for deduction overrides — %/$ edits recompute the numbers instantly
   const [overridesLocal, setOverridesLocal] = useState<DeductionOverrides>(period.deduction_overrides ?? {})
@@ -428,8 +429,14 @@ export default function PeriodDetailClient({
 
   const handleToggleManualIncomeDone = (id: string, value: boolean) =>
     startTransition(async () => {
-      applyManualOpt({ id, value })
+      applyManualOpt({ id, is_done: value })
       await toggleManualIncomeDone(id, period.id, value)
+    })
+
+  const handleToggleManualExcluded = (id: string, value: boolean) =>
+    startTransition(async () => {
+      applyManualOpt({ id, exclude_from_reports: value })
+      await setManualIncomeExcluded(id, period.id, value)
     })
 
   const handleToggleLinkedInvoiceDone = (linkId: string, value: boolean) =>
@@ -878,9 +885,25 @@ export default function PeriodDetailClient({
                     {mi.is_done && (
                       <span className="text-[10px] bg-success/10 text-success px-1.5 py-0.5 rounded-full font-bold uppercase">Budgeted</span>
                     )}
+                    {mi.exclude_from_reports && (
+                      <span className="text-[10px] bg-surface-beige text-text-muted px-1.5 py-0.5 rounded-full font-bold uppercase">Not income</span>
+                    )}
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="text-caption font-bold text-text-heading">{formatCurrency(mi.amount)}</span>
+                    <span
+                      className="flex items-center gap-1 text-caption text-text-muted cursor-help"
+                      title="Exclude from income reports: keeps this out of the 6-month income chart and trends (e.g. gifts, reimbursements). It still counts in this budget."
+                    >
+                      <input
+                        type="checkbox"
+                        checked={mi.exclude_from_reports}
+                        disabled={isLocked || isPending}
+                        onChange={(e) => handleToggleManualExcluded(mi.id, e.target.checked)}
+                        className="rounded"
+                      />
+                      Not income
+                    </span>
                     <span
                       className="flex items-center gap-1 text-caption text-text-muted cursor-help"
                       title="Budgeted out: this income's deductions are logged to the period ledger and it's removed from the active income total (so new income calculates its own tithe/savings/tax)."

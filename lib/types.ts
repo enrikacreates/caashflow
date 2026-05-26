@@ -176,6 +176,8 @@ export interface PeriodManualIncome {
   description: string
   amount: number
   is_done: boolean
+  // When true, kept out of income reports/charts (e.g. gifts, paybacks)
+  exclude_from_reports: boolean
   created_at: string
 }
 

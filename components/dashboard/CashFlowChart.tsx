@@ -26,11 +26,13 @@ export default function CashFlowChart({
   incomeGoal,
   expenseNeed,
   periods = [],
+  manualByMonth = {},
 }: {
   invoices: Invoice[]
   incomeGoal: number | null
   expenseNeed: number
   periods?: BudgetPeriod[]
+  manualByMonth?: Record<string, number>
 }) {
   const router = useRouter()
   const [mode, setMode] = useState<'projected' | 'received'>('projected')
@@ -45,10 +47,12 @@ export default function CashFlowChart({
   const data = months.map((m) => {
     const inMonth = (inv: Invoice) =>
       inv.month === m || inv.projected_date?.startsWith(m) || inv.actual_received_date?.startsWith(m)
-    const projected = invoices.filter(inMonth).reduce((sum, inv) => sum + inv.amount, 0)
+    // Manual income (gifts/paybacks excluded upstream) counts as received money in hand
+    const manual = manualByMonth[m] ?? 0
+    const projected = invoices.filter(inMonth).reduce((sum, inv) => sum + inv.amount, manual)
     const received = invoices
       .filter((inv) => inv.status === 'received' && inMonth(inv))
-      .reduce((sum, inv) => sum + inv.amount, 0)
+      .reduce((sum, inv) => sum + inv.amount, manual)
     return { month: m, projected, received }
   })
 

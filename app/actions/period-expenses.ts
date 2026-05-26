@@ -940,6 +940,25 @@ export async function toggleManualIncomeDone(id: string, periodId: string, value
   await recalculatePeriodIncome(periodId)
 }
 
+/** Flag a manual income row to be excluded from income reports/charts (gifts, paybacks, etc.). */
+export async function setManualIncomeExcluded(id: string, periodId: string, value: boolean) {
+  const supabase = await createClient()
+  const householdId = await getUserHouseholdId()
+
+  const { error } = await supabase
+    .from('period_manual_income')
+    .update({ exclude_from_reports: value })
+    .eq('id', id)
+    .eq('household_id', householdId)
+
+  if (error) throw new Error(`Failed to update manual income: ${error.message}`)
+
+  revalidatePath(`/periods/${periodId}`)
+  revalidatePath('/')
+  revalidatePath('/cashflow')
+  revalidatePath('/invoices')
+}
+
 /** Mark a linked invoice done (or active) for this period — recalcs the period income. */
 export async function toggleLinkedInvoiceDone(linkId: string, periodId: string, value: boolean) {
   const supabase = await createClient()

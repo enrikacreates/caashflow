@@ -2,7 +2,7 @@ import PeriodSwitcherHeader from '@/components/dashboard/PeriodSwitcherHeader'
 import NewBudgetButton from '@/components/dashboard/NewBudgetButton'
 import CashFlowChart from '@/components/dashboard/CashFlowChart'
 import BudgetSummaryBar from '@/components/dashboard/BudgetSummaryBar'
-import { getBudgetPeriods, getPeriodDetail } from '@/app/actions/periods'
+import { getBudgetPeriods, getPeriodDetail, getMonthlyManualIncome } from '@/app/actions/periods'
 import { getInvoices } from '@/app/actions/invoices'
 import { getBaseBudgetItems } from '@/app/actions/base-budget'
 import { getSettings } from '@/app/actions/settings'
@@ -19,13 +19,14 @@ export default async function DashboardPage({
 }) {
   const { period: periodParam } = await searchParams
 
-  const [periods, invoices, baseItems, settings, savingsGoals, debts] = await Promise.all([
+  const [periods, invoices, baseItems, settings, savingsGoals, debts, manualByMonth] = await Promise.all([
     getBudgetPeriods(),
     getInvoices(),
     getBaseBudgetItems(),
     getSettings(),
     getSavingsGoals(),
     getDebts(),
+    getMonthlyManualIncome(),
   ])
 
   // Periods sorted oldest→newest by month, so we can pick "latest" and "previous"
@@ -118,7 +119,7 @@ export default async function DashboardPage({
       </div>
 
       {/* 6-Month Income — primary cash-flow view, kept up top */}
-      <CashFlowChart invoices={invoices} incomeGoal={settings.monthly_income_goal} expenseNeed={monthlyExpenses} periods={periods} />
+      <CashFlowChart invoices={invoices} incomeGoal={settings.monthly_income_goal} expenseNeed={monthlyExpenses} periods={periods} manualByMonth={manualByMonth} />
 
       {/* Insight cards */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
