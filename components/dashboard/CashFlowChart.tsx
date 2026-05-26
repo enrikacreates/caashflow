@@ -183,8 +183,8 @@ export default function CashFlowChart({
         </div>
 
         <div className="relative z-10">
-          {/* Continuous "water" backdrop: expense filled + crested, goal as a waterline; income bars rise through it */}
-          <div className="relative h-48">
+          {/* Continuous "water" backdrop — full-bleed to the card edges (no side gutter) */}
+          <div className="relative h-48 -mx-6">
             {/* Income goal "water" — back layer; steady wave, average = the goal waterline */}
             {goal > 0 && <WaveLayer levelPct={(goal / maxVal) * 100} color="rgba(34,182,219,0.12)" crests={3} amp={5} />}
 
@@ -196,8 +196,6 @@ export default function CashFlowChart({
               <path d={incomeAreaAt(-6, 0.9, 1.6)} fill="rgba(34,182,219,0.28)" />
               <path d={incomeAreaAt(-3, 2.4, 1.8)} fill="rgba(34,182,219,0.5)" />
               <path d={incomeAreaAt(0, 0, 1.5)} fill="rgba(34,182,219,0.92)" />
-              {/* foam crest line riding the surface */}
-              <path d={incomeTop(0, 0, 1.5)} fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
             </svg>
 
             {/* Foam bubbles clustered at the wave peaks */}
@@ -238,13 +236,11 @@ export default function CashFlowChart({
               })}
             </div>
 
-            {/* Month labels — floating white pills on the water (Option C) */}
+            {/* Month labels — plain white text floating on the water */}
             <div className="absolute inset-x-0 bottom-1.5 flex pointer-events-none">
               {data.map((d) => (
-                <span key={d.month} className="flex-1 flex justify-center">
-                  <span className="rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-medium text-text-heading/80 shadow-sm">
-                    {new Date(d.month + '-01T00:00:00').toLocaleDateString('en-US', { month: 'short' })}
-                  </span>
+                <span key={d.month} className="flex-1 text-center text-[11px] font-semibold text-white/90">
+                  {new Date(d.month + '-01T00:00:00').toLocaleDateString('en-US', { month: 'short' })}
                 </span>
               ))}
             </div>
