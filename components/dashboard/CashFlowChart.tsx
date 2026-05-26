@@ -129,7 +129,7 @@ export default function CashFlowChart({
                   <div className="relative w-full h-full">
                     {/* income goal (lightest teal tint) — behind; value floats above as the ceiling */}
                     {goal > 0 && (
-                      <div className="absolute bottom-0 inset-x-0 bg-[#c4ebe5] rounded-t-sm" style={{ height: pct(goal) }}>
+                      <div className="absolute bottom-0 inset-x-0 bg-[#cfeef7] rounded-t-sm" style={{ height: pct(goal) }}>
                         <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[9px] font-semibold text-text-muted whitespace-nowrap">
                           {formatCurrencyShort(goal)}
                         </span>
@@ -137,14 +137,14 @@ export default function CashFlowChart({
                     )}
                     {/* expense need (medium teal tint) — on top of goal; value sits inside near its top */}
                     {expense > 0 && (
-                      <div className="absolute bottom-0 inset-x-0 bg-[#aed9d2] rounded-t-sm" style={{ height: pct(expense) }}>
-                        <span className="absolute top-1 left-1/2 -translate-x-1/2 text-[9px] font-semibold text-[#0e7c70] whitespace-nowrap">
+                      <div className="absolute bottom-0 inset-x-0 bg-[#a3d9ea] rounded-t-sm" style={{ height: pct(expense) }}>
+                        <span className="absolute top-1 left-1/2 -translate-x-1/2 text-[9px] font-semibold text-[#0e6a86] whitespace-nowrap">
                           {formatCurrencyShort(expense)}
                         </span>
                       </div>
                     )}
-                    {/* income (prominent teal, slightly translucent so target bands show through on overshoot) */}
-                    <div className="absolute bottom-0 inset-x-0 bg-primary-teal/85 group-hover:bg-primary-teal rounded-t-sm min-h-[2px] transition-all" style={{ height: pct(val) }}>
+                    {/* income (prominent logo-wave blue, slightly translucent so target bands show through on overshoot) */}
+                    <div className="absolute bottom-0 inset-x-0 bg-income/90 group-hover:bg-income rounded-t-sm min-h-[2px] transition-all" style={{ height: pct(val) }}>
                       {val > 0 && (
                         <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-text-heading whitespace-nowrap">
                           {formatCurrencyShort(val)}
@@ -167,16 +167,16 @@ export default function CashFlowChart({
           {/* Key */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-4 text-[10px] text-text-muted">
             <span className="inline-flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-sm bg-primary-teal" /> Income ({mode})
+              <span className="w-2.5 h-2.5 rounded-sm bg-income" /> Income ({mode})
             </span>
             {expense > 0 && (
               <span className="inline-flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-sm bg-[#aed9d2]" /> Expense need <span className="font-semibold text-text-heading">{formatCurrency(expense)}</span>
+                <span className="w-2.5 h-2.5 rounded-sm bg-[#a3d9ea]" /> Expense need <span className="font-semibold text-text-heading">{formatCurrency(expense)}</span>
               </span>
             )}
             {goal > 0 && (
               <span className="inline-flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-sm bg-[#c4ebe5]" /> Income goal <span className="font-semibold text-text-heading">{formatCurrency(goal)}</span>
+                <span className="w-2.5 h-2.5 rounded-sm bg-[#cfeef7]" /> Income goal <span className="font-semibold text-text-heading">{formatCurrency(goal)}</span>
               </span>
             )}
           </div>

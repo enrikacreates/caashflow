@@ -162,7 +162,7 @@ export default async function DashboardPage({
               <span className="text-caption text-text-muted">of {formatCurrency(savedTarget)}</span>
             </div>
             <div className="h-2 rounded-full bg-surface-gray overflow-hidden">
-              <div className="h-full bg-primary-teal rounded-full" style={{ width: `${savedTarget > 0 ? Math.min(100, (savedTotal / savedTarget) * 100) : 0}%` }} />
+              <div className="h-full bg-income rounded-full" style={{ width: `${savedTarget > 0 ? Math.min(100, (savedTotal / savedTarget) * 100) : 0}%` }} />
             </div>
             <p className="text-caption text-text-muted mt-2">{activeGoals.length} active {activeGoals.length === 1 ? 'goal' : 'goals'}</p>
           </div>
