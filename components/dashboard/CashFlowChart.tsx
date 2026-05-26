@@ -181,14 +181,6 @@ export default function CashFlowChart({
               <path d={incomeArea} fill="rgba(34,182,219,0.85)" />
             </svg>
 
-            {/* Waterline amounts — stacked top-left, no chip, each tinted in its wave's blue */}
-            {(goal > 0 || expense > 0) && (
-              <div className="absolute -top-3 left-0 z-20 flex flex-col gap-0 text-[10px] font-bold leading-tight">
-                {goal > 0 && <span className="whitespace-nowrap text-income">{formatCurrencyShort(goal)} goal</span>}
-                {expense > 0 && <span className="whitespace-nowrap" style={{ color: '#0E7C9C' }}>{formatCurrencyShort(expense)} expenses</span>}
-              </div>
-            )}
-
             {/* Per-month overlay: click targets + income value labels (no gutters) */}
             <div className="absolute inset-0 flex">
               {data.map((d) => {
