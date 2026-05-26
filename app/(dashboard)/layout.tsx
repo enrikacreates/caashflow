@@ -86,13 +86,21 @@ export default function DashboardLayout({
         </div>
       </main>
 
-      {/* Decorative footer flourish — vertically compressed so it's a slim band */}
-      <img
-        src="/shapes/footer-dashboard.svg"
-        alt=""
-        aria-hidden="true"
-        className="pointer-events-none select-none block w-full h-56 object-fill mt-10"
-      />
+      {/* Decorative footer flourish — natural proportions, with the logo on the teal band */}
+      <div className="relative w-full mt-10">
+        <img
+          src="/shapes/footer-dashboard.svg"
+          alt=""
+          aria-hidden="true"
+          className="pointer-events-none select-none block w-full"
+        />
+        <img
+          src="/logo.svg"
+          alt="Caashflow"
+          className="pointer-events-none select-none absolute w-[26%] max-w-[220px] h-auto"
+          style={{ left: '5%', bottom: '8%' }}
+        />
+      </div>
     </div>
   )
 }
