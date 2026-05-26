@@ -85,6 +85,14 @@ export default function DashboardLayout({
           {children}
         </div>
       </main>
+
+      {/* Decorative footer flourish */}
+      <img
+        src="/shapes/footer-dashboard.svg"
+        alt=""
+        aria-hidden="true"
+        className="pointer-events-none select-none block w-full mt-10"
+      />
     </div>
   )
 }
