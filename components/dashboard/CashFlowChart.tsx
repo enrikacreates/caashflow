@@ -2,15 +2,15 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { TrendingUp } from 'lucide-react'
+import { TrendingUp, ChevronLeft, ChevronRight } from 'lucide-react'
 import { formatCurrency, formatCurrencyShort } from '@/lib/utils'
 import type { Invoice, BudgetPeriod } from '@/lib/types'
 
-/** 6-month window spanning 2 months back → 3 months ahead, so both received (recent) and projected (upcoming) show. */
-function chartMonths(): string[] {
+/** 6-month window spanning 2 months back → 3 months ahead, shifted by `offset` months for prev/next browsing. */
+function chartMonths(offset = 0): string[] {
   const now = new Date()
   return Array.from({ length: 6 }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() - 2 + i, 1)
+    const d = new Date(now.getFullYear(), now.getMonth() - 2 + i + offset, 1)
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
   })
 }
@@ -36,7 +36,8 @@ export default function CashFlowChart({
 }) {
   const router = useRouter()
   const [mode, setMode] = useState<'projected' | 'received'>('projected')
-  const months = chartMonths()
+  const [monthOffset, setMonthOffset] = useState(0)
+  const months = chartMonths(monthOffset)
 
   // Map "YYYY-MM" → budget id so each bar can jump into that month's budget
   const periodByMonth = new Map<string, string>()
@@ -79,6 +80,33 @@ export default function CashFlowChart({
           <option value="projected">Projected</option>
           <option value="received">Received</option>
         </select>
+        <div className="ml-auto flex items-center gap-1">
+          {monthOffset !== 0 && (
+            <button
+              type="button"
+              onClick={() => setMonthOffset(0)}
+              className="text-caption font-semibold text-primary hover:underline mr-1"
+            >
+              Today
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setMonthOffset((o) => o - 6)}
+            title="Previous 6 months"
+            className="bg-bg-white border border-border rounded-full p-1 text-text-muted hover:text-text-heading hover:border-primary transition-colors"
+          >
+            <ChevronLeft size={15} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setMonthOffset((o) => o + 6)}
+            title="Next 6 months"
+            className="bg-bg-white border border-border rounded-full p-1 text-text-muted hover:text-text-heading hover:border-primary transition-colors"
+          >
+            <ChevronRight size={15} />
+          </button>
+        </div>
       </div>
       <div className="bg-bg-white rounded-lg p-6 shadow-card relative overflow-hidden">
         {/* "FLOW" watermark — decorative */}

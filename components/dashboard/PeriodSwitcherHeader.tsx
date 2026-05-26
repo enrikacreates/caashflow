@@ -25,7 +25,7 @@ export default function PeriodSwitcherHeader({
   if (!currentPeriod) {
     return (
       <div>
-        <h1 className="text-h1 font-bold text-text-heading">Latest</h1>
+        <h1 className="text-h1 font-bold text-text-heading">Latest Budget</h1>
         <p className="text-sm text-text-muted mt-0.5">No budget yet</p>
       </div>
     )
@@ -33,7 +33,7 @@ export default function PeriodSwitcherHeader({
 
   return (
     <div className="relative inline-block">
-      <h1 className="text-h1 font-bold text-text-heading">Latest</h1>
+      <h1 className="text-h1 font-bold text-text-heading">Latest Budget</h1>
       <div className="flex items-center gap-1.5 mt-0.5">
         <Link
           href={`/periods/${currentPeriod.id}`}
