@@ -688,6 +688,7 @@ export default function PeriodDetailClient({
           income={period.income_amount}
           toBudget={deductions.incomeAfterDeductions}
           payNow={payNowTotal}
+          paid={paymentSummary.paid}
           amountLeft={amountLeft}
           totalExpenses={totalExpenses}
           stillToFund={stillToFund}

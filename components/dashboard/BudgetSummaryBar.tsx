@@ -9,6 +9,7 @@ export default function BudgetSummaryBar({
   income,
   toBudget,
   payNow,
+  paid,
   amountLeft,
   totalExpenses,
   stillToFund,
@@ -19,6 +20,7 @@ export default function BudgetSummaryBar({
   income: number
   toBudget: number
   payNow: number
+  paid: number
   amountLeft: number
   totalExpenses: number
   stillToFund: number
@@ -26,6 +28,7 @@ export default function BudgetSummaryBar({
   daysLeft?: number
   bare?: boolean
 }) {
+  const leftToPay = Math.max(0, payNow - paid)
   const content = (
     <>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-4 sm:divide-x sm:divide-border/60">
@@ -41,6 +44,9 @@ export default function BudgetSummaryBar({
         <div className="@container sm:px-3">
           <div className="text-caption font-bold uppercase text-text-muted mb-1">Pay Now</div>
           <div className="font-bold text-text-heading whitespace-nowrap leading-tight text-[clamp(0.78rem,15cqi,1.5rem)]">{formatCurrency(payNow)}</div>
+          {payNow > 0 && (
+            <div className="text-[10px] text-text-muted mt-0.5 leading-tight">{formatCurrency(paid)} paid · {formatCurrency(leftToPay)} left to pay</div>
+          )}
         </div>
         <div className="@container sm:px-3">
           <div className="text-caption font-bold uppercase text-text-muted mb-1">Amount Left</div>

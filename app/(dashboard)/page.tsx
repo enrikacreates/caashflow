@@ -9,7 +9,7 @@ import { getSettings } from '@/app/actions/settings'
 import { getSavingsGoals } from '@/app/actions/savings'
 import { getDebts } from '@/app/actions/debts'
 import { getOwedAmount, formatCurrency, formatCurrencyShort } from '@/lib/utils'
-import { calculateDeductions, calculatePayNowTotal, calculateMonthlyEquivalent } from '@/lib/calculations'
+import { calculateDeductions, calculatePayNowTotal, calculateMonthlyEquivalent, calculatePeriodPaymentSummary } from '@/lib/calculations'
 import { CalendarClock, PiggyBank, Hammer, ArrowUpRight, ArrowDownRight } from 'lucide-react'
 
 export default async function DashboardPage({
@@ -44,6 +44,7 @@ export default async function DashboardPage({
   const incomeDelta = selectedPeriod && prevPeriod ? selectedPeriod.income_amount - prevPeriod.income_amount : null
 
   let payNowTotal = 0
+  let paidTotal = 0
   let amountLeft = 0
   let incomeAfterDeductions = 0
   let totalExpenses = 0
@@ -53,6 +54,7 @@ export default async function DashboardPage({
   if (selectedPeriod) {
     const detail = await getPeriodDetail(selectedPeriod.id)
     payNowTotal = calculatePayNowTotal(detail.expenses)
+    paidTotal = calculatePeriodPaymentSummary(detail.expenses).paid
     const deductions = calculateDeductions(selectedPeriod.income_amount, settings, selectedPeriod.deduction_overrides)
     const adjustment = (detail.adjustments ?? []).reduce((sum, a) => sum + (a.amount || 0), 0)
     incomeAfterDeductions = deductions.incomeAfterDeductions
@@ -109,6 +111,7 @@ export default async function DashboardPage({
             income={selectedPeriod.income_amount}
             toBudget={incomeAfterDeductions}
             payNow={payNowTotal}
+            paid={paidTotal}
             amountLeft={amountLeft}
             totalExpenses={totalExpenses}
             stillToFund={stillToFund}
