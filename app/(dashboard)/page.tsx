@@ -89,9 +89,10 @@ export default async function DashboardPage({
   const savedTotal = activeGoals.reduce((s, g) => s + g.current_amount, 0)
   const savedTarget = activeGoals.reduce((s, g) => s + g.target_amount, 0)
   const activeDebts = debts.filter((d) => !d.is_paid_off)
-  const debtOriginal = activeDebts.reduce((s, d) => s + d.original_balance, 0)
-  const debtCurrent = activeDebts.reduce((s, d) => s + d.current_balance, 0)
-  const debtPaid = Math.max(0, debtOriginal - debtCurrent)
+  // Totals across all debts (incl. paid off) so the card shows lifetime payoff progress
+  const debtOriginalAll = debts.reduce((s, d) => s + d.original_balance, 0)
+  const debtCurrentAll = debts.reduce((s, d) => s + d.current_balance, 0)
+  const debtPaidAll = Math.max(0, debtOriginalAll - debtCurrentAll)
 
   const monthlyExpenses = calculateMonthlyEquivalent(baseItems)
   const cardLabel = 'flex items-center gap-2 text-caption font-bold uppercase tracking-wide text-text-muted mb-3'
@@ -171,19 +172,30 @@ export default async function DashboardPage({
           </div>
         )}
 
-        {activeDebts.length > 0 && (
-          <div className="bg-bg-white rounded-lg shadow-card p-5">
-            <div className={cardLabel}><Hammer size={16} /> Debt paid down</div>
-            <div className="flex items-baseline justify-between mb-2">
-              <span className="text-h3 font-bold text-text-heading">{formatCurrency(debtPaid)}</span>
-              <span className="text-caption text-text-muted">of {formatCurrency(debtOriginal)}</span>
-            </div>
-            <div className="h-2 rounded-full bg-surface-gray overflow-hidden">
-              <div className="h-full bg-success rounded-full" style={{ width: `${debtOriginal > 0 ? Math.min(100, (debtPaid / debtOriginal) * 100) : 0}%` }} />
-            </div>
-            <p className="text-caption text-text-muted mt-2">{formatCurrency(debtCurrent)} remaining across {activeDebts.length} {activeDebts.length === 1 ? 'debt' : 'debts'}</p>
-          </div>
-        )}
+        <a href="/debts" className="block bg-bg-white rounded-lg shadow-card p-5 hover:shadow-lg transition-shadow">
+          <div className={cardLabel}><Hammer size={16} /> Debt paid down</div>
+          {debts.length === 0 ? (
+            <>
+              <div className="text-h3 font-bold text-text-heading">$0</div>
+              <p className="text-caption text-text-muted mt-2">No debts tracked yet — start the Debt Demo →</p>
+            </>
+          ) : (
+            <>
+              <div className="flex items-baseline justify-between mb-2">
+                <span className="text-h3 font-bold text-text-heading">{formatCurrency(debtPaidAll)}</span>
+                <span className="text-caption text-text-muted">of {formatCurrency(debtOriginalAll)}</span>
+              </div>
+              <div className="h-2 rounded-full bg-surface-gray overflow-hidden">
+                <div className="h-full bg-income rounded-full" style={{ width: `${debtOriginalAll > 0 ? Math.min(100, (debtPaidAll / debtOriginalAll) * 100) : 0}%` }} />
+              </div>
+              <p className="text-caption text-text-muted mt-2">
+                {activeDebts.length > 0
+                  ? `${formatCurrency(debtCurrentAll)} remaining across ${activeDebts.length} ${activeDebts.length === 1 ? 'debt' : 'debts'}`
+                  : 'All debts paid off 🎉'}
+              </p>
+            </>
+          )}
+        </a>
       </div>
 
     </div>
