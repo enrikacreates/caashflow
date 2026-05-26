@@ -230,20 +230,24 @@ export default function CashFlowChart({
                     onClick={periodId ? () => router.push(`/periods/${periodId}`) : undefined}
                     title={periodId ? "Open this month's budget" : undefined}
                   >
-                    <span className={`absolute left-1/2 -translate-x-1/2 -translate-y-1.5 text-[9px] font-bold whitespace-nowrap ${val > 0 ? 'text-text-heading' : 'text-text-muted'}`} style={{ bottom: pct(val) }}>
+                    <span className={`absolute left-1/2 -translate-x-1/2 -translate-y-1.5 text-[9px] font-bold whitespace-nowrap ${val > 0 ? 'text-text-heading' : 'text-text-muted'}`} style={{ bottom: `${Math.max((val / maxVal) * 100, 9)}%` }}>
                       {formatCurrencyShort(val)}
                     </span>
                   </div>
                 )
               })}
             </div>
-          </div>
-          <div className="flex mt-2">
-            {data.map((d) => (
-              <span key={d.month} className="flex-1 text-center text-caption text-text-muted font-medium">
-                {new Date(d.month + '-01T00:00:00').toLocaleDateString('en-US', { month: 'short' })}
-              </span>
-            ))}
+
+            {/* Month labels — floating white pills on the water (Option C) */}
+            <div className="absolute inset-x-0 bottom-1.5 flex pointer-events-none">
+              {data.map((d) => (
+                <span key={d.month} className="flex-1 flex justify-center">
+                  <span className="rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-medium text-text-heading/80 shadow-sm">
+                    {new Date(d.month + '-01T00:00:00').toLocaleDateString('en-US', { month: 'short' })}
+                  </span>
+                </span>
+              ))}
+            </div>
           </div>
 
           {/* Key */}
