@@ -115,13 +115,14 @@ export default function CashFlowChart({
   const n = vals.length
   const cy = (v: number) => 100 - (v / maxVal) * 100
   // Smooth (cosine-interpolated) income trend at any x in 0..100 — the overall mountain shape.
+  // Floored at y=93 so even $0 months keep a shallow water band at the bottom (labels stay readable).
   const trendY = (x: number) => {
     const pos = (x / 100) * n - 0.5
     const i0 = Math.max(0, Math.min(n - 1, Math.floor(pos)))
     const i1 = Math.max(0, Math.min(n - 1, i0 + 1))
     const t = Math.max(0, Math.min(1, pos - Math.floor(pos)))
     const s = (1 - Math.cos(t * Math.PI)) / 2
-    return cy(vals[i0] + (vals[i1] - vals[i0]) * s)
+    return Math.min(cy(vals[i0] + (vals[i1] - vals[i0]) * s), 93)
   }
   // Rippled income surface top-edge (open path) so it reads as water, not a mountain.
   const incomeTop = (dy: number, phase: number, amp: number) => {
