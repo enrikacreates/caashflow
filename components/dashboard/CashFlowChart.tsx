@@ -111,14 +111,17 @@ export default function CashFlowChart({
   const pct = (v: number) => `${(v / maxVal) * 100}%`
 
   // Income as one connected wave (area) across the months — viewBox 0..100, stretched to fit.
+  // dy lifts the surface up (negative) to stack lighter "crest" layers above the main body.
   const vals = data.map(valueFor)
   const cy = (v: number) => 100 - (v / maxVal) * 100
-  const incomePoints = [
-    { x: 0, y: cy(vals[0]) },
-    ...vals.map((v, i) => ({ x: ((i + 0.5) / vals.length) * 100, y: cy(v) })),
-    { x: 100, y: cy(vals[vals.length - 1]) },
-  ]
-  const incomeArea = `${smoothPath(incomePoints)} L 100,100 L 0,100 Z`
+  const incomeAreaAt = (dy: number) => {
+    const pts = [
+      { x: 0, y: cy(vals[0]) + dy },
+      ...vals.map((v, i) => ({ x: ((i + 0.5) / vals.length) * 100, y: cy(v) + dy })),
+      { x: 100, y: cy(vals[vals.length - 1]) + dy },
+    ]
+    return `${smoothPath(pts)} L 100,100 L 0,100 Z`
+  }
 
   return (
     <div>
@@ -176,9 +179,11 @@ export default function CashFlowChart({
             {/* Expense need "water" — front layer (overlaps goal, no gap); a tighter wave variant */}
             {expense > 0 && <WaveLayer levelPct={(expense / maxVal) * 100} color="rgba(34,182,219,0.18)" crests={4} amp={4} />}
 
-            {/* Income — one connected wave across all months (no gutters) */}
+            {/* Income — one connected wave across all months (no gutters), with stacked crest layers for an ocean look */}
             <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-              <path d={incomeArea} fill="rgba(34,182,219,0.85)" />
+              <path d={incomeAreaAt(-6)} fill="rgba(34,182,219,0.28)" />
+              <path d={incomeAreaAt(-3)} fill="rgba(34,182,219,0.5)" />
+              <path d={incomeAreaAt(0)} fill="rgba(34,182,219,0.92)" />
             </svg>
 
             {/* Per-month overlay: click targets + income value labels (no gutters) */}
