@@ -133,7 +133,6 @@ export default function CashFlowChart({
   }
   // dy lifts lighter crest layers above the body; phase/amp vary per layer for overlapping swells.
   const incomeAreaAt = (dy: number, phase: number, amp: number) => `${incomeTop(dy, phase, amp)} L 100,100 L 0,100 Z`
-  const maxIncome = Math.max(...vals, 1)
 
   return (
     <div>
@@ -177,14 +176,14 @@ export default function CashFlowChart({
         </div>
       </div>
       <div className="bg-bg-white rounded-lg p-6 shadow-card relative overflow-hidden">
-        {/* "FLOW" watermark — decorative */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
-          <span className="font-display leading-none text-[#ebf0f0]" style={{ fontSize: '20rem' }}>FLOW</span>
-        </div>
-
         <div className="relative z-10">
-          {/* Continuous "water" backdrop — full-bleed to the card edges (no side gutter) */}
-          <div className="relative h-48 -mx-6">
+          {/* Continuous "water" backdrop — full-bleed to the card edges; FLOW watermark clipped so its bottom lines up with the wave bottom */}
+          <div className="relative h-48 -mx-6 overflow-hidden">
+            {/* "FLOW" watermark — decorative, behind the water */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
+              <span className="font-display leading-none text-[#ebf0f0]" style={{ fontSize: '20rem' }}>FLOW</span>
+            </div>
+
             {/* Income goal "water" — back layer; steady wave, average = the goal waterline */}
             {goal > 0 && <WaveLayer levelPct={(goal / maxVal) * 100} color="rgba(34,182,219,0.12)" crests={3} amp={5} />}
 
@@ -197,24 +196,6 @@ export default function CashFlowChart({
               <path d={incomeAreaAt(-3, 2.4, 1.8)} fill="rgba(34,182,219,0.5)" />
               <path d={incomeAreaAt(0, 0, 1.5)} fill="rgba(34,182,219,0.92)" />
             </svg>
-
-            {/* Foam bubbles clustered at the wave peaks */}
-            <div className="absolute inset-0 flex pointer-events-none">
-              {data.map((d) => {
-                const val = valueFor(d)
-                return (
-                  <div key={d.month} className="relative flex-1 h-full">
-                    {val >= maxIncome * 0.55 && (
-                      <span className="absolute left-1/2 -translate-x-1/2 flex items-end gap-0.5" style={{ bottom: `calc(${pct(val)} + 3px)` }} aria-hidden="true">
-                        <span className="w-1 h-1 rounded-full bg-white/45" />
-                        <span className="w-1.5 h-1.5 rounded-full bg-white/60" />
-                        <span className="w-1 h-1 rounded-full bg-white/40" />
-                      </span>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
 
             {/* Per-month overlay: click targets + income value labels (no gutters) */}
             <div className="absolute inset-0 flex">
