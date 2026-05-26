@@ -111,15 +111,25 @@ export default function CashFlowChart({
   const pct = (v: number) => `${(v / maxVal) * 100}%`
 
   // Income as one connected wave (area) across the months — viewBox 0..100, stretched to fit.
-  // dy lifts the surface up (negative) to stack lighter "crest" layers above the main body.
   const vals = data.map(valueFor)
+  const n = vals.length
   const cy = (v: number) => 100 - (v / maxVal) * 100
-  const incomeAreaAt = (dy: number) => {
-    const pts = [
-      { x: 0, y: cy(vals[0]) + dy },
-      ...vals.map((v, i) => ({ x: ((i + 0.5) / vals.length) * 100, y: cy(v) + dy })),
-      { x: 100, y: cy(vals[vals.length - 1]) + dy },
-    ]
+  // Smooth (cosine-interpolated) income trend at any x in 0..100 — the overall mountain shape.
+  const trendY = (x: number) => {
+    const pos = (x / 100) * n - 0.5
+    const i0 = Math.max(0, Math.min(n - 1, Math.floor(pos)))
+    const i1 = Math.max(0, Math.min(n - 1, i0 + 1))
+    const t = Math.max(0, Math.min(1, pos - Math.floor(pos)))
+    const s = (1 - Math.cos(t * Math.PI)) / 2
+    return cy(vals[i0] + (vals[i1] - vals[i0]) * s)
+  }
+  // Area with small surface ripples so it reads as water, not a mountain.
+  // dy lifts lighter crest layers above the body; phase/amp vary per layer for overlapping swells.
+  const incomeAreaAt = (dy: number, phase: number, amp: number) => {
+    const pts: { x: number; y: number }[] = []
+    for (let x = 0; x <= 100; x += 4) {
+      pts.push({ x, y: trendY(x) + dy + amp * Math.sin((x / 100) * Math.PI * 2 * 4 + phase) })
+    }
     return `${smoothPath(pts)} L 100,100 L 0,100 Z`
   }
 
@@ -181,9 +191,9 @@ export default function CashFlowChart({
 
             {/* Income — one connected wave across all months (no gutters), with stacked crest layers for an ocean look */}
             <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-              <path d={incomeAreaAt(-6)} fill="rgba(34,182,219,0.28)" />
-              <path d={incomeAreaAt(-3)} fill="rgba(34,182,219,0.5)" />
-              <path d={incomeAreaAt(0)} fill="rgba(34,182,219,0.92)" />
+              <path d={incomeAreaAt(-6, 0.9, 1.6)} fill="rgba(34,182,219,0.28)" />
+              <path d={incomeAreaAt(-3, 2.4, 1.8)} fill="rgba(34,182,219,0.5)" />
+              <path d={incomeAreaAt(0, 0, 1.5)} fill="rgba(34,182,219,0.92)" />
             </svg>
 
             {/* Per-month overlay: click targets + income value labels (no gutters) */}
