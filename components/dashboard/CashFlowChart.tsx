@@ -15,16 +15,16 @@ function chartMonths(offset = 0): string[] {
   })
 }
 
-// A gentle repeating wave crest, stretched to full width (preserveAspectRatio none).
-const WAVE_D = 'M0,9 C150,2 300,2 450,9 C600,16 750,16 900,9 C1050,2 1200,2 1200,9'
+// One bold swell, stretched to full width (preserveAspectRatio none) for dramatic wave crests.
+const WAVE_D = 'M0,26 C220,2 430,2 600,26 C770,48 980,48 1200,26'
 
-/** Translucent "water" filled from the baseline up to `levelPct`, capped with a wave crest. */
+/** Translucent "water" filled from the baseline up to `levelPct`, capped with a dramatic wave crest. */
 function WaveLayer({ levelPct, color }: { levelPct: number; color: string }) {
   return (
     <div className="absolute inset-x-0 bottom-0 pointer-events-none" style={{ height: `${levelPct}%` }}>
       <div className="absolute inset-0" style={{ backgroundColor: color }} />
-      <svg className="absolute inset-x-0 w-full" style={{ bottom: '100%', height: 9 }} viewBox="0 0 1200 18" preserveAspectRatio="none" aria-hidden="true">
-        <path d={`${WAVE_D} L1200,18 L0,18 Z`} fill={color} />
+      <svg className="absolute inset-x-0 w-full" style={{ bottom: '100%', height: 24 }} viewBox="0 0 1200 52" preserveAspectRatio="none" aria-hidden="true">
+        <path d={`${WAVE_D} L1200,52 L0,52 Z`} fill={color} />
       </svg>
     </div>
   )
@@ -46,15 +46,6 @@ function smoothPath(pts: { x: number; y: number }[]): string {
     d += ` C ${c1x},${c1y} ${c2x},${c2y} ${p2.x},${p2.y}`
   }
   return d
-}
-
-/** A wave-shaped line marking a waterline (e.g. the income goal) — no fill. */
-function WaveLine({ levelPct, color }: { levelPct: number; color: string }) {
-  return (
-    <svg className="absolute inset-x-0 w-full pointer-events-none" style={{ bottom: `${levelPct}%`, height: 10, transform: 'translateY(50%)' }} viewBox="0 0 1200 18" preserveAspectRatio="none" aria-hidden="true">
-      <path d={WAVE_D} fill="none" stroke={color} strokeWidth={2} vectorEffect="non-scaling-stroke" />
-    </svg>
-  )
 }
 
 /**
@@ -106,7 +97,8 @@ export default function CashFlowChart({
   const nowMonth = (() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}` })()
   const valueFor = (d: { month: string; projected: number; received: number }) =>
     mode === 'received' ? d.received : d.month < nowMonth ? d.received : d.projected
-  const maxVal = Math.max(...data.map(valueFor), goal, expense, 1)
+  // 12% headroom so the top wave crest has room to crest without clipping
+  const maxVal = Math.max(...data.map(valueFor), goal, expense, 1) * 1.12
   const pct = (v: number) => `${(v / maxVal) * 100}%`
 
   // Income as one connected wave (area) across the months — viewBox 0..100, stretched to fit.
@@ -169,16 +161,16 @@ export default function CashFlowChart({
         <div className="relative z-10">
           {/* Continuous "water" backdrop: expense filled + crested, goal as a waterline; income bars rise through it */}
           <div className="relative h-48">
-            {/* Expense "water" — continuous, crested */}
-            {expense > 0 && <WaveLayer levelPct={(expense / maxVal) * 100} color="rgba(34,182,219,0.16)" />}
+            {/* Income goal "water" — back layer (transparent, crested) */}
+            {goal > 0 && <WaveLayer levelPct={(goal / maxVal) * 100} color="rgba(34,182,219,0.12)" />}
+
+            {/* Expense need "water" — front layer (transparent, crested); overlaps goal so there's no gap */}
+            {expense > 0 && <WaveLayer levelPct={(expense / maxVal) * 100} color="rgba(34,182,219,0.18)" />}
 
             {/* Income — one connected wave across all months (no gutters) */}
             <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
               <path d={incomeArea} fill="rgba(34,182,219,0.85)" />
             </svg>
-
-            {/* Income goal — waterline */}
-            {goal > 0 && <WaveLine levelPct={(goal / maxVal) * 100} color="rgba(34,182,219,0.5)" />}
 
             {/* Waterline amounts — labeled once, on the left */}
             {goal > 0 && (
@@ -234,7 +226,7 @@ export default function CashFlowChart({
             )}
             {goal > 0 && (
               <span className="inline-flex items-center gap-1.5">
-                <span className="w-2.5 h-0.5 rounded-full" style={{ backgroundColor: 'rgba(34,182,219,0.6)' }} /> Income goal <span className="font-semibold text-text-heading">{formatCurrency(goal)}</span>
+                <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: 'rgba(34,182,219,0.12)' }} /> Income goal <span className="font-semibold text-text-heading">{formatCurrency(goal)}</span>
               </span>
             )}
           </div>
