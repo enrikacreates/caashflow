@@ -87,48 +87,61 @@ export default function DashboardLayout({
       </main>
 
       {/* Footer — full-bleed teal band, flush to the very bottom (nothing beneath it).
-          Big transparent CAA$H watermark + the logo, with playful shapes peeking from the band edges. */}
-      <footer className="relative w-full mt-10 overflow-hidden bg-primary-teal">
-        {/* Playful shapes — sit on top of the band, peeking in from the edges (clipped by overflow) */}
+          Shapes perch on the band's TOP edge (mostly above it, base dipping in); the band itself
+          holds the big transparent CAA$H watermark + the logo. */}
+      <div className="relative w-full mt-12">
+        {/* Perched shapes — positioned at the band's top edge (bottom-full), then nudged down so
+            most of each shape sits on top of the band and only its base dips in. Width-only sizing
+            preserves each shape's natural aspect (no skew). Rendered outside the band so they aren't clipped. */}
         <img
-          src="/shapes/blob-orange.svg"
+          src="/shapes/sail-blue.svg"
           alt=""
           aria-hidden="true"
-          className="pointer-events-none select-none absolute -top-10 left-[18%] w-28 md:w-40 -rotate-12 opacity-95"
+          className="pointer-events-none select-none absolute z-10 left-[40%] -translate-x-1/2 bottom-full translate-y-[46%] w-52 md:w-72"
+        />
+        <img
+          src="/shapes/blob-peach.svg"
+          alt=""
+          aria-hidden="true"
+          className="pointer-events-none select-none absolute z-10 left-[9%] bottom-full translate-y-[32%] w-20 md:w-28"
         />
         <img
           src="/shapes/circle-gold.svg"
           alt=""
           aria-hidden="true"
-          className="pointer-events-none select-none absolute top-3 right-[26%] w-12 md:w-16 opacity-90"
+          className="pointer-events-none select-none absolute z-10 left-[3%] bottom-full translate-y-[40%] w-10 md:w-14"
         />
         <img
-          src="/shapes/blob-pink.svg"
+          src="/shapes/rect-pink.svg"
           alt=""
           aria-hidden="true"
-          className="pointer-events-none select-none absolute -top-12 -right-10 w-36 md:w-48 -rotate-6 opacity-90"
-        />
-        <img
-          src="/shapes/bluelinewaves.svg"
-          alt=""
-          aria-hidden="true"
-          className="pointer-events-none select-none absolute bottom-3 right-[6%] w-20 md:w-28 opacity-60"
+          className="pointer-events-none select-none absolute z-10 left-[20%] bottom-full translate-y-[34%] w-28 md:w-40"
         />
 
-        {/* CAA$H watermark — large, faint, behind the content */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
-          <span className="font-display leading-none text-white/10 text-[7rem] md:text-[12rem]">CAA$H</span>
-        </div>
+        {/* The band — full-bleed teal, fixed compact height; overflow-hidden clips the watermark + surface accents */}
+        <footer className="relative w-full overflow-hidden bg-primary-teal">
+          {/* CAA$H watermark — large, faint, behind the content */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
+            <span className="font-display leading-none text-white/10 text-[6rem] md:text-[10rem]">CAA$H</span>
+          </div>
 
-        {/* Band — fixed, compact height; logo bottom-left, whitened to read on teal */}
-        <div className="relative h-44 md:h-52">
+          {/* Blue line-waves — small accent resting on the band surface, bottom-right */}
           <img
-            src="/logo.svg"
-            alt="Caashflow"
-            className="pointer-events-none select-none absolute left-[5%] bottom-[18%] w-[26%] max-w-[220px] h-auto brightness-0 invert"
+            src="/shapes/bluelinewaves.svg"
+            alt=""
+            aria-hidden="true"
+            className="pointer-events-none select-none absolute bottom-4 right-[7%] w-16 md:w-24 opacity-70"
           />
-        </div>
-      </footer>
+
+          <div className="relative h-40 md:h-44">
+            <img
+              src="/logo.svg"
+              alt="Caashflow"
+              className="pointer-events-none select-none absolute left-[5%] bottom-[20%] w-[26%] max-w-[220px] h-auto brightness-0 invert"
+            />
+          </div>
+        </footer>
+      </div>
     </div>
   )
 }
