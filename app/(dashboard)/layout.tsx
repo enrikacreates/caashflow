@@ -86,12 +86,12 @@ export default function DashboardLayout({
         </div>
       </main>
 
-      {/* Decorative footer flourish */}
+      {/* Decorative footer flourish — vertically compressed so it's a slim band */}
       <img
         src="/shapes/footer-dashboard.svg"
         alt=""
         aria-hidden="true"
-        className="pointer-events-none select-none block w-full mt-10"
+        className="pointer-events-none select-none block w-full h-56 object-fill mt-10"
       />
     </div>
   )
