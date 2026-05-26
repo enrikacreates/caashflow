@@ -181,16 +181,12 @@ export default function CashFlowChart({
               <path d={incomeArea} fill="rgba(34,182,219,0.85)" />
             </svg>
 
-            {/* Waterline amounts — labeled once, on the left */}
-            {goal > 0 && (
-              <span className="absolute left-0 z-20 -translate-y-1/2 text-[10px] font-semibold text-[#0e6a86] bg-bg-white/70 rounded px-1 whitespace-nowrap" style={{ bottom: `${(goal / maxVal) * 100}%` }}>
-                {formatCurrencyShort(goal)} goal
-              </span>
-            )}
-            {expense > 0 && (
-              <span className="absolute left-0 z-20 -translate-y-1/2 text-[10px] font-semibold text-[#0e6a86] bg-bg-white/70 rounded px-1 whitespace-nowrap" style={{ bottom: `${(expense / maxVal) * 100}%` }}>
-                {formatCurrencyShort(expense)} expenses
-              </span>
+            {/* Waterline amounts — stacked top-left so the two close lines never collide */}
+            {(goal > 0 || expense > 0) && (
+              <div className="absolute top-1 left-0 z-20 flex flex-col gap-0.5 rounded bg-bg-white/70 px-1 py-0.5 text-[10px] font-semibold leading-tight text-[#0e6a86]">
+                {goal > 0 && <span className="whitespace-nowrap">{formatCurrencyShort(goal)} goal</span>}
+                {expense > 0 && <span className="whitespace-nowrap opacity-80">{formatCurrencyShort(expense)} expenses</span>}
+              </div>
             )}
 
             {/* Per-month overlay: click targets + income value labels (no gutters) */}
@@ -205,11 +201,9 @@ export default function CashFlowChart({
                     onClick={periodId ? () => router.push(`/periods/${periodId}`) : undefined}
                     title={periodId ? "Open this month's budget" : undefined}
                   >
-                    {val > 0 && (
-                      <span className="absolute left-1/2 -translate-x-1/2 -translate-y-1.5 text-[9px] font-bold text-text-heading whitespace-nowrap" style={{ bottom: pct(val) }}>
-                        {formatCurrencyShort(val)}
-                      </span>
-                    )}
+                    <span className={`absolute left-1/2 -translate-x-1/2 -translate-y-1.5 text-[9px] font-bold whitespace-nowrap ${val > 0 ? 'text-text-heading' : 'text-text-muted'}`} style={{ bottom: pct(val) }}>
+                      {formatCurrencyShort(val)}
+                    </span>
                   </div>
                 )
               })}
