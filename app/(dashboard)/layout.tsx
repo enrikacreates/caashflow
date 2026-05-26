@@ -120,9 +120,10 @@ export default function DashboardLayout({
 
         {/* The band — full-bleed teal, fixed compact height; overflow-hidden clips the watermark + surface accents */}
         <footer className="relative w-full overflow-hidden bg-primary-teal">
-          {/* CAA$H watermark — large, faint, behind the content */}
+          {/* CAA$H watermark — oversized live text that fills the banner width and scales with the
+              window (vw units); clipped top/bottom by the band like the FLOW watermark. */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
-            <span className="font-display leading-none text-white/10 text-[6rem] md:text-[10rem]">CAA$H</span>
+            <span className="font-display leading-none whitespace-nowrap text-white/10 text-[40vw]">CAA$H</span>
           </div>
 
           {/* Blue line-waves — small accent resting on the band surface, bottom-right */}
