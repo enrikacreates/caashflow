@@ -15,6 +15,30 @@ function chartMonths(offset = 0): string[] {
   })
 }
 
+// A gentle repeating wave crest, stretched to full width (preserveAspectRatio none).
+const WAVE_D = 'M0,9 C150,2 300,2 450,9 C600,16 750,16 900,9 C1050,2 1200,2 1200,9'
+
+/** Translucent "water" filled from the baseline up to `levelPct`, capped with a wave crest. */
+function WaveLayer({ levelPct, color }: { levelPct: number; color: string }) {
+  return (
+    <div className="absolute inset-x-0 bottom-0 pointer-events-none" style={{ height: `${levelPct}%` }}>
+      <div className="absolute inset-0" style={{ backgroundColor: color }} />
+      <svg className="absolute inset-x-0 w-full" style={{ bottom: '100%', height: 9 }} viewBox="0 0 1200 18" preserveAspectRatio="none" aria-hidden="true">
+        <path d={`${WAVE_D} L1200,18 L0,18 Z`} fill={color} />
+      </svg>
+    </div>
+  )
+}
+
+/** A wave-shaped line marking a waterline (e.g. the income goal) — no fill. */
+function WaveLine({ levelPct, color }: { levelPct: number; color: string }) {
+  return (
+    <svg className="absolute inset-x-0 w-full pointer-events-none" style={{ bottom: `${levelPct}%`, height: 10, transform: 'translateY(50%)' }} viewBox="0 0 1200 18" preserveAspectRatio="none" aria-hidden="true">
+      <path d={WAVE_D} fill="none" stroke={color} strokeWidth={2} vectorEffect="non-scaling-stroke" />
+    </svg>
+  )
+}
+
 /**
  * 6-month income chart. Each month layers three things, bottom-anchored:
  *  - translucent orange = monthly expense need
@@ -115,35 +139,35 @@ export default function CashFlowChart({
         </div>
 
         <div className="relative z-10">
-          <div className="flex items-end gap-3 h-48">
-            {data.map((d) => {
-              const val = valueFor(d)
-              const periodId = periodByMonth.get(d.month)
-              return (
-                <div
-                  key={d.month}
-                  className={`flex-1 h-full ${periodId ? 'cursor-pointer group' : ''}`}
-                  onClick={periodId ? () => router.push(`/periods/${periodId}`) : undefined}
-                  title={periodId ? "Open this month's budget" : undefined}
-                >
-                  <div className="relative w-full h-full">
-                    {/* income goal (lightest teal tint) — behind; value floats above as the ceiling */}
-                    {goal > 0 && (
-                      <div className="absolute bottom-0 inset-x-0 bg-[#cfeef7] rounded-t-sm" style={{ height: pct(goal) }}>
-                        <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[9px] font-semibold text-text-muted whitespace-nowrap">
-                          {formatCurrencyShort(goal)}
-                        </span>
-                      </div>
-                    )}
-                    {/* expense need (medium teal tint) — on top of goal; value sits inside near its top */}
-                    {expense > 0 && (
-                      <div className="absolute bottom-0 inset-x-0 bg-[#a3d9ea] rounded-t-sm" style={{ height: pct(expense) }}>
-                        <span className="absolute top-1 left-1/2 -translate-x-1/2 text-[9px] font-semibold text-[#0e6a86] whitespace-nowrap">
-                          {formatCurrencyShort(expense)}
-                        </span>
-                      </div>
-                    )}
-                    {/* income (prominent logo-wave blue, slightly translucent so target bands show through on overshoot) */}
+          {/* Continuous "water" backdrop: expense filled + crested, goal as a waterline; income bars rise through it */}
+          <div className="relative h-48">
+            {expense > 0 && <WaveLayer levelPct={(expense / maxVal) * 100} color="rgba(34,182,219,0.16)" />}
+            {goal > 0 && <WaveLine levelPct={(goal / maxVal) * 100} color="rgba(34,182,219,0.5)" />}
+
+            {/* Waterline amounts — labeled once, on the left */}
+            {goal > 0 && (
+              <span className="absolute left-0 z-20 -translate-y-1/2 text-[10px] font-semibold text-[#0e6a86] bg-bg-white/70 rounded px-1 whitespace-nowrap" style={{ bottom: `${(goal / maxVal) * 100}%` }}>
+                {formatCurrencyShort(goal)} goal
+              </span>
+            )}
+            {expense > 0 && (
+              <span className="absolute left-0 z-20 -translate-y-1/2 text-[10px] font-semibold text-[#0e6a86] bg-bg-white/70 rounded px-1 whitespace-nowrap" style={{ bottom: `${(expense / maxVal) * 100}%` }}>
+                {formatCurrencyShort(expense)} expenses
+              </span>
+            )}
+
+            {/* Income bars */}
+            <div className="absolute inset-0 flex items-end gap-3">
+              {data.map((d) => {
+                const val = valueFor(d)
+                const periodId = periodByMonth.get(d.month)
+                return (
+                  <div
+                    key={d.month}
+                    className={`relative flex-1 h-full ${periodId ? 'cursor-pointer group' : ''}`}
+                    onClick={periodId ? () => router.push(`/periods/${periodId}`) : undefined}
+                    title={periodId ? "Open this month's budget" : undefined}
+                  >
                     <div className="absolute bottom-0 inset-x-0 bg-income/90 group-hover:bg-income rounded-t-sm min-h-[2px] transition-all" style={{ height: pct(val) }}>
                       {val > 0 && (
                         <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-text-heading whitespace-nowrap">
@@ -152,9 +176,9 @@ export default function CashFlowChart({
                       )}
                     </div>
                   </div>
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
           </div>
           <div className="flex gap-3 mt-2">
             {data.map((d) => (
@@ -171,12 +195,12 @@ export default function CashFlowChart({
             </span>
             {expense > 0 && (
               <span className="inline-flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-sm bg-[#a3d9ea]" /> Expense need <span className="font-semibold text-text-heading">{formatCurrency(expense)}</span>
+                <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: 'rgba(34,182,219,0.25)' }} /> Expense need <span className="font-semibold text-text-heading">{formatCurrency(expense)}</span>
               </span>
             )}
             {goal > 0 && (
               <span className="inline-flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-sm bg-[#cfeef7]" /> Income goal <span className="font-semibold text-text-heading">{formatCurrency(goal)}</span>
+                <span className="w-2.5 h-0.5 rounded-full" style={{ backgroundColor: 'rgba(34,182,219,0.6)' }} /> Income goal <span className="font-semibold text-text-heading">{formatCurrency(goal)}</span>
               </span>
             )}
           </div>
