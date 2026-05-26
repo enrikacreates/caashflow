@@ -114,7 +114,8 @@
    * -------------------------------------------------- */
   --color-error:   #d32f2f;
   --color-warning: #ED6113;
-  --color-success: #2e7d32;
+  --color-success: #22B6DB;  /* Water-blue — positive money reads as flow, not grass green */
+  --color-green:   #22B6DB;  /* Legacy "green" alias kept pointing at the same water-blue */
   --color-info:    #0078D0;  /* Matches primary */
 
   /* --------------------------------------------------
