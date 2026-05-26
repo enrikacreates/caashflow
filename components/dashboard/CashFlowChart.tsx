@@ -15,18 +15,27 @@ function chartMonths(offset = 0): string[] {
   })
 }
 
-// One bold swell, stretched to full width (preserveAspectRatio none) for dramatic wave crests.
-const WAVE_D = 'M0,26 C220,2 430,2 600,26 C770,48 980,48 1200,26'
+// A steady repeating wave top-edge that oscillates ±amp around yLine, so its average IS the waterline.
+function waveTop(yLine: number, amp: number, crests: number, width = 1200): string {
+  const seg = width / (crests * 2)
+  let d = `M 0,${yLine}`
+  for (let i = 0; i < crests * 2; i++) {
+    const x0 = i * seg
+    const x1 = x0 + seg
+    const peakY = yLine + (i % 2 === 0 ? -amp : amp) // crest, then trough, repeating
+    const cx = x0 + seg / 2
+    d += ` C ${cx},${peakY} ${cx},${peakY} ${x1},${yLine}`
+  }
+  return d
+}
 
-/** Translucent "water" filled from the baseline up to `levelPct`, capped with a dramatic wave crest. */
-function WaveLayer({ levelPct, color }: { levelPct: number; color: string }) {
+/** Translucent "water" filled to `levelPct`; its surface is a steady wave averaging to the waterline. */
+function WaveLayer({ levelPct, color, amp = 5, crests = 3 }: { levelPct: number; color: string; amp?: number; crests?: number }) {
+  const yLine = 100 - levelPct
   return (
-    <div className="absolute inset-x-0 bottom-0 pointer-events-none" style={{ height: `${levelPct}%` }}>
-      <div className="absolute inset-0" style={{ backgroundColor: color }} />
-      <svg className="absolute inset-x-0 w-full" style={{ bottom: '100%', height: 24 }} viewBox="0 0 1200 52" preserveAspectRatio="none" aria-hidden="true">
-        <path d={`${WAVE_D} L1200,52 L0,52 Z`} fill={color} />
-      </svg>
-    </div>
+    <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 1200 100" preserveAspectRatio="none" aria-hidden="true">
+      <path d={`${waveTop(yLine, amp, crests)} L 1200,100 L 0,100 Z`} fill={color} />
+    </svg>
   )
 }
 
@@ -97,8 +106,8 @@ export default function CashFlowChart({
   const nowMonth = (() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}` })()
   const valueFor = (d: { month: string; projected: number; received: number }) =>
     mode === 'received' ? d.received : d.month < nowMonth ? d.received : d.projected
-  // 12% headroom so the top wave crest has room to crest without clipping
-  const maxVal = Math.max(...data.map(valueFor), goal, expense, 1) * 1.12
+  // small headroom so the top wave crest has room without clipping
+  const maxVal = Math.max(...data.map(valueFor), goal, expense, 1) * 1.07
   const pct = (v: number) => `${(v / maxVal) * 100}%`
 
   // Income as one connected wave (area) across the months — viewBox 0..100, stretched to fit.
@@ -161,11 +170,11 @@ export default function CashFlowChart({
         <div className="relative z-10">
           {/* Continuous "water" backdrop: expense filled + crested, goal as a waterline; income bars rise through it */}
           <div className="relative h-48">
-            {/* Income goal "water" — back layer (transparent, crested) */}
-            {goal > 0 && <WaveLayer levelPct={(goal / maxVal) * 100} color="rgba(34,182,219,0.12)" />}
+            {/* Income goal "water" — back layer; steady wave, average = the goal waterline */}
+            {goal > 0 && <WaveLayer levelPct={(goal / maxVal) * 100} color="rgba(34,182,219,0.12)" crests={3} amp={5} />}
 
-            {/* Expense need "water" — front layer (transparent, crested); overlaps goal so there's no gap */}
-            {expense > 0 && <WaveLayer levelPct={(expense / maxVal) * 100} color="rgba(34,182,219,0.18)" />}
+            {/* Expense need "water" — front layer (overlaps goal, no gap); a tighter wave variant */}
+            {expense > 0 && <WaveLayer levelPct={(expense / maxVal) * 100} color="rgba(34,182,219,0.18)" crests={4} amp={4} />}
 
             {/* Income — one connected wave across all months (no gutters) */}
             <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
