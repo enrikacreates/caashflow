@@ -89,33 +89,33 @@ export default function DashboardLayout({
       {/* Footer — full-bleed teal band, flush to the very bottom (nothing beneath it).
           Shapes perch on the band's TOP edge (mostly above it, base dipping in); the band itself
           holds the big transparent CAA$H watermark + the logo. */}
-      <div className="relative w-full mt-12">
-        {/* Perched shapes — positioned at the band's top edge (bottom-full), then nudged down so
-            most of each shape sits on top of the band and only its base dips in. Width-only sizing
+      <div className="relative w-full mt-20">
+        {/* Perched shapes — rest ON TOP of the band, bottoms sitting right on its top edge
+            (bottom-full, no downward nudge) so the green never contains them. Width-only sizing
             preserves each shape's natural aspect (no skew). Rendered outside the band so they aren't clipped. */}
         <img
           src="/shapes/sail-blue.svg"
           alt=""
           aria-hidden="true"
-          className="pointer-events-none select-none absolute z-10 left-[40%] -translate-x-1/2 bottom-full translate-y-[46%] w-52 md:w-72"
+          className="pointer-events-none select-none absolute z-10 left-[40%] -translate-x-1/2 bottom-full w-40 md:w-52"
         />
         <img
           src="/shapes/blob-peach.svg"
           alt=""
           aria-hidden="true"
-          className="pointer-events-none select-none absolute z-10 left-[9%] bottom-full translate-y-[32%] w-20 md:w-28"
+          className="pointer-events-none select-none absolute z-10 left-[9%] bottom-full w-16 md:w-24"
         />
         <img
           src="/shapes/circle-gold.svg"
           alt=""
           aria-hidden="true"
-          className="pointer-events-none select-none absolute z-10 left-[3%] bottom-full translate-y-[40%] w-10 md:w-14"
+          className="pointer-events-none select-none absolute z-10 left-[3%] bottom-full w-9 md:w-12"
         />
         <img
           src="/shapes/rect-pink.svg"
           alt=""
           aria-hidden="true"
-          className="pointer-events-none select-none absolute z-10 left-[20%] bottom-full translate-y-[34%] w-28 md:w-40"
+          className="pointer-events-none select-none absolute z-10 left-[20%] bottom-full w-24 md:w-36"
         />
 
         {/* The band — full-bleed teal, fixed compact height; overflow-hidden clips the watermark + surface accents */}
