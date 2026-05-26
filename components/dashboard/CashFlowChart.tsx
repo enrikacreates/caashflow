@@ -123,15 +123,17 @@ export default function CashFlowChart({
     const s = (1 - Math.cos(t * Math.PI)) / 2
     return cy(vals[i0] + (vals[i1] - vals[i0]) * s)
   }
-  // Area with small surface ripples so it reads as water, not a mountain.
-  // dy lifts lighter crest layers above the body; phase/amp vary per layer for overlapping swells.
-  const incomeAreaAt = (dy: number, phase: number, amp: number) => {
+  // Rippled income surface top-edge (open path) so it reads as water, not a mountain.
+  const incomeTop = (dy: number, phase: number, amp: number) => {
     const pts: { x: number; y: number }[] = []
     for (let x = 0; x <= 100; x += 4) {
       pts.push({ x, y: trendY(x) + dy + amp * Math.sin((x / 100) * Math.PI * 2 * 4 + phase) })
     }
-    return `${smoothPath(pts)} L 100,100 L 0,100 Z`
+    return smoothPath(pts)
   }
+  // dy lifts lighter crest layers above the body; phase/amp vary per layer for overlapping swells.
+  const incomeAreaAt = (dy: number, phase: number, amp: number) => `${incomeTop(dy, phase, amp)} L 100,100 L 0,100 Z`
+  const maxIncome = Math.max(...vals, 1)
 
   return (
     <div>
@@ -194,7 +196,27 @@ export default function CashFlowChart({
               <path d={incomeAreaAt(-6, 0.9, 1.6)} fill="rgba(34,182,219,0.28)" />
               <path d={incomeAreaAt(-3, 2.4, 1.8)} fill="rgba(34,182,219,0.5)" />
               <path d={incomeAreaAt(0, 0, 1.5)} fill="rgba(34,182,219,0.92)" />
+              {/* foam crest line riding the surface */}
+              <path d={incomeTop(0, 0, 1.5)} fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
             </svg>
+
+            {/* Foam bubbles clustered at the wave peaks */}
+            <div className="absolute inset-0 flex pointer-events-none">
+              {data.map((d) => {
+                const val = valueFor(d)
+                return (
+                  <div key={d.month} className="relative flex-1 h-full">
+                    {val >= maxIncome * 0.55 && (
+                      <span className="absolute left-1/2 -translate-x-1/2 flex items-end gap-0.5" style={{ bottom: `calc(${pct(val)} + 3px)` }} aria-hidden="true">
+                        <span className="w-1 h-1 rounded-full bg-white/45" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-white/60" />
+                        <span className="w-1 h-1 rounded-full bg-white/40" />
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
 
             {/* Per-month overlay: click targets + income value labels (no gutters) */}
             <div className="absolute inset-0 flex">
