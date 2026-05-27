@@ -352,6 +352,11 @@ export default function PeriodDetailClient({
   const oneTimePayNow = calculatePayNowTotal(oneTimeExpenses)
   const owedOf = (e: PeriodExpense) => (e.is_split ? (e.payments ?? []).reduce((s, p) => s + p.amount, 0) : getOwedAmount(e))
   const oneTimeTotal = oneTimeExpenses.reduce((s, e) => s + owedOf(e), 0)
+  // Expenses rollup funnel: Paid = funded/set aside, Cleared = actually left the account.
+  const isClosed = (e: PeriodExpense) =>
+    e.is_split ? (e.payments ?? []).length > 0 && (e.payments ?? []).every((p) => p.cleared) : e.is_complete
+  const fundedTotal = optExpenses.reduce((s, e) => s + (isFullyPaid(e) ? owedOf(e) : 0), 0)
+  const clearedTotal = optExpenses.reduce((s, e) => s + (isClosed(e) ? getSpentSoFar(e) : 0), 0)
 
   const SortIcon = ({ col }: { col: SortKey }) => (
     <span className="ml-1 text-[10px] opacity-50">
@@ -1327,13 +1332,15 @@ export default function PeriodDetailClient({
               ({baselineExpenses.filter((e) => getBudgetedAmount(e) > 0).length} marked pay now)
             </span>
           </h2>
-          {/* Payment rollup — accounts for partial / split payments */}
-          <div className="flex items-center gap-3 text-caption">
+          {/* Payment rollup — funnel: budgeted → funded(Paid) → spent → cleared, plus total */}
+          <div className="flex items-center gap-3 text-caption flex-wrap">
             <span className="text-text-muted">Budgeted <span className="font-bold text-text-heading">{formatCurrency(paymentSummary.budgeted)}</span></span>
             <span className="text-text-muted">·</span>
-            <span className="text-text-muted">Paid <span className="font-bold text-success">{formatCurrency(paymentSummary.paid)}</span></span>
+            <span className="text-text-muted">Paid <span className="font-bold text-text-heading">{formatCurrency(fundedTotal)}</span></span>
             <span className="text-text-muted">·</span>
-            <span className="text-text-muted"><span className="font-bold text-text-heading">{paymentSummary.scheduledBills}</span> {paymentSummary.scheduledBills === 1 ? 'bill' : 'bills'} scheduled</span>
+            <span className="text-text-muted">Spent <span className="font-bold text-success">{formatCurrency(paymentSummary.paid)}</span></span>
+            <span className="text-text-muted">·</span>
+            <span className="text-text-muted">Cleared <span className="font-bold text-primary-teal">{formatCurrency(clearedTotal)}</span></span>
             <span className="text-text-muted">·</span>
             <span className="text-text-muted">Total <span className="font-bold text-text-heading">{formatCurrency(totalExpenses)}</span></span>
           </div>
