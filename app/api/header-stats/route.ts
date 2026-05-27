@@ -30,10 +30,25 @@ export async function GET() {
     .eq('household_id', householdId)
     .eq('status', 'received')
 
-  const earned = (invoices ?? []).reduce((sum, inv) => {
+  const invoiceEarned = (invoices ?? []).reduce((sum, inv) => {
     const dateStr = inv.actual_received_date ?? (inv.month ? `${inv.month}-01` : null)
     return dateStr && dateStr >= yearStart && dateStr <= yearEnd ? sum + (inv.amount ?? 0) : sum
   }, 0)
+
+  // --- Plus manual/one-off income (gifts, sales, paybacks) that counts as income.
+  //     Rows flagged exclude_from_reports (the "not income" flag) are left out. ---
+  const { data: manual } = await supabase
+    .from('period_manual_income')
+    .select('amount, budget_periods ( period_month )')
+    .eq('household_id', householdId)
+    .eq('exclude_from_reports', false)
+
+  const manualEarned = (manual ?? []).reduce((sum, row) => {
+    const pm = (row.budget_periods as unknown as { period_month: string | null } | null)?.period_month
+    return pm && pm >= yearStart && pm <= yearEnd ? sum + (Number(row.amount) || 0) : sum
+  }, 0)
+
+  const earned = invoiceEarned + manualEarned
 
   // --- Spent: paid-so-far across this year's periods ---
   const { data: periods } = await supabase
