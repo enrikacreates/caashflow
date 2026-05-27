@@ -51,7 +51,7 @@ export default function HeaderStats({ className = '' }: { className?: string }) 
 
   if (!stats) return null
 
-  const H = 44 // base blob height in px; each blob's width follows its natural aspect
+  const H = 50 // base blob height in px; each blob's width follows its natural aspect
 
   return (
     <div className={`flex-col items-center ${className}`}>
@@ -72,15 +72,15 @@ export default function HeaderStats({ className = '' }: { className?: string }) 
                 className="absolute inset-0 w-full h-full select-none pointer-events-none"
               />
               <div className={`relative text-center leading-none ${b.nudge ?? ''}`}>
-                <div className="font-medium text-text-heading text-[15px] whitespace-nowrap">{fmt(stats[b.key])}</div>
-                <div className="text-[8px] font-semibold uppercase tracking-wide text-text-heading/70 mt-0.5">{b.label}</div>
+                <div className="font-medium text-text-heading text-[16px] whitespace-nowrap">{fmt(stats[b.key])}</div>
+                <div className="text-[9px] font-semibold uppercase tracking-wide text-text-heading/70 mt-0.5">{b.label}</div>
               </div>
             </div>
           )
         })}
       </div>
       <div className="flex justify-center -mt-3.5 relative z-10">
-        <span className="bg-[#E3C7AB] rounded-full px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.2em] text-text-heading/75">
+        <span className="bg-[#E3C7AB] rounded-full px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.2em] text-text-heading/75 -translate-x-3">
           YTD
         </span>
       </div>
