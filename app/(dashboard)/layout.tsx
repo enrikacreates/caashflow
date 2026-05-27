@@ -26,7 +26,7 @@ export default function DashboardLayout({
   return (
     <div className="min-h-screen bg-bg-cream flex flex-col">
       {/* ── Header band — off-white bg ────────────────── */}
-      <header className="bg-white/60 flex items-center justify-between px-6 py-4 md:px-10 md:py-5">
+      <header className="sticky top-0 z-30 bg-white flex items-center justify-between px-6 py-4 md:px-10 md:py-5">
         {/* Big logo */}
         <Link href="/" className="hover:opacity-80 transition-opacity shrink-0">
           <img src="/logo.svg" alt="Caashflow" className="h-14 md:h-16 w-auto" />
@@ -67,6 +67,17 @@ export default function DashboardLayout({
           {/* Profile avatar with colored blob — links to settings */}
           <HeaderAvatar />
         </div>
+
+        {/* Irregular wavy bottom edge — same white fill, hangs below so content scrolls under it */}
+        <svg
+          aria-hidden="true"
+          className="absolute top-full left-0 w-full h-5 text-white"
+          viewBox="0 0 1440 24"
+          preserveAspectRatio="none"
+          fill="currentColor"
+        >
+          <path d="M0,0 H1440 V11 Q1330,21 1210,13 Q1090,6 980,14 Q860,22 740,12 Q620,5 500,15 Q380,21 260,12 Q140,7 0,14 Z" />
+        </svg>
       </header>
 
       {/* Mobile hamburger — below header */}
