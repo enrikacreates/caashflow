@@ -71,12 +71,12 @@ export default function DashboardLayout({
         {/* Irregular wavy bottom edge — same white fill, hangs below so content scrolls under it */}
         <svg
           aria-hidden="true"
-          className="absolute top-full left-0 w-full h-4 text-white"
+          className="absolute top-full left-0 w-full h-4 text-white drop-shadow-[0_3px_2px_rgba(0,0,0,0.06)]"
           viewBox="0 0 1440 24"
           preserveAspectRatio="none"
           fill="currentColor"
         >
-          <path d="M0,0 H1440 V22 Q1330,8 1210,15 Q1090,21 980,13 Q860,7 740,16 Q620,21 500,12 Q380,7 260,15 Q140,20 0,22 Z" />
+          <path d="M0,0 H1440 V20 Q1080,13 720,18 Q360,13 0,20 Z" />
         </svg>
       </header>
 
@@ -148,7 +148,7 @@ export default function DashboardLayout({
             <span className="font-display leading-none whitespace-nowrap text-white/10 text-[40vw]">CAA$H</span>
           </div>
 
-          <div className="relative h-40 md:h-44">
+          <div className="relative h-28 md:h-32">
             <img
               src="/logo-footer.svg"
               alt="Caashflow"
