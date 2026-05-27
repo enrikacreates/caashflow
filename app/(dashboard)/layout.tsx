@@ -102,7 +102,7 @@ export default function DashboardLayout({
       />
 
       {/* Main content — offset for floating nav on desktop; grows to push footer flush to bottom */}
-      <main className="flex-1 px-6 pt-10 pb-[230px] md:pl-[220px] md:pr-10 md:pt-14 md:pb-[270px]">
+      <main className="flex-1 px-6 pt-10 pb-[200px] md:pl-[220px] md:pr-10 md:pt-14 md:pb-[238px]">
         <div className="max-w-3xl mx-auto">
           {children}
         </div>
@@ -128,16 +128,35 @@ export default function DashboardLayout({
           aria-hidden="true"
           className="pointer-events-none select-none absolute left-0 bottom-full w-full translate-y-[5%]"
         />
+        {/* Red dashed wavy accent — rendered BEHIND the band so its ends tuck behind the green */}
+        <img
+          src="/shapes/navshapes/footer-dash-wave.svg"
+          alt=""
+          aria-hidden="true"
+          className="pointer-events-none select-none absolute left-0 bottom-full w-full translate-y-[5%]"
+        />
 
         {/* The band — full-bleed teal, fixed compact height; overflow-hidden clips the watermark + surface accents */}
+        {/* Organic wavy top edge — a teal wave whose straight bottom overlaps INTO the band (no gap)
+            and whose wavy top rises to meet the shapes. Behind the shapes so they sit on top. */}
+        <svg
+          aria-hidden="true"
+          className="absolute z-0 left-0 bottom-full -mb-[2px] w-full h-5 text-primary-teal"
+          viewBox="0 0 1440 28"
+          preserveAspectRatio="none"
+          fill="currentColor"
+        >
+          <path d="M0,28 H1440 V10 Q1080,17 720,12 Q360,17 0,10 Z" />
+        </svg>
+
         <footer className="relative w-full overflow-hidden bg-primary-teal">
           {/* CAA$H watermark — oversized live text that fills the banner width and scales with the
               window (vw units); clipped top/bottom by the band like the FLOW watermark. */}
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
-            <span className="font-display leading-none whitespace-nowrap text-white/10 text-[30vw]">CAA$H</span>
+          <div className="absolute inset-0 flex items-start justify-center pointer-events-none select-none">
+            <span className="font-display leading-none whitespace-nowrap text-white/10 text-[32vw]">CAA$H</span>
           </div>
 
-          <div className="relative h-28 md:h-32">
+          <div className="relative h-20 md:h-24">
             <img
               src="/logo-footer.svg"
               alt="Caashflow"

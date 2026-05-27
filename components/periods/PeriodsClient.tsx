@@ -102,7 +102,7 @@ export default function PeriodsClient({ periods }: { periods: BudgetPeriod[] }) 
               key={period.id}
               onClick={() => router.push(`/periods/${period.id}`)}
               className={`rounded-lg shadow-card p-6 hover:shadow-lg transition-shadow cursor-pointer ${
-                period.status === 'complete' ? 'bg-surface-beige opacity-80' : 'bg-bg-white'
+                period.status === 'complete' ? 'bg-surface-beige' : 'bg-bg-white'
               }`}
             >
               <div className="flex items-center justify-between gap-2 mb-2">
@@ -127,7 +127,7 @@ export default function PeriodsClient({ periods }: { periods: BudgetPeriod[] }) 
               key={period.id}
               onClick={() => router.push(`/periods/${period.id}`)}
               className={`flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 cursor-pointer hover:bg-surface-beige transition-colors ${
-                period.status === 'complete' ? 'opacity-80' : ''
+                period.status === 'complete' ? 'bg-surface-beige' : ''
               }`}
             >
               <h3 className="font-bold text-text-heading flex-1 min-w-[120px] truncate">{displayName(period.period_name)}</h3>
