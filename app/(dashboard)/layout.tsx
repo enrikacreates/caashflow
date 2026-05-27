@@ -112,13 +112,21 @@ export default function DashboardLayout({
           Shapes perch on the band's TOP edge (mostly above it, base dipping in); the band itself
           holds the big transparent CAA$H watermark + the logo. */}
       <div className="sticky bottom-0 z-20 w-full">
+        {/* Colored backdrop behind the right-side wave stripes (same viewBox/positioning as the
+            shapes so it tracks them on resize) — keeps the stripes visible over scrolling content. */}
+        <img
+          src="/shapes/navshapes/footer-wave-backdrop.svg"
+          alt=""
+          aria-hidden="true"
+          className="pointer-events-none select-none absolute left-0 bottom-full w-full translate-y-[5%]"
+        />
         {/* Footer shapes — full-width organic composition; rendered BEHIND the band (no z bump,
             band paints on top) and dropped down so the bases tuck behind the teal. */}
         <img
           src="/shapes/navshapes/footershapes2.svg"
           alt=""
           aria-hidden="true"
-          className="pointer-events-none select-none absolute left-0 bottom-full w-full translate-y-[8%]"
+          className="pointer-events-none select-none absolute left-0 bottom-full w-full translate-y-[5%]"
         />
 
         {/* The band — full-bleed teal, fixed compact height; overflow-hidden clips the watermark + surface accents */}
