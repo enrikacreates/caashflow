@@ -24,6 +24,7 @@ import {
   addExpenseSpend,
   updateExpenseSpend,
   removeExpenseSpend,
+  transferFunds,
   uploadReceiptImage,
   extractReceiptTotal,
   toggleManualIncomeDone,
@@ -633,6 +634,10 @@ export default function PeriodDetailClient({
 
   const handleRemoveSpend = (adjustmentId: string) =>
     startTransition(() => removeExpenseSpend(adjustmentId, period.id))
+
+  // Cover an overage by pulling funded dollars from another line into this one.
+  const handleTransferFunds = (fromId: string, toId: string, amount: number) =>
+    startTransition(() => transferFunds(fromId, toId, amount).then(() => {}))
 
   // Attach (or clear) a receipt photo on an existing spend entry.
   const handleAttachSpendImage = (adjustmentId: string, imageUrl: string | null) =>
@@ -1457,6 +1462,8 @@ export default function PeriodDetailClient({
                     onAddSpend={handleAddSpend}
                     onRemoveSpend={handleRemoveSpend}
                     onAttachSpendImage={handleAttachSpendImage}
+                    onTransferFunds={handleTransferFunds}
+                    siblingExpenses={optExpenses}
                     onEdit={setEditExpense}
                     inputClass={inputClass}
                     categoryColorMap={categoryColorMap}
@@ -1584,6 +1591,8 @@ export default function PeriodDetailClient({
                       onAddSpend={handleAddSpend}
                       onRemoveSpend={handleRemoveSpend}
                       onAttachSpendImage={handleAttachSpendImage}
+                      onTransferFunds={handleTransferFunds}
+                      siblingExpenses={optExpenses}
                       onRemove={handleRemoveOneTime}
                       onEdit={setEditExpense}
                       inputClass={inputClass}
@@ -1635,7 +1644,7 @@ export default function PeriodDetailClient({
 
 // ─── Spend Ledger (shared by a whole line and by each split installment) ──────
 function SpendLedger({
-  funded, spent, adjustments, onAdd, onRemove, onAttachImage, isLocked, isPending, inputClass,
+  funded, spent, adjustments, onAdd, onRemove, onAttachImage, coverSources, onCover, isLocked, isPending, inputClass,
 }: {
   funded: number
   spent: number
@@ -1643,11 +1652,17 @@ function SpendLedger({
   onAdd: (amount: number, note: string | null, imageUrl: string | null) => void
   onRemove: (adjustmentId: string) => void
   onAttachImage: (adjustmentId: string, imageUrl: string) => void
+  coverSources?: { id: string; name: string; available: number }[]
+  onCover?: (fromId: string, amount: number) => void
   isLocked: boolean
   isPending: boolean
   inputClass: string
 }) {
   const remaining = funded - spent
+  const overage = Math.round(-remaining * 100) / 100 // positive when overspent
+  const [coverFrom, setCoverFrom] = useState('')
+  const [coverAmt, setCoverAmt] = useState('')
+  const coverSource = (coverSources ?? []).find((s) => s.id === coverFrom)
   const [spendMode, setSpendMode] = useState<'spent' | 'left'>('spent')
   const [spendAmt, setSpendAmt] = useState('')
   const [spendNote, setSpendNote] = useState('')
@@ -1691,6 +1706,17 @@ function SpendLedger({
     setSpendNote('')
     setSpendImage(null)
   }
+  const handleCover = () => {
+    if (!onCover) return
+    const amt = r2(parseFloat(coverAmt))
+    if (!coverFrom || isNaN(amt) || amt <= 0) return
+    if (coverSource && amt > coverSource.available + 0.005) return
+    onCover(coverFrom, amt)
+    setCoverFrom('')
+    setCoverAmt('')
+  }
+  // Show the cover-overage prompt when this line is overspent and there's somewhere to pull from.
+  const showCover = !isLocked && !!onCover && overage > 0.005 && (coverSources?.length ?? 0) > 0
   const hasLedger = adjustments.length > 0
   return (
     <div>
@@ -1707,6 +1733,47 @@ function SpendLedger({
           <span className="text-success font-bold">fully spent</span>
         )}
       </div>
+      {showCover && (
+        <div className="bg-warning/10 rounded-sm p-2.5 mb-2 max-w-md">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[11px] font-bold text-warning">{formatCurrency(overage)} over — cover it?</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={coverFrom}
+              onChange={(e) => {
+                const id = e.target.value
+                setCoverFrom(id)
+                const src = (coverSources ?? []).find((s) => s.id === id)
+                if (src) setCoverAmt(String(Math.min(overage, src.available)))
+              }}
+              className={`flex-1 min-w-[8rem] ${inputClass}`}
+            >
+              <option value="">Pull from…</option>
+              {(coverSources ?? []).map((s) => (
+                <option key={s.id} value={s.id}>{s.name} ({formatCurrency(s.available)})</option>
+              ))}
+            </select>
+            <input
+              type="number"
+              step="0.01"
+              value={coverAmt}
+              onChange={(e) => setCoverAmt(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleCover() }}
+              placeholder="0.00"
+              className={`w-24 text-right ${inputClass}`}
+            />
+            <button
+              type="button"
+              onClick={handleCover}
+              disabled={isPending || !coverFrom || isNaN(parseFloat(coverAmt)) || parseFloat(coverAmt) <= 0}
+              className="bg-primary-teal text-text-inverse rounded-full px-3 py-1.5 text-[11px] font-bold hover:opacity-90 disabled:opacity-50 transition-opacity"
+            >
+              Cover
+            </button>
+          </div>
+        </div>
+      )}
       {hasLedger && (
         <ul className="space-y-1 mb-2 max-w-md">
           {adjustments.map((a) => (
@@ -1778,6 +1845,8 @@ function ExpenseRow({
   onAddSpend,
   onRemoveSpend,
   onAttachSpendImage,
+  onTransferFunds,
+  siblingExpenses,
   onRemove,
   onEdit,
   inputClass,
@@ -1799,6 +1868,8 @@ function ExpenseRow({
   onAddSpend: (id: string, amount: number, note: string | null, imageUrl?: string | null, paymentId?: string | null) => void
   onRemoveSpend: (adjustmentId: string) => void
   onAttachSpendImage: (adjustmentId: string, imageUrl: string | null) => void
+  onTransferFunds: (fromId: string, toId: string, amount: number) => void
+  siblingExpenses: PeriodExpense[]
   onRemove?: (id: string) => void
   onEdit?: (expense: PeriodExpense) => void
   inputClass: string
@@ -1832,6 +1903,12 @@ function ExpenseRow({
   const isLinked = !!(expense.debt_id || expense.savings_goal_id)
   const isDrawDown = expense.track_spending && !isLinked
   const inPaidMode = !expense.is_split && expense.paid && isDrawDown // spending/logging phase
+
+  // Other lines we can pull funded dollars from to cover an overage (available = funded − booked spend)
+  const coverSources = (siblingExpenses ?? [])
+    .filter((e) => e.id !== expense.id)
+    .map((e) => ({ id: e.id, name: e.name, available: Math.round((getOwedAmount(e) - getSpentSoFar(e)) * 100) / 100 }))
+    .filter((s) => s.available > 0.005)
   const [spendOpen, setSpendOpen] = useState(hasLedger && !expense.is_complete)
 
   // Row is read-only when the budget is locked OR the line is marked complete
@@ -2138,6 +2215,8 @@ function ExpenseRow({
               onAdd={(amount, note, imageUrl) => onAddSpend(expense.id, amount, note, imageUrl)}
               onRemove={onRemoveSpend}
               onAttachImage={onAttachSpendImage}
+              coverSources={coverSources}
+              onCover={(fromId, amount) => onTransferFunds(fromId, expense.id, amount)}
               isLocked={isLocked}
               isPending={isPending}
               inputClass={inputClass}
