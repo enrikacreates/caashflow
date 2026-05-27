@@ -1345,8 +1345,6 @@ export default function PeriodDetailClient({
             <span className="text-text-muted">·</span>
             <span className="text-text-muted">Paid <span className="font-bold text-text-heading">{formatCurrency(fundedTotal)}</span></span>
             <span className="text-text-muted">·</span>
-            <span className="text-text-muted">Spent <span className="font-bold text-success">{formatCurrency(paymentSummary.paid)}</span></span>
-            <span className="text-text-muted">·</span>
             <span className="text-text-muted">Cleared <span className="font-bold text-primary-teal">{formatCurrency(clearedTotal)}</span></span>
             <span className="text-text-muted">·</span>
             <span className="text-text-muted">Total <span className="font-bold text-text-heading">{formatCurrency(totalExpenses)}</span></span>
