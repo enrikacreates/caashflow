@@ -102,17 +102,17 @@ export default function PeriodsClient({ periods }: { periods: BudgetPeriod[] }) 
               key={period.id}
               onClick={() => router.push(`/periods/${period.id}`)}
               className={`rounded-lg shadow-card p-6 hover:shadow-lg transition-shadow cursor-pointer ${
-                period.status === 'complete' ? 'bg-surface-beige' : 'bg-bg-white'
+                period.status === 'complete' ? 'bg-white/60' : 'bg-bg-white'
               }`}
             >
               <div className="flex items-center justify-between gap-2 mb-2">
-                <h3 className="font-bold text-text-heading text-h3">{displayName(period.period_name)}</h3>
+                <h3 className={`font-bold text-h3 ${period.status === 'complete' ? 'text-text-muted' : 'text-text-heading'}`}>{displayName(period.period_name)}</h3>
                 {statusPill(period)}
               </div>
               <div className="space-y-1 mb-3">
                 <div className="flex justify-between text-caption">
                   <span className="text-text-muted">Income</span>
-                  <span className="font-bold text-text-heading">{formatCurrency(period.income_amount)}</span>
+                  <span className={`font-bold ${period.status === 'complete' ? 'text-text-muted' : 'text-text-heading'}`}>{formatCurrency(period.income_amount)}</span>
                 </div>
               </div>
               <div className="text-caption text-text-muted">Created {formatDate(period.created_at)}</div>
@@ -126,15 +126,30 @@ export default function PeriodsClient({ periods }: { periods: BudgetPeriod[] }) 
             <div
               key={period.id}
               onClick={() => router.push(`/periods/${period.id}`)}
-              className={`flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 cursor-pointer hover:bg-surface-beige transition-colors ${
-                period.status === 'complete' ? 'bg-surface-beige' : ''
+              className={`flex items-center gap-4 px-5 py-4 cursor-pointer hover:bg-surface-beige transition-colors ${
+                period.status === 'complete' ? 'bg-[#FFFCF9]' : ''
               }`}
             >
-              <h3 className="font-bold text-text-heading flex-1 min-w-[120px] truncate">{displayName(period.period_name)}</h3>
-              {statusPill(period)}
-              <span className="text-caption font-bold text-text-heading w-24 text-right">{formatCurrency(period.income_amount)}</span>
-              <span className="text-caption text-text-muted hidden md:block w-28 text-right">{formatDate(period.created_at)}</span>
-              <div className="flex flex-wrap gap-3 ml-auto">{renderActions(period)}</div>
+              {/* Title + status stacked */}
+              <div className="flex flex-col items-start gap-1.5 flex-1 min-w-[130px]">
+                <h3 className={`font-bold truncate max-w-full ${period.status === 'complete' ? 'text-text-muted' : 'text-text-heading'}`}>{displayName(period.period_name)}</h3>
+                {statusPill(period)}
+              </div>
+
+              {/* Income */}
+              <div className="hidden sm:flex flex-1 flex-col">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">Income</span>
+                <span className={`text-caption font-bold ${period.status === 'complete' ? 'text-text-muted' : 'text-text-heading'}`}>{formatCurrency(period.income_amount)}</span>
+              </div>
+
+              {/* Created */}
+              <div className="hidden md:flex flex-1 flex-col">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">Created</span>
+                <span className="text-caption text-text-muted">{formatDate(period.created_at)}</span>
+              </div>
+
+              {/* Actions */}
+              <div className="flex flex-wrap gap-3 justify-end shrink-0">{renderActions(period)}</div>
             </div>
           ))}
         </div>
