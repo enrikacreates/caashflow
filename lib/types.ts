@@ -130,6 +130,17 @@ export interface PeriodExpense {
   adjustments?: PeriodExpenseAdjustment[]
 }
 
+export interface PeriodExpenseTransfer {
+  id: string
+  household_id: string
+  period_id: string
+  from_expense_id: string
+  to_expense_id: string
+  amount: number
+  note: string | null
+  created_at: string
+}
+
 export interface PeriodExpenseAdjustment {
   id: string
   household_id: string

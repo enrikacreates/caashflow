@@ -365,6 +365,14 @@ export async function getPeriodDetail(periodId: string) {
     lastPeriodAllocations = lastAllocs || []
   }
 
+  // Fund transfers between expense lines (zero-sum reallocations) — for history + undo
+  const { data: expenseTransfers } = await supabase
+    .from('period_expense_transfers')
+    .select('*')
+    .eq('period_id', periodId)
+    .eq('household_id', householdId)
+    .order('created_at', { ascending: false })
+
   return {
     period,
     expenses: expensesWithPayments,
@@ -375,6 +383,7 @@ export async function getPeriodDetail(periodId: string) {
     accounts: accounts || [],
     deductionContributions: deductionContributions || [],
     adjustments: adjustments || [],
+    expenseTransfers: expenseTransfers || [],
     savingsGoals: savingsGoals || [],
     savingsAllocations: savingsAllocations || [],
     lastPeriodAllocations: lastPeriodAllocations || [],

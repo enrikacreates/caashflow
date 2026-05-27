@@ -6,6 +6,7 @@ import { calculateDeductions } from '@/lib/calculations'
 import { revalidatePath } from 'next/cache'
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 import Anthropic from '@anthropic-ai/sdk'
+import type { PeriodExpenseTransfer } from '@/lib/types'
 
 type SupabaseServer = Awaited<ReturnType<typeof createClient>>
 
@@ -1028,6 +1029,97 @@ export async function removeExpenseSpend(adjustmentId: string, periodId: string)
   if (row.period_expense_payment_id) await reconcilePaymentSpend(supabase, householdId, row.period_expense_payment_id)
   else await reconcileExpenseSpend(supabase, householdId, row.period_expense_id)
   revalidatePath(`/periods/${periodId}`)
+  revalidatePath('/periods')
+  revalidatePath('/')
+}
+
+// ── Fund transfers between expense lines (zero-sum reallocation) ──────────────
+
+/** Funded amount minus already-booked spend — the most you can move out of a line. */
+function availableToTransfer(e: { amount_override: number | null; default_amount: number; paid_amount: number | null }) {
+  const funded = e.amount_override ?? e.default_amount ?? 0
+  return round2(funded - (Number(e.paid_amount) || 0))
+}
+
+/**
+ * Move funded dollars from one expense line to another (zero-sum): lower the source's funded
+ * amount, raise the destination's by the same, and log the move for history/undo. Capped at the
+ * source's available (funded − spent).
+ */
+export async function transferFunds(fromExpenseId: string, toExpenseId: string, amount: number, note: string | null = null) {
+  const supabase = await createClient()
+  const householdId = await getUserHouseholdId()
+  const amt = round2(amount)
+  if (fromExpenseId === toExpenseId) throw new Error('Pick a different destination')
+  if (!(amt > 0)) throw new Error('Enter an amount greater than 0')
+
+  const { data: from } = await supabase
+    .from('period_expenses')
+    .select('default_amount, amount_override, paid_amount, period_id')
+    .eq('id', fromExpenseId).eq('household_id', householdId).single()
+  const { data: to } = await supabase
+    .from('period_expenses')
+    .select('default_amount, amount_override, period_id')
+    .eq('id', toExpenseId).eq('household_id', householdId).single()
+  if (!from || !to) throw new Error('Expense not found')
+
+  const available = availableToTransfer(from)
+  if (amt > available + 0.005) throw new Error(`Only ${available} available to move from this line`)
+
+  const fromFunded = from.amount_override ?? from.default_amount ?? 0
+  const toFunded = to.amount_override ?? to.default_amount ?? 0
+  const newFrom = round2(fromFunded - amt)
+  const newTo = round2(toFunded + amt)
+
+  await supabase.from('period_expenses')
+    .update({ amount_override: newFrom === from.default_amount ? null : newFrom, updated_at: new Date().toISOString() })
+    .eq('id', fromExpenseId).eq('household_id', householdId)
+  await supabase.from('period_expenses')
+    .update({ amount_override: newTo === to.default_amount ? null : newTo, updated_at: new Date().toISOString() })
+    .eq('id', toExpenseId).eq('household_id', householdId)
+
+  const { data: row, error } = await supabase.from('period_expense_transfers').insert({
+    household_id: householdId,
+    period_id: from.period_id,
+    from_expense_id: fromExpenseId,
+    to_expense_id: toExpenseId,
+    amount: amt,
+    note,
+  }).select().single()
+  if (error) throw new Error(`Failed to log transfer: ${error.message}`)
+
+  revalidatePath(`/periods/${from.period_id}`)
+  revalidatePath('/periods')
+  revalidatePath('/')
+  return row as PeriodExpenseTransfer
+}
+
+/** Reverse a logged transfer — give the amount back to the source, take it from the destination. */
+export async function undoTransfer(transferId: string) {
+  const supabase = await createClient()
+  const householdId = await getUserHouseholdId()
+
+  const { data: t } = await supabase
+    .from('period_expense_transfers')
+    .select('from_expense_id, to_expense_id, amount, period_id')
+    .eq('id', transferId).eq('household_id', householdId).single()
+  if (!t) throw new Error('Transfer not found')
+
+  const { data: from } = await supabase.from('period_expenses').select('default_amount, amount_override').eq('id', t.from_expense_id).eq('household_id', householdId).single()
+  const { data: to } = await supabase.from('period_expenses').select('default_amount, amount_override').eq('id', t.to_expense_id).eq('household_id', householdId).single()
+
+  if (from) {
+    const back = round2((from.amount_override ?? from.default_amount ?? 0) + Number(t.amount))
+    await supabase.from('period_expenses').update({ amount_override: back === from.default_amount ? null : back, updated_at: new Date().toISOString() }).eq('id', t.from_expense_id).eq('household_id', householdId)
+  }
+  if (to) {
+    const back = round2(Math.max(0, (to.amount_override ?? to.default_amount ?? 0) - Number(t.amount)))
+    await supabase.from('period_expenses').update({ amount_override: back === to.default_amount ? null : back, updated_at: new Date().toISOString() }).eq('id', t.to_expense_id).eq('household_id', householdId)
+  }
+
+  await supabase.from('period_expense_transfers').delete().eq('id', transferId).eq('household_id', householdId)
+
+  revalidatePath(`/periods/${t.period_id}`)
   revalidatePath('/periods')
   revalidatePath('/')
 }

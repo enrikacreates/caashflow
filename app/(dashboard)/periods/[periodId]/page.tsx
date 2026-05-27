@@ -31,6 +31,7 @@ export default async function PeriodDetailPage({
         accounts={detail.accounts}
         deductionContributions={detail.deductionContributions}
         adjustments={detail.adjustments}
+        expenseTransfers={detail.expenseTransfers ?? []}
         categories={categories ?? []}
         savingsGoals={detail.savingsGoals}
         savingsAllocations={detail.savingsAllocations}

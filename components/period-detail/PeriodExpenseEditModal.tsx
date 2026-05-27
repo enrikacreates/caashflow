@@ -2,13 +2,18 @@
 
 import { useState, useTransition } from 'react'
 import Link from 'next/link'
-import { updatePeriodExpenseDetails } from '@/app/actions/period-expenses'
-import type { PeriodExpense, Account, PriorityCategoryRecord } from '@/lib/types'
+import { updatePeriodExpenseDetails, transferFunds, undoTransfer } from '@/app/actions/period-expenses'
+import { formatCurrency } from '@/lib/utils'
+import type { PeriodExpense, PeriodExpenseTransfer, Account, PriorityCategoryRecord } from '@/lib/types'
+
+const round2 = (n: number) => Math.round(n * 100) / 100
 
 export default function PeriodExpenseEditModal({
-  expense, accounts, categories, onClose,
+  expense, expenses, transfers, accounts, categories, onClose,
 }: {
   expense: PeriodExpense
+  expenses: PeriodExpense[]
+  transfers: PeriodExpenseTransfer[]
   accounts: Account[]
   categories: PriorityCategoryRecord[]
   onClose: () => void
@@ -17,6 +22,53 @@ export default function PeriodExpenseEditModal({
   const [alsoMaster, setAlsoMaster] = useState(false)
   const [trackSpending, setTrackSpending] = useState(expense.track_spending)
   const inputClass = 'w-full bg-bg-white border border-border rounded-sm px-4 py-2.5 text-caption focus:outline-none focus:border-primary transition-colors'
+
+  // ─── Move funds — reallocate this line's funded dollars to/from another line (zero-sum) ──
+  const bookedSpent = Number(expense.paid_amount) || 0
+  const [funded, setFunded] = useState<number>(expense.amount_override ?? expense.default_amount ?? 0)
+  const available = round2(funded - bookedSpent)
+  const [moveTo, setMoveTo] = useState('')
+  const [moveAmount, setMoveAmount] = useState('')
+  const [moveError, setMoveError] = useState<string | null>(null)
+  const [moving, startMove] = useTransition()
+  const [history, setHistory] = useState<PeriodExpenseTransfer[]>(
+    transfers.filter((t) => t.from_expense_id === expense.id || t.to_expense_id === expense.id),
+  )
+  const nameById = new Map(expenses.map((e) => [e.id, e.name]))
+  const moveTargets = expenses.filter((e) => e.id !== expense.id)
+
+  const handleMove = () => {
+    const amt = round2(parseFloat(moveAmount))
+    setMoveError(null)
+    if (!moveTo) { setMoveError('Pick a destination line'); return }
+    if (!(amt > 0)) { setMoveError('Enter an amount greater than 0'); return }
+    if (amt > available + 0.005) { setMoveError(`Only ${formatCurrency(available)} available to move`); return }
+    startMove(async () => {
+      try {
+        const row = await transferFunds(expense.id, moveTo, amt)
+        if (row) setHistory((h) => [row, ...h])
+        setFunded((f) => round2(f - amt))
+        setMoveAmount('')
+        setMoveTo('')
+      } catch (err) {
+        setMoveError(err instanceof Error ? err.message : 'Move failed')
+      }
+    })
+  }
+
+  const handleUndo = (t: PeriodExpenseTransfer) => {
+    startMove(async () => {
+      try {
+        await undoTransfer(t.id)
+        setHistory((h) => h.filter((x) => x.id !== t.id))
+        // Undo restores this line: incoming reverses to −amount, outgoing returns +amount.
+        const delta = t.from_expense_id === expense.id ? Number(t.amount) : -Number(t.amount)
+        setFunded((f) => round2(f + delta))
+      } catch {
+        setMoveError('Undo failed')
+      }
+    })
+  }
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -88,6 +140,73 @@ export default function PeriodExpenseEditModal({
           <div>
             <label className="block text-caption font-semibold text-text-heading mb-1">Notes</label>
             <textarea name="notes" rows={2} defaultValue={expense.notes || ''} className={inputClass + ' resize-y'} />
+          </div>
+
+          {/* Move funds — reallocate this line's funded dollars to/from another line (zero-sum) */}
+          <div className="bg-surface-beige rounded-sm p-3 space-y-2.5">
+            <div className="flex items-baseline justify-between">
+              <span className="text-caption font-semibold text-text-heading">Move funds</span>
+              <span className="text-caption text-text-muted">{formatCurrency(available)} available</span>
+            </div>
+            <div className="flex gap-2">
+              <select
+                value={moveTo}
+                onChange={(e) => { setMoveTo(e.target.value); setMoveError(null) }}
+                className={inputClass + ' flex-1'}
+              >
+                <option value="">Move to…</option>
+                {moveTargets.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+              </select>
+              <div className="relative w-28 shrink-0">
+                <input
+                  type="number"
+                  step="0.01"
+                  value={moveAmount}
+                  onChange={(e) => { setMoveAmount(e.target.value); setMoveError(null) }}
+                  placeholder="0.00"
+                  className={inputClass + ' pr-12'}
+                />
+                <button
+                  type="button"
+                  onClick={() => { setMoveAmount(String(available)); setMoveError(null) }}
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-primary hover:underline"
+                >
+                  All
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={handleMove}
+                disabled={moving || available <= 0}
+                className="bg-primary-teal text-text-inverse rounded-full px-4 py-2.5 text-caption font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity shrink-0"
+              >
+                Move
+              </button>
+            </div>
+            {moveError && <p className="text-[11px] text-red-500">{moveError}</p>}
+            {history.length > 0 && (
+              <ul className="space-y-1 pt-0.5">
+                {history.map((t) => {
+                  const outgoing = t.from_expense_id === expense.id
+                  const other = outgoing ? nameById.get(t.to_expense_id) : nameById.get(t.from_expense_id)
+                  return (
+                    <li key={t.id} className="flex items-center justify-between text-[11px] text-text-muted">
+                      <span>
+                        {outgoing ? '→ ' : '← '}{formatCurrency(Number(t.amount))} {outgoing ? 'to' : 'from'} {other ?? 'another line'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleUndo(t)}
+                        disabled={moving}
+                        className="font-semibold text-primary hover:underline disabled:opacity-50"
+                      >
+                        Undo
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
           </div>
 
           {/* Track spending — turns this line into a draw-down category (log spends, attach receipts) */}

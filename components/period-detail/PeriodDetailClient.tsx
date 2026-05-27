@@ -52,6 +52,7 @@ import type {
   PeriodExpense,
   PeriodExpensePayment,
   PeriodExpenseAdjustment,
+  PeriodExpenseTransfer,
   Invoice,
   PeriodManualIncome,
   Settings,
@@ -95,6 +96,7 @@ interface Props {
   accounts: Account[]
   deductionContributions: PeriodDeductionContribution[]
   adjustments: PeriodAdjustment[]
+  expenseTransfers: PeriodExpenseTransfer[]
   categories: PriorityCategoryRecord[]
   savingsGoals: SavingsGoal[]
   savingsAllocations: PeriodSavingsAllocation[]
@@ -114,6 +116,7 @@ export default function PeriodDetailClient({
   accounts,
   deductionContributions,
   adjustments,
+  expenseTransfers,
   categories,
   savingsGoals,
   savingsAllocations,
@@ -1609,6 +1612,8 @@ export default function PeriodDetailClient({
       {editExpense && (
         <PeriodExpenseEditModal
           expense={editExpense}
+          expenses={expenses}
+          transfers={expenseTransfers}
           accounts={accounts}
           categories={categories}
           onClose={() => setEditExpense(null)}
