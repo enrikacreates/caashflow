@@ -5,6 +5,7 @@ import { getUserHouseholdId } from '@/lib/supabase/helpers'
 import { calculateDeductions } from '@/lib/calculations'
 import { revalidatePath } from 'next/cache'
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
+import Anthropic from '@anthropic-ai/sdk'
 
 type SupabaseServer = Awaited<ReturnType<typeof createClient>>
 
@@ -39,6 +40,41 @@ export async function uploadReceiptImage(formData: FormData): Promise<string> {
   )
 
   return `${process.env.R2_PUBLIC_URL}/${key}`
+}
+
+/**
+ * Read the grand total off a receipt photo via Claude vision. Returns null when the key is
+ * unset or the total can't be parsed — callers fall back to manual entry.
+ */
+export async function extractReceiptTotal(imageUrl: string): Promise<number | null> {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey || !imageUrl) return null
+  try {
+    const anthropic = new Anthropic({ apiKey })
+    const msg = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 32,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'url', url: imageUrl } },
+            {
+              type: 'text',
+              text: 'This image is a purchase receipt. Reply with ONLY the final grand total as a plain number — no currency symbol, no words (e.g. 42.18). If you cannot determine a total, reply exactly: none',
+            },
+          ],
+        },
+      ],
+    })
+    const block = msg.content.find((b) => b.type === 'text')
+    const text = block && 'text' in block ? block.text.trim() : ''
+    const num = parseFloat(text.replace(/[^0-9.]/g, ''))
+    return Number.isFinite(num) && num > 0 ? round2(num) : null
+  } catch (err) {
+    console.error('Receipt OCR failed', err)
+    return null
+  }
 }
 
 /**

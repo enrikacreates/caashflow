@@ -24,6 +24,7 @@ import {
   updateExpenseSpend,
   removeExpenseSpend,
   uploadReceiptImage,
+  extractReceiptTotal,
   toggleManualIncomeDone,
   setManualIncomeExcluded,
   toggleLinkedInvoiceDone,
@@ -1670,8 +1671,19 @@ function ExpenseRow({
       const fd = new FormData()
       fd.append('file', file)
       const url = await uploadReceiptImage(fd)
-      if (attachTarget) onAttachSpendImage(attachTarget, url)
-      else setSpendImage(url)
+      if (attachTarget) {
+        onAttachSpendImage(attachTarget, url)
+      } else {
+        setSpendImage(url)
+        // Blank amount → read the total off the receipt as an editable default.
+        if (spendAmt.trim() === '') {
+          const total = await extractReceiptTotal(url)
+          if (total != null) {
+            setSpendMode('spent')
+            setSpendAmt(String(total))
+          }
+        }
+      }
     } catch (err) {
       console.error('Receipt upload failed', err)
     } finally {
@@ -2075,7 +2087,7 @@ function ExpenseRow({
                 >
                   Log
                 </button>
-                {uploadingReceipt && <span className="text-[10px] text-text-muted">uploading…</span>}
+                {uploadingReceipt && <span className="text-[10px] text-text-muted">reading receipt…</span>}
                 {spendMode === 'left' && !isNaN(resolvedSpend) && (
                   <span className="text-[10px] text-text-muted">→ logs {formatCurrency(resolvedSpend)} spent</span>
                 )}
