@@ -1848,8 +1848,32 @@ function ExpenseRow({
                   )}
                 </div>
               )}
-              {/* Split / partial — budgeting-phase action, shown before the line is funded */}
-              {!isLocked && (
+              {/* Tracked draw-down progress — shown once spends are logged, even before Paid */}
+              {isDrawDown && !expense.is_split && hasLedger && (
+                <div className="text-[10px] mt-0.5 whitespace-nowrap">
+                  <span className="text-text-muted">{formatCurrency(spent)} spent</span>
+                  {remaining > 0.005 ? (
+                    <span className="text-success font-bold ml-1">{formatCurrency(remaining)} left</span>
+                  ) : remaining < -0.005 ? (
+                    <span className="text-warning font-bold ml-1">{formatCurrency(-remaining)} over</span>
+                  ) : (
+                    <span className="text-success font-bold ml-1">fully spent</span>
+                  )}
+                </div>
+              )}
+              {/* Tracked lines log spends (draw-down); everything else gets Split / partial */}
+              {!isLocked && isDrawDown && !expense.is_split ? (
+                <button
+                  onClick={() => setSpendOpen((o) => !o)}
+                  disabled={isPending}
+                  title={spendOpen ? 'Close spend ledger' : hasLedger ? `Edit spends (${adjustments.length})` : 'Log a spend'}
+                  aria-label="Log or adjust spend"
+                  className={`mt-0.5 inline-flex items-center gap-0.5 text-[11px] font-semibold transition-colors disabled:opacity-50 ${spendOpen ? 'text-primary-teal' : 'text-primary hover:text-primary-teal'}`}
+                >
+                  <Pencil size={12} aria-hidden="true" />
+                  <span>Log{hasLedger ? ` (${adjustments.length})` : ''}</span>
+                </button>
+              ) : !isLocked ? (
                 <button
                   onClick={() => onToggleSplit(expense.id, !expense.is_split)}
                   disabled={isPending}
@@ -1857,7 +1881,7 @@ function ExpenseRow({
                 >
                   {expense.is_split ? '✕ Unsplit' : '+ Split / partial'}
                 </button>
-              )}
+              ) : null}
             </>
           )}
         </td>
