@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getUserHouseholdId } from '@/lib/supabase/helpers'
-import { getPaidSoFar } from '@/lib/calculations'
+import { isFullyPaid } from '@/lib/calculations'
+import { getOwedAmount } from '@/lib/utils'
 import type { PeriodExpense } from '@/lib/types'
 
 /**
  * Year-to-date header stats for the profile/stat blobs.
  *  - earned: income received this calendar year (received invoices)
- *  - spent:  expenses actually paid this year (paid-so-far across this year's periods)
+ *  - paid:   total funded/paid expenses this year (the pre-cleared stage), across this year's periods
  *  - owed:   current total debt balance (live, not YTD)
  *  - saved:  current savings total (live, not YTD)
  */
@@ -50,7 +51,7 @@ export async function GET() {
 
   const earned = invoiceEarned + manualEarned
 
-  // --- Spent: paid-so-far across this year's periods ---
+  // --- Paid: total funded/paid expenses across this year's periods (pre-cleared stage) ---
   const { data: periods } = await supabase
     .from('budget_periods')
     .select('id')
@@ -59,7 +60,7 @@ export async function GET() {
     .lte('period_month', yearEnd)
 
   const periodIds = (periods ?? []).map((p) => p.id)
-  let spent = 0
+  let paid = 0
   if (periodIds.length > 0) {
     const { data: expenses } = await supabase
       .from('period_expenses')
@@ -95,7 +96,9 @@ export async function GET() {
       }
       for (const e of expenseList) e.adjustments = (adjByExpense.get(e.id) ?? []) as PeriodExpense['adjustments']
     }
-    spent = expenseList.reduce((sum, e) => sum + getPaidSoFar(e), 0)
+    const owedOf = (e: PeriodExpense) =>
+      e.is_split ? (e.payments ?? []).reduce((s, p) => s + p.amount, 0) : getOwedAmount(e)
+    paid = expenseList.reduce((sum, e) => sum + (isFullyPaid(e) ? owedOf(e) : 0), 0)
   }
 
   // --- Owed: current total debt balance ---
@@ -112,5 +115,5 @@ export async function GET() {
     .eq('household_id', householdId)
   const saved = (goals ?? []).reduce((sum, g) => sum + (g.current_amount ?? 0), 0)
 
-  return NextResponse.json({ year, earned, spent, owed, saved })
+  return NextResponse.json({ year, earned, paid, owed, saved })
 }

@@ -32,8 +32,8 @@ export default function DashboardLayout({
           <img src="/logo.svg" alt="Caashflow" className="h-11 md:h-12 w-auto" />
         </Link>
 
-        {/* YTD stat blobs — center, large screens only */}
-        <HeaderStats className="hidden lg:flex" />
+        {/* YTD stat blobs — pushed toward the profile side, large screens only */}
+        <HeaderStats className="hidden lg:flex lg:ml-auto lg:mr-4" />
 
         {/* Right side: profile blob + settings */}
         <div className="flex items-center gap-3">
