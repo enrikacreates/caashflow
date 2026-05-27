@@ -126,6 +126,7 @@ export default function PeriodDetailClient({
   const categoryColorMap = new Map(categories.map(c => [c.name, c.color_key]))
   const [sortKey, setSortKey] = useState<SortKey>('priority_category')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
+  const [expenseSearch, setExpenseSearch] = useState('')
   const [showInvoiceSelector, setShowInvoiceSelector] = useState(false)
   const [showManualIncomeForm, setShowManualIncomeForm] = useState(false)
   const [showOneTimeForm, setShowOneTimeForm] = useState(false)
@@ -357,6 +358,24 @@ export default function PeriodDetailClient({
   const oneTimePayNow = calculatePayNowTotal(oneTimeExpenses)
   const owedOf = (e: PeriodExpense) => (e.is_split ? (e.payments ?? []).reduce((s, p) => s + p.amount, 0) : getOwedAmount(e))
   const oneTimeTotal = oneTimeExpenses.reduce((s, e) => s + owedOf(e), 0)
+
+  // Free-text search across name / account / priority / amount / due / notes / tags.
+  // Filters only the rendered rows — period totals still reflect every expense.
+  const q = expenseSearch.trim().toLowerCase()
+  const matchesSearch = (e: PeriodExpense) => {
+    if (!q) return true
+    const haystack = [
+      e.name,
+      e.account,
+      e.priority_category,
+      e.notes,
+      (e.tags ?? []).join(' '),
+      String(owedOf(e)),
+      e.default_amount != null ? String(e.default_amount) : '',
+      e.due_day != null ? String(e.due_day) : '',
+    ].filter(Boolean).join(' ').toLowerCase()
+    return haystack.includes(q)
+  }
   // Expenses rollup funnel: Paid = funded/set aside, Cleared = actually left the account.
   const isClosed = (e: PeriodExpense) =>
     e.is_split ? (e.payments ?? []).length > 0 && (e.payments ?? []).every((p) => p.cleared) : e.is_complete
@@ -1354,6 +1373,20 @@ export default function PeriodDetailClient({
         </div>
 
         {isOpen('expenses') && (
+        <>
+        {/* Search — filters the rows below; totals above still reflect every expense */}
+        <div className="mb-3 flex items-center gap-2">
+          <input
+            type="text"
+            value={expenseSearch}
+            onChange={(e) => setExpenseSearch(e.target.value)}
+            placeholder="Search expenses — name, amount, account, priority…"
+            className={`${inputClass} w-full sm:max-w-sm`}
+          />
+          {expenseSearch && (
+            <button type="button" onClick={() => setExpenseSearch('')} className="text-caption text-text-muted hover:text-warning font-semibold shrink-0">Clear</button>
+          )}
+        </div>
         <div className="rounded-lg overflow-auto max-h-[70vh]">
             <table className="w-full border-separate border-spacing-0">
               <thead>
@@ -1384,7 +1417,7 @@ export default function PeriodDetailClient({
                 </tr>
               </thead>
               <tbody>
-                {baselineExpenses.map((expense) => (
+                {baselineExpenses.filter(matchesSearch).map((expense) => (
                   <ExpenseRow
                     key={expense.id}
                     expense={expense}
@@ -1419,6 +1452,7 @@ export default function PeriodDetailClient({
               </tfoot>
             </table>
         </div>
+        </>
         )}
       </div>
 
@@ -1510,7 +1544,7 @@ export default function PeriodDetailClient({
                   </tr>
                 </thead>
                 <tbody>
-                  {oneTimeExpenses.map((expense) => (
+                  {oneTimeExpenses.filter(matchesSearch).map((expense) => (
                     <ExpenseRow
                       key={expense.id}
                       expense={expense}
