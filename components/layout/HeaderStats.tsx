@@ -23,7 +23,7 @@ const BLOBS: {
   nudge?: string // vertical nudge for shapes whose visual mass isn't centered (e.g. triangle)
 }[] = [
   { key: 'earned', label: 'Earned', shape: '/shapes/navshapes/Nav_Roundshape_blue.svg', w: 157, h: 107, overlap: 0 },
-  { key: 'spent', label: 'Spent', shape: '/shapes/navshapes/NavPinkRoundRect.svg', w: 155, h: 84, overlap: 16 },
+  { key: 'spent', label: 'Spent', shape: '/shapes/navshapes/NavPinkRoundRect.svg', w: 155, h: 84, overlap: 8 },
   { key: 'owed', label: 'Owed', shape: '/shapes/navshapes/NavOrangeTriangle.svg', w: 152, h: 100, overlap: 24, nudge: 'translate-y-[30%]' },
   { key: 'saved', label: 'Saved', shape: '/shapes/navshapes/NavYellowCircle.svg', w: 107, h: 101, overlap: 30 },
 ]
