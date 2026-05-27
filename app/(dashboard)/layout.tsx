@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Menu, Settings2, LogOut } from 'lucide-react'
 import Sidebar from '@/components/layout/Sidebar'
 import HeaderAvatar from '@/components/layout/HeaderAvatar'
+import HeaderStats from '@/components/layout/HeaderStats'
 import { signOut } from '@/app/actions/auth'
 
 /* -------------------------------------------------------
@@ -30,6 +31,9 @@ export default function DashboardLayout({
         <Link href="/" className="hover:opacity-80 transition-opacity shrink-0">
           <img src="/logo.svg" alt="Caashflow" className="h-14 md:h-16 w-auto" />
         </Link>
+
+        {/* YTD stat blobs — center, large screens only */}
+        <HeaderStats className="hidden lg:flex" />
 
         {/* Right side: profile blob + settings */}
         <div className="flex items-center gap-3">
