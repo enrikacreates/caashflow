@@ -118,7 +118,7 @@ export default function DashboardLayout({
           src="/shapes/navshapes/footershapes2.svg"
           alt=""
           aria-hidden="true"
-          className="pointer-events-none select-none absolute left-0 bottom-full w-full translate-y-[28%]"
+          className="pointer-events-none select-none absolute left-0 bottom-full w-full translate-y-[12%]"
         />
 
         {/* The band — full-bleed teal, fixed compact height; overflow-hidden clips the watermark + surface accents */}
