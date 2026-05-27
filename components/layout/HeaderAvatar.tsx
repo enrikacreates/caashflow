@@ -31,12 +31,12 @@ export default function HeaderAvatar() {
 
   return (
     <Link href="/settings" className="relative w-14 h-14 md:w-16 md:h-16 ml-1 block group" aria-label="Profile & settings">
-      {/* Green organic blob — backdrop, sized larger and shifted up-left so the green peeks out on the top-left of the photo */}
+      {/* Green organic blob — backdrop at its natural orientation, centered behind the photo (matches the mockup) */}
       <img
         src="/shapes/profile-blob-green.svg"
         alt=""
         aria-hidden="true"
-        className="pointer-events-none select-none absolute -top-5 -left-6 w-[155%] h-[155%] max-w-none -rotate-[28deg] transition-transform duration-200 group-hover:-rotate-[16deg] group-hover:scale-105"
+        className="pointer-events-none select-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[148%] h-[132%] max-w-none transition-transform duration-200 group-hover:scale-105"
       />
       {/* Profile image — circular container with a white ring */}
       <div className="relative w-full h-full rounded-full bg-surface-beige ring-2 ring-white shadow-sm flex items-center justify-center overflow-hidden">
