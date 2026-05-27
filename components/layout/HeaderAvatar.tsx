@@ -30,13 +30,13 @@ export default function HeaderAvatar() {
   }, [])
 
   return (
-    <Link href="/settings" className="relative w-12 h-12 md:w-14 md:h-14 ml-1 block group" aria-label="Profile & settings">
-      {/* Green organic blob — backdrop, peeks out behind the photo */}
+    <Link href="/settings" className="relative w-14 h-14 md:w-16 md:h-16 ml-1 block group" aria-label="Profile & settings">
+      {/* Green organic blob — backdrop, sized larger and shifted up-left so the green peeks out on the top-left of the photo */}
       <img
         src="/shapes/profile-blob-green.svg"
         alt=""
         aria-hidden="true"
-        className="pointer-events-none select-none absolute -top-1.5 -left-2 w-[135%] h-[135%] max-w-none -rotate-[18deg] transition-transform duration-200 group-hover:-rotate-6 group-hover:scale-105"
+        className="pointer-events-none select-none absolute -top-5 -left-6 w-[155%] h-[155%] max-w-none -rotate-[28deg] transition-transform duration-200 group-hover:-rotate-[16deg] group-hover:scale-105"
       />
       {/* Profile image — circular container with a white ring */}
       <div className="relative w-full h-full rounded-full bg-surface-beige ring-2 ring-white shadow-sm flex items-center justify-center overflow-hidden">
