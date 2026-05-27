@@ -1762,7 +1762,7 @@ function ExpenseRow({
               className={`mt-1 inline-flex items-center gap-0.5 text-[11px] font-semibold transition-colors disabled:opacity-50 ${spendOpen ? 'text-primary-teal' : 'text-primary hover:text-primary-teal'}`}
             >
               <Pencil size={12} aria-hidden="true" />
-              {hasLedger && <span className="text-[10px]">{adjustments.length}</span>}
+              <span>Log{hasLedger ? ` (${adjustments.length})` : ''}</span>
             </button>
           )}
           {/* Toggle: split (hidden once a spend is logged — the two modes are exclusive) */}
