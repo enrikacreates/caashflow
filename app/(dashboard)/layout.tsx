@@ -112,13 +112,13 @@ export default function DashboardLayout({
           Shapes perch on the band's TOP edge (mostly above it, base dipping in); the band itself
           holds the big transparent CAA$H watermark + the logo. */}
       <div className="sticky bottom-0 z-20 w-full">
-        {/* Footer shapes — full-width organic composition sitting on the band's top edge,
-            scales with the window (designed at 1440-wide, anchored bottom = band top). */}
+        {/* Footer shapes — full-width organic composition; rendered BEHIND the band (no z bump,
+            band paints on top) and dropped down so the bases tuck behind the teal. */}
         <img
           src="/shapes/navshapes/footershapes2.svg"
           alt=""
           aria-hidden="true"
-          className="pointer-events-none select-none absolute z-10 left-0 bottom-full w-full translate-y-[1px]"
+          className="pointer-events-none select-none absolute left-0 bottom-full w-full translate-y-[28%]"
         />
 
         {/* The band — full-bleed teal, fixed compact height; overflow-hidden clips the watermark + surface accents */}
@@ -126,7 +126,7 @@ export default function DashboardLayout({
           {/* CAA$H watermark — oversized live text that fills the banner width and scales with the
               window (vw units); clipped top/bottom by the band like the FLOW watermark. */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
-            <span className="font-display leading-none whitespace-nowrap text-white/10 text-[14vw]">CAA$H</span>
+            <span className="font-display leading-none whitespace-nowrap text-white/10 text-[40vw]">CAA$H</span>
           </div>
 
           <div className="relative h-28 md:h-32">
