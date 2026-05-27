@@ -698,8 +698,8 @@ export default function PeriodDetailClient({
 
       {/* ─── Sticky Summary Bar (visible when scrolled past cards) ── */}
       {showStickyBar && (
-        <div className="sticky top-[88px] md:top-[100px] z-20 -mx-6 px-6 -mt-4">
-          <div className="bg-white/90 backdrop-blur-sm rounded-b-lg shadow-card px-4 py-2 flex items-center justify-between gap-4">
+        <div className="sticky top-[72px] md:top-[84px] z-40 -mx-6 px-6 -mt-4">
+          <div className="bg-[#ebf0f0] rounded-b-lg shadow-card px-4 py-2 flex items-center justify-between gap-4">
             <div className="flex items-center gap-4 text-caption">
               <span className="text-text-muted">Income <span className="font-bold text-text-heading">{formatCurrency(period.income_amount)}</span></span>
               <span className="text-text-muted hidden sm:inline">To Budget <span className="font-bold text-text-heading">{formatCurrency(deductions.incomeAfterDeductions)}</span></span>
