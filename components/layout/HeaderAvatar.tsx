@@ -39,7 +39,7 @@ export default function HeaderAvatar() {
         className="pointer-events-none select-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[148%] h-[132%] max-w-none transition-transform duration-200 group-hover:scale-105"
       />
       {/* Profile image — circular container with a white ring */}
-      <div className="relative w-full h-full rounded-full bg-surface-beige ring-2 ring-white shadow-sm flex items-center justify-center overflow-hidden">
+      <div className="relative w-full h-full rounded-full bg-surface-beige flex items-center justify-center overflow-hidden">
         {avatarUrl ? (
           <img
             src={avatarUrl}
