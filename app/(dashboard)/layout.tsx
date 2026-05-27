@@ -102,7 +102,7 @@ export default function DashboardLayout({
       />
 
       {/* Main content — offset for floating nav on desktop; grows to push footer flush to bottom */}
-      <main className="flex-1 px-6 py-6 md:pl-[220px] md:pr-10 md:py-6">
+      <main className="flex-1 px-6 pt-10 pb-6 md:pl-[220px] md:pr-10 md:pt-14 md:pb-6">
         <div className="max-w-3xl mx-auto">
           {children}
         </div>

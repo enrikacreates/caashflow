@@ -64,7 +64,7 @@ export default function Sidebar({
           md:rounded-3xl
 
           /* Desktop: floating card below header */
-          md:mt-[120px]
+          md:mt-[150px]
 
           md:translate-x-0
           ${open ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
