@@ -137,6 +137,9 @@ export default function PeriodDetailClient({
   const [showManualIncomeForm, setShowManualIncomeForm] = useState(false)
   const [showOneTimeForm, setShowOneTimeForm] = useState(false)
   const [editExpense, setEditExpense] = useState<PeriodExpense | null>(null)
+  const [editFocusMove, setEditFocusMove] = useState(false)
+  // Open an expense's editor jumped straight to the Move funds section (used by the overage prompt).
+  const openMoveFunds = (expense: PeriodExpense) => { setEditFocusMove(true); setEditExpense(expense) }
   // Collapsible sections — open by default; a key set true means collapsed.
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const isOpen = (k: string) => !collapsed[k]
@@ -1463,6 +1466,7 @@ export default function PeriodDetailClient({
                     onRemoveSpend={handleRemoveSpend}
                     onAttachSpendImage={handleAttachSpendImage}
                     onTransferFunds={handleTransferFunds}
+                    onOpenMoveFunds={openMoveFunds}
                     siblingExpenses={optExpenses}
                     onEdit={setEditExpense}
                     inputClass={inputClass}
@@ -1592,6 +1596,7 @@ export default function PeriodDetailClient({
                       onRemoveSpend={handleRemoveSpend}
                       onAttachSpendImage={handleAttachSpendImage}
                       onTransferFunds={handleTransferFunds}
+                      onOpenMoveFunds={openMoveFunds}
                       siblingExpenses={optExpenses}
                       onRemove={handleRemoveOneTime}
                       onEdit={setEditExpense}
@@ -1625,7 +1630,8 @@ export default function PeriodDetailClient({
           transfers={expenseTransfers}
           accounts={accounts}
           categories={categories}
-          onClose={() => setEditExpense(null)}
+          focusMove={editFocusMove}
+          onClose={() => { setEditExpense(null); setEditFocusMove(false) }}
         />
       )}
 
@@ -1644,7 +1650,7 @@ export default function PeriodDetailClient({
 
 // ─── Spend Ledger (shared by a whole line and by each split installment) ──────
 function SpendLedger({
-  funded, spent, adjustments, onAdd, onRemove, onAttachImage, coverSources, onCover, isLocked, isPending, inputClass,
+  funded, spent, adjustments, onAdd, onRemove, onAttachImage, coverSources, onCover, onOpenMoveFunds, isLocked, isPending, inputClass,
 }: {
   funded: number
   spent: number
@@ -1654,6 +1660,7 @@ function SpendLedger({
   onAttachImage: (adjustmentId: string, imageUrl: string) => void
   coverSources?: { id: string; name: string; available: number }[]
   onCover?: (fromId: string, amount: number) => void
+  onOpenMoveFunds?: () => void
   isLocked: boolean
   isPending: boolean
   inputClass: string
@@ -1737,6 +1744,11 @@ function SpendLedger({
         <div className="bg-warning/10 rounded-sm p-2.5 mb-2 max-w-md">
           <div className="flex items-center justify-between mb-1.5">
             <span className="text-[11px] font-bold text-warning">{formatCurrency(overage)} over — cover it?</span>
+            {onOpenMoveFunds && (
+              <button type="button" onClick={onOpenMoveFunds} className="text-[10px] font-semibold text-primary hover:underline">
+                Move funds →
+              </button>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <select
@@ -1846,6 +1858,7 @@ function ExpenseRow({
   onRemoveSpend,
   onAttachSpendImage,
   onTransferFunds,
+  onOpenMoveFunds,
   siblingExpenses,
   onRemove,
   onEdit,
@@ -1869,6 +1882,7 @@ function ExpenseRow({
   onRemoveSpend: (adjustmentId: string) => void
   onAttachSpendImage: (adjustmentId: string, imageUrl: string | null) => void
   onTransferFunds: (fromId: string, toId: string, amount: number) => void
+  onOpenMoveFunds: (expense: PeriodExpense) => void
   siblingExpenses: PeriodExpense[]
   onRemove?: (id: string) => void
   onEdit?: (expense: PeriodExpense) => void
@@ -2217,6 +2231,7 @@ function ExpenseRow({
               onAttachImage={onAttachSpendImage}
               coverSources={coverSources}
               onCover={(fromId, amount) => onTransferFunds(fromId, expense.id, amount)}
+              onOpenMoveFunds={() => onOpenMoveFunds(expense)}
               isLocked={isLocked}
               isPending={isPending}
               inputClass={inputClass}

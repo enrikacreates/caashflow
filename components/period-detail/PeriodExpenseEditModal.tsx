@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { updatePeriodExpenseDetails, transferFunds, undoTransfer } from '@/app/actions/period-expenses'
 import { formatCurrency } from '@/lib/utils'
@@ -9,7 +9,7 @@ import type { PeriodExpense, PeriodExpenseTransfer, Account, PriorityCategoryRec
 const round2 = (n: number) => Math.round(n * 100) / 100
 
 export default function PeriodExpenseEditModal({
-  expense, expenses, transfers, accounts, categories, onClose,
+  expense, expenses, transfers, accounts, categories, onClose, focusMove = false,
 }: {
   expense: PeriodExpense
   expenses: PeriodExpense[]
@@ -17,6 +17,7 @@ export default function PeriodExpenseEditModal({
   accounts: Account[]
   categories: PriorityCategoryRecord[]
   onClose: () => void
+  focusMove?: boolean
 }) {
   const [isPending, startTransition] = useTransition()
   const [alsoMaster, setAlsoMaster] = useState(false)
@@ -35,8 +36,13 @@ export default function PeriodExpenseEditModal({
   const applyDelta = (id: string, delta: number) =>
     setFunds((f) => ({ ...f, [id]: round2((f[id] ?? snapFunded(id)) + delta) }))
 
-  const [moveDir, setMoveDir] = useState<'to' | 'from'>('to')
+  const [moveDir, setMoveDir] = useState<'to' | 'from'>(focusMove ? 'from' : 'to')
   const [moveOther, setMoveOther] = useState('')
+  const moveSectionRef = useRef<HTMLDivElement>(null)
+  // When deep-linked from an overage prompt, scroll the Move funds section into view.
+  useEffect(() => {
+    if (focusMove) moveSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [focusMove])
   const [moveAmount, setMoveAmount] = useState('')
   const [moveError, setMoveError] = useState<string | null>(null)
   const [moving, startMove] = useTransition()
@@ -158,7 +164,7 @@ export default function PeriodExpenseEditModal({
           </div>
 
           {/* Move funds — reallocate funded dollars to/from another line (zero-sum, both directions) */}
-          <div className="bg-surface-beige rounded-sm p-3 space-y-2.5">
+          <div ref={moveSectionRef} className={`bg-surface-beige rounded-sm p-3 space-y-2.5 transition-shadow ${focusMove ? 'ring-2 ring-primary-teal' : ''}`}>
             <div className="flex items-baseline justify-between">
               <span className="text-caption font-semibold text-text-heading">Move funds</span>
               <span className="text-caption text-text-muted">{formatCurrency(availOf(expense))} available here</span>
