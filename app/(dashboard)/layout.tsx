@@ -112,32 +112,13 @@ export default function DashboardLayout({
           Shapes perch on the band's TOP edge (mostly above it, base dipping in); the band itself
           holds the big transparent CAA$H watermark + the logo. */}
       <div className="sticky bottom-0 z-20 w-full">
-        {/* Perched shapes — rest ON TOP of the band, bottoms sitting right on its top edge
-            (bottom-full, no downward nudge) so the green never contains them. Width-only sizing
-            preserves each shape's natural aspect (no skew). Rendered outside the band so they aren't clipped. */}
+        {/* Footer shapes — full-width organic composition sitting on the band's top edge,
+            scales with the window (designed at 1440-wide, anchored bottom = band top). */}
         <img
-          src="/shapes/sail-blue.svg"
+          src="/shapes/navshapes/footershapes2.svg"
           alt=""
           aria-hidden="true"
-          className="pointer-events-none select-none absolute z-10 left-[40%] -translate-x-1/2 bottom-full w-40 md:w-52"
-        />
-        <img
-          src="/shapes/blob-peach.svg"
-          alt=""
-          aria-hidden="true"
-          className="pointer-events-none select-none absolute z-10 left-[9%] bottom-full w-16 md:w-24"
-        />
-        <img
-          src="/shapes/circle-gold.svg"
-          alt=""
-          aria-hidden="true"
-          className="pointer-events-none select-none absolute z-10 left-[3%] bottom-full w-9 md:w-12"
-        />
-        <img
-          src="/shapes/rect-pink.svg"
-          alt=""
-          aria-hidden="true"
-          className="pointer-events-none select-none absolute z-10 left-[20%] bottom-full w-24 md:w-36"
+          className="pointer-events-none select-none absolute z-10 left-0 bottom-full w-full translate-y-[1px]"
         />
 
         {/* The band — full-bleed teal, fixed compact height; overflow-hidden clips the watermark + surface accents */}
