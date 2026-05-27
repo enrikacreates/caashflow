@@ -220,8 +220,9 @@ export async function getPeriodDetail(periodId: string) {
 
   // Sub-payments for split expenses — attach to each expense
   const expenseIds = (expenses ?? []).map((e) => e.id)
-  const paymentsByExpense: Record<string, unknown[]> = {}
+  const paymentsByExpense: Record<string, Record<string, unknown>[]> = {}
   const adjustmentsByExpense: Record<string, unknown[]> = {}
+  const adjustmentsByPayment: Record<string, unknown[]> = {}
   if (expenseIds.length > 0) {
     const { data: payments, error: paymentsError } = await supabase
       .from('period_expense_payments')
@@ -235,7 +236,7 @@ export async function getPeriodDetail(periodId: string) {
       ;(paymentsByExpense[p.period_expense_id] ??= []).push(p)
     }
 
-    // Spend-ledger entries (per-line adjustments) — attach to each expense
+    // Spend-ledger entries — attach whole-line ones to the expense, installment ones to the payment.
     const { data: adjustments, error: adjustmentsError } = await supabase
       .from('period_expense_adjustments')
       .select('*')
@@ -246,6 +247,11 @@ export async function getPeriodDetail(periodId: string) {
 
     for (const a of adjustments ?? []) {
       ;(adjustmentsByExpense[a.period_expense_id] ??= []).push(a)
+      if (a.period_expense_payment_id) (adjustmentsByPayment[a.period_expense_payment_id] ??= []).push(a)
+    }
+    // Attach each installment's spends to it
+    for (const list of Object.values(paymentsByExpense)) {
+      for (const p of list) p.adjustments = adjustmentsByPayment[p.id as string] ?? []
     }
   }
   const expensesWithPayments = (expenses ?? []).map((e) => ({

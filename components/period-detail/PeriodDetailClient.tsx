@@ -51,6 +51,7 @@ import type {
   BudgetPeriod,
   PeriodExpense,
   PeriodExpensePayment,
+  PeriodExpenseAdjustment,
   Invoice,
   PeriodManualIncome,
   Settings,
@@ -624,8 +625,8 @@ export default function PeriodDetailClient({
     startTransition(() => removeExpensePayment(paymentId, period.id))
 
   // ─── Spend ledger (per-line draw-down) ───────────────────────
-  const handleAddSpend = (id: string, amount: number, note: string | null, imageUrl: string | null = null) =>
-    startTransition(() => addExpenseSpend(id, period.id, amount, note, imageUrl))
+  const handleAddSpend = (id: string, amount: number, note: string | null, imageUrl: string | null = null, paymentId: string | null = null) =>
+    startTransition(() => addExpenseSpend(id, period.id, amount, note, imageUrl, paymentId))
 
   const handleRemoveSpend = (adjustmentId: string) =>
     startTransition(() => removeExpenseSpend(adjustmentId, period.id))
@@ -1627,6 +1628,133 @@ export default function PeriodDetailClient({
   )
 }
 
+// ─── Spend Ledger (shared by a whole line and by each split installment) ──────
+function SpendLedger({
+  funded, spent, adjustments, onAdd, onRemove, onAttachImage, isLocked, isPending, inputClass,
+}: {
+  funded: number
+  spent: number
+  adjustments: PeriodExpenseAdjustment[]
+  onAdd: (amount: number, note: string | null, imageUrl: string | null) => void
+  onRemove: (adjustmentId: string) => void
+  onAttachImage: (adjustmentId: string, imageUrl: string) => void
+  isLocked: boolean
+  isPending: boolean
+  inputClass: string
+}) {
+  const remaining = funded - spent
+  const [spendMode, setSpendMode] = useState<'spent' | 'left'>('spent')
+  const [spendAmt, setSpendAmt] = useState('')
+  const [spendNote, setSpendNote] = useState('')
+  const [spendImage, setSpendImage] = useState<string | null>(null)
+  const [uploadingReceipt, setUploadingReceipt] = useState(false)
+  const [attachTarget, setAttachTarget] = useState<string | null>(null)
+  const receiptInputRef = useRef<HTMLInputElement>(null)
+  const r2 = (n: number) => Math.round(n * 100) / 100
+  const enteredSpend = spendAmt === '' ? NaN : parseFloat(spendAmt)
+  const resolvedSpend = isNaN(enteredSpend) ? NaN : spendMode === 'left' ? r2(remaining - enteredSpend) : enteredSpend
+  const pickReceipt = (targetId: string | null) => { setAttachTarget(targetId); receiptInputRef.current?.click() }
+  const handleReceiptFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingReceipt(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const url = await uploadReceiptImage(fd)
+      if (attachTarget) {
+        onAttachImage(attachTarget, url)
+      } else {
+        setSpendImage(url)
+        if (spendAmt.trim() === '') {
+          const total = await extractReceiptTotal(url)
+          if (total != null) { setSpendMode('spent'); setSpendAmt(String(total)) }
+        }
+      }
+    } catch (err) {
+      console.error('Receipt upload failed', err)
+    } finally {
+      setUploadingReceipt(false)
+      setAttachTarget(null)
+      if (receiptInputRef.current) receiptInputRef.current.value = ''
+    }
+  }
+  const handleLogSpend = () => {
+    if (isNaN(resolvedSpend) || resolvedSpend === 0) return
+    onAdd(resolvedSpend, spendNote.trim() || null, spendImage)
+    setSpendAmt('')
+    setSpendNote('')
+    setSpendImage(null)
+  }
+  const hasLedger = adjustments.length > 0
+  return (
+    <div>
+      <div className="text-[11px] text-text-muted mb-2">
+        Funded <span className="font-bold text-text-heading">{formatCurrency(funded)}</span>
+        <span className="mx-1">·</span>
+        Spent <span className="font-bold text-text-heading">{formatCurrency(spent)}</span>
+        <span className="mx-1">·</span>
+        {remaining > 0.005 ? (
+          <span className="text-success font-bold">{formatCurrency(remaining)} left</span>
+        ) : remaining < -0.005 ? (
+          <span className="text-warning font-bold">{formatCurrency(-remaining)} over</span>
+        ) : (
+          <span className="text-success font-bold">fully spent</span>
+        )}
+      </div>
+      {hasLedger && (
+        <ul className="space-y-1 mb-2 max-w-md">
+          {adjustments.map((a) => (
+            <li key={a.id} className="flex items-center gap-2 text-caption">
+              <span className="text-text-muted text-[10px] w-14 shrink-0">{formatDate(a.created_at)}</span>
+              <span className="flex-1 text-text-heading truncate">{a.note || '—'}</span>
+              <span className="font-bold text-text-heading">{formatCurrency(a.amount)}</span>
+              {a.image_url ? (
+                <a href={a.image_url} target="_blank" rel="noopener noreferrer" title="View receipt" className="shrink-0">
+                  <img src={a.image_url} alt="Receipt" className="h-6 w-6 object-cover rounded border border-border" />
+                </a>
+              ) : !isLocked ? (
+                <button onClick={() => pickReceipt(a.id)} disabled={uploadingReceipt} title="Attach a receipt photo" className="text-text-muted hover:text-primary disabled:opacity-50">
+                  <Camera size={13} aria-hidden="true" />
+                </button>
+              ) : null}
+              {!isLocked && (
+                <button onClick={() => onRemove(a.id)} disabled={isPending} title="Remove this spend" className="text-text-muted hover:text-warning text-[10px] disabled:opacity-50">✕</button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {!isLocked && (
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-full border border-border overflow-hidden text-[10px] font-bold">
+            <button type="button" onClick={() => setSpendMode('spent')} className={`px-2.5 py-1 transition-colors ${spendMode === 'spent' ? 'bg-text-heading text-white' : 'bg-bg-white text-text-muted hover:text-text-heading'}`}>Spent</button>
+            <button type="button" onClick={() => setSpendMode('left')} className={`px-2.5 py-1 transition-colors ${spendMode === 'left' ? 'bg-text-heading text-white' : 'bg-bg-white text-text-muted hover:text-text-heading'}`}>Left</button>
+          </div>
+          <input type="number" step="0.01" value={spendAmt} onChange={(e) => setSpendAmt(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleLogSpend() }} placeholder={spendMode === 'spent' ? 'Spent' : 'Left'} className={`w-24 text-right ${inputClass}`} />
+          <input type="text" value={spendNote} onChange={(e) => setSpendNote(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleLogSpend() }} placeholder="Note (e.g. Trader Joe's)" className={`w-44 ${inputClass}`} />
+          <input ref={receiptInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleReceiptFile} />
+          {spendImage ? (
+            <span className="inline-flex items-center gap-1">
+              <img src={spendImage} alt="Receipt" className="h-7 w-7 object-cover rounded border border-border" />
+              <button type="button" onClick={() => setSpendImage(null)} title="Remove photo" className="text-text-muted hover:text-warning text-[10px]">✕</button>
+            </span>
+          ) : (
+            <button type="button" onClick={() => pickReceipt(null)} disabled={uploadingReceipt} title="Snap a receipt photo" className="inline-flex items-center text-text-muted hover:text-primary disabled:opacity-50 p-1">
+              <Camera size={15} aria-hidden="true" />
+            </button>
+          )}
+          <button type="button" onClick={handleLogSpend} disabled={isPending || uploadingReceipt || isNaN(resolvedSpend) || resolvedSpend === 0} className="bg-primary-teal text-text-inverse rounded-full px-3 py-1 text-[10px] font-bold hover:opacity-90 disabled:opacity-50 transition-opacity">Log</button>
+          {uploadingReceipt && <span className="text-[10px] text-text-muted">reading receipt…</span>}
+          {spendMode === 'left' && !isNaN(resolvedSpend) && (
+            <span className="text-[10px] text-text-muted">→ logs {formatCurrency(resolvedSpend)} spent</span>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Expense Row Component ───────────────────────────────────────
 function ExpenseRow({
   expense,
@@ -1663,7 +1791,7 @@ function ExpenseRow({
   onPaymentToggle: (paymentId: string, field: string, value: boolean) => void
   onPaymentCleared: (paymentId: string, value: boolean) => void
   onRemovePayment: (paymentId: string) => void
-  onAddSpend: (id: string, amount: number, note: string | null, imageUrl?: string | null) => void
+  onAddSpend: (id: string, amount: number, note: string | null, imageUrl?: string | null, paymentId?: string | null) => void
   onRemoveSpend: (adjustmentId: string) => void
   onAttachSpendImage: (adjustmentId: string, imageUrl: string | null) => void
   onRemove?: (id: string) => void
@@ -1700,58 +1828,6 @@ function ExpenseRow({
   const isDrawDown = expense.track_spending && !isLinked
   const inPaidMode = !expense.is_split && expense.paid && isDrawDown // spending/logging phase
   const [spendOpen, setSpendOpen] = useState(hasLedger && !expense.is_complete)
-  const [spendMode, setSpendMode] = useState<'spent' | 'left'>('spent')
-  const [spendAmt, setSpendAmt] = useState('')
-  const [spendNote, setSpendNote] = useState('')
-  const r2 = (n: number) => Math.round(n * 100) / 100
-  const enteredSpend = spendAmt === '' ? NaN : parseFloat(spendAmt)
-  const resolvedSpend = isNaN(enteredSpend) ? NaN : spendMode === 'left' ? r2(remaining - enteredSpend) : enteredSpend
-  // Receipt photo capture. A null target uploads onto the new spend being entered;
-  // a set target attaches the photo to that existing ledger entry.
-  const [spendImage, setSpendImage] = useState<string | null>(null)
-  const [uploadingReceipt, setUploadingReceipt] = useState(false)
-  const [attachTarget, setAttachTarget] = useState<string | null>(null)
-  const receiptInputRef = useRef<HTMLInputElement>(null)
-  const pickReceipt = (targetId: string | null) => {
-    setAttachTarget(targetId)
-    receiptInputRef.current?.click()
-  }
-  const handleReceiptFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setUploadingReceipt(true)
-    try {
-      const fd = new FormData()
-      fd.append('file', file)
-      const url = await uploadReceiptImage(fd)
-      if (attachTarget) {
-        onAttachSpendImage(attachTarget, url)
-      } else {
-        setSpendImage(url)
-        // Blank amount → read the total off the receipt as an editable default.
-        if (spendAmt.trim() === '') {
-          const total = await extractReceiptTotal(url)
-          if (total != null) {
-            setSpendMode('spent')
-            setSpendAmt(String(total))
-          }
-        }
-      }
-    } catch (err) {
-      console.error('Receipt upload failed', err)
-    } finally {
-      setUploadingReceipt(false)
-      setAttachTarget(null)
-      if (receiptInputRef.current) receiptInputRef.current.value = ''
-    }
-  }
-  const handleLogSpend = () => {
-    if (isNaN(resolvedSpend) || resolvedSpend === 0) return
-    onAddSpend(expense.id, resolvedSpend, spendNote.trim() || null, spendImage)
-    setSpendAmt('')
-    setSpendNote('')
-    setSpendImage(null)
-  }
 
   // Row is read-only when the budget is locked OR the line is marked complete
   const rowDisabled = isLocked || expense.is_complete
@@ -1912,8 +1988,8 @@ function ExpenseRow({
                   )}
                 </div>
               )}
-              {/* Tracked lines log spends (draw-down); everything else gets Split / partial */}
-              {!isLocked && isDrawDown && !expense.is_split ? (
+              {/* Whole-line Log (draw-down) for tracked, non-split lines */}
+              {!isLocked && isDrawDown && !expense.is_split && (
                 <button
                   onClick={() => setSpendOpen((o) => !o)}
                   disabled={isPending}
@@ -1924,7 +2000,9 @@ function ExpenseRow({
                   <Pencil size={12} aria-hidden="true" />
                   <span>Log{hasLedger ? ` (${adjustments.length})` : ''}</span>
                 </button>
-              ) : !isLocked ? (
+              )}
+              {/* Split / partial — available on any line (tracked lines log each installment separately) */}
+              {!isLocked && (
                 <button
                   onClick={() => onToggleSplit(expense.id, !expense.is_split)}
                   disabled={isPending}
@@ -1932,7 +2010,7 @@ function ExpenseRow({
                 >
                   {expense.is_split ? '✕ Unsplit' : '+ Split / partial'}
                 </button>
-              ) : null}
+              )}
             </>
           )}
         </td>
@@ -2013,13 +2091,18 @@ function ExpenseRow({
           <SubPaymentRow
             key={p.id}
             payment={p}
+            parentExpenseId={expense.id}
             parentAccount={expense.account}
+            parentTracked={isDrawDown}
             disabled={rowDisabled}
             isPending={isPending}
             onPaymentField={onPaymentField}
             onPaymentToggle={onPaymentToggle}
             onPaymentCleared={onPaymentCleared}
             onRemovePayment={onRemovePayment}
+            onAddSpend={onAddSpend}
+            onRemoveSpend={onRemoveSpend}
+            onAttachSpendImage={onAttachSpendImage}
             inputClass={inputClass}
           />
         ))}
@@ -2043,133 +2126,17 @@ function ExpenseRow({
         <tr className="bg-[#ebf0f0]">
           <td />
           <td className="px-3 py-3 pl-8" colSpan={onRemove ? 9 : 8}>
-            {/* Summary line */}
-            <div className="text-[11px] text-text-muted mb-2">
-              Funded <span className="font-bold text-text-heading">{formatCurrency(owed)}</span>
-              <span className="mx-1">·</span>
-              Spent <span className="font-bold text-text-heading">{formatCurrency(spent)}</span>
-              <span className="mx-1">·</span>
-              {remaining > 0.005 ? (
-                <span className="text-success font-bold">{formatCurrency(remaining)} left</span>
-              ) : remaining < -0.005 ? (
-                <span className="text-warning font-bold">{formatCurrency(-remaining)} over</span>
-              ) : (
-                <span className="text-success font-bold">fully spent</span>
-              )}
-            </div>
-
-            {/* Logged entries */}
-            {hasLedger && (
-              <ul className="space-y-1 mb-2 max-w-md">
-                {adjustments.map((a) => (
-                  <li key={a.id} className="flex items-center gap-2 text-caption">
-                    <span className="text-text-muted text-[10px] w-14 shrink-0">{formatDate(a.created_at)}</span>
-                    <span className="flex-1 text-text-heading truncate">{a.note || '—'}</span>
-                    <span className="font-bold text-text-heading">{formatCurrency(a.amount)}</span>
-                    {a.image_url ? (
-                      <a href={a.image_url} target="_blank" rel="noopener noreferrer" title="View receipt" className="shrink-0">
-                        <img src={a.image_url} alt="Receipt" className="h-6 w-6 object-cover rounded border border-border" />
-                      </a>
-                    ) : !isLocked ? (
-                      <button
-                        onClick={() => pickReceipt(a.id)}
-                        disabled={uploadingReceipt}
-                        title="Attach a receipt photo"
-                        className="text-text-muted hover:text-primary disabled:opacity-50"
-                      >
-                        <Camera size={13} aria-hidden="true" />
-                      </button>
-                    ) : null}
-                    {!isLocked && (
-                      <button
-                        onClick={() => onRemoveSpend(a.id)}
-                        disabled={isPending}
-                        title="Remove this spend"
-                        className="text-text-muted hover:text-warning text-[10px] disabled:opacity-50"
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            {/* Add a spend — enter the amount Spent, or the amount you want Left (back-solved) */}
-            {!isLocked && (
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="inline-flex rounded-full border border-border overflow-hidden text-[10px] font-bold">
-                  <button
-                    type="button"
-                    onClick={() => setSpendMode('spent')}
-                    className={`px-2.5 py-1 transition-colors ${spendMode === 'spent' ? 'bg-text-heading text-white' : 'bg-bg-white text-text-muted hover:text-text-heading'}`}
-                  >
-                    Spent
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSpendMode('left')}
-                    className={`px-2.5 py-1 transition-colors ${spendMode === 'left' ? 'bg-text-heading text-white' : 'bg-bg-white text-text-muted hover:text-text-heading'}`}
-                  >
-                    Left
-                  </button>
-                </div>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={spendAmt}
-                  onChange={(e) => setSpendAmt(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleLogSpend() }}
-                  placeholder={spendMode === 'spent' ? 'Spent' : 'Left'}
-                  className={`w-24 text-right ${inputClass}`}
-                />
-                <input
-                  type="text"
-                  value={spendNote}
-                  onChange={(e) => setSpendNote(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleLogSpend() }}
-                  placeholder="Note (e.g. Trader Joe's)"
-                  className={`w-44 ${inputClass}`}
-                />
-                {/* Receipt camera — capture a photo to attach to this spend */}
-                <input
-                  ref={receiptInputRef}
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  className="hidden"
-                  onChange={handleReceiptFile}
-                />
-                {spendImage ? (
-                  <span className="inline-flex items-center gap-1">
-                    <img src={spendImage} alt="Receipt" className="h-7 w-7 object-cover rounded border border-border" />
-                    <button type="button" onClick={() => setSpendImage(null)} title="Remove photo" className="text-text-muted hover:text-warning text-[10px]">✕</button>
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => pickReceipt(null)}
-                    disabled={uploadingReceipt}
-                    title="Snap a receipt photo"
-                    className="inline-flex items-center text-text-muted hover:text-primary disabled:opacity-50 p-1"
-                  >
-                    <Camera size={15} aria-hidden="true" />
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={handleLogSpend}
-                  disabled={isPending || uploadingReceipt || isNaN(resolvedSpend) || resolvedSpend === 0}
-                  className="bg-primary-teal text-text-inverse rounded-full px-3 py-1 text-[10px] font-bold hover:opacity-90 disabled:opacity-50 transition-opacity"
-                >
-                  Log
-                </button>
-                {uploadingReceipt && <span className="text-[10px] text-text-muted">reading receipt…</span>}
-                {spendMode === 'left' && !isNaN(resolvedSpend) && (
-                  <span className="text-[10px] text-text-muted">→ logs {formatCurrency(resolvedSpend)} spent</span>
-                )}
-              </div>
-            )}
+            <SpendLedger
+              funded={owed}
+              spent={spent}
+              adjustments={adjustments}
+              onAdd={(amount, note, imageUrl) => onAddSpend(expense.id, amount, note, imageUrl)}
+              onRemove={onRemoveSpend}
+              onAttachImage={onAttachSpendImage}
+              isLocked={isLocked}
+              isPending={isPending}
+              inputClass={inputClass}
+            />
           </td>
         </tr>
       )}
@@ -2180,28 +2147,45 @@ function ExpenseRow({
 // ─── Sub-Payment Row ─────────────────────────────────────────────
 function SubPaymentRow({
   payment,
+  parentExpenseId,
   parentAccount,
+  parentTracked,
   disabled,
   isPending,
   onPaymentField,
   onPaymentToggle,
   onPaymentCleared,
   onRemovePayment,
+  onAddSpend,
+  onRemoveSpend,
+  onAttachSpendImage,
   inputClass,
 }: {
   payment: PeriodExpensePayment
+  parentExpenseId: string
   parentAccount: string | null
+  parentTracked: boolean
   disabled: boolean
   isPending: boolean
   onPaymentField: (paymentId: string, field: string, value: string | number | boolean | null) => void
   onPaymentToggle: (paymentId: string, field: string, value: boolean) => void
   onPaymentCleared: (paymentId: string, value: boolean) => void
   onRemovePayment: (paymentId: string) => void
+  onAddSpend: (id: string, amount: number, note: string | null, imageUrl?: string | null, paymentId?: string | null) => void
+  onRemoveSpend: (adjustmentId: string) => void
+  onAttachSpendImage: (adjustmentId: string, imageUrl: string | null) => void
   inputClass: string
 }) {
   // A cleared installment is settled — lock its fields (Clear stays toggleable to reopen).
   const locked = disabled || payment.cleared
+  // Per-installment draw-down (only when the parent line is a tracked category).
+  const subAdjustments = payment.adjustments ?? []
+  const subSpent = payment.paid_amount ?? 0
+  const subRemaining = payment.amount - subSpent
+  const subHasLedger = subAdjustments.length > 0
+  const [subSpendOpen, setSubSpendOpen] = useState(false)
   return (
+    <>
     <tr className={payment.cleared ? 'bg-[#ebf0f0] opacity-60' : payment.pay_now ? 'bg-primary-teal/[0.15]' : 'bg-[#ebf0f0]'}>
       {/* Pay (to-pay) — what this installment commits to the budget */}
       <td className="text-center px-3 py-2">
@@ -2232,7 +2216,7 @@ function SubPaymentRow({
           )}
         </div>
       </td>
-      {/* Amount */}
+      {/* Amount (+ per-installment draw-down when the parent line is tracked) */}
       <td className="px-3 py-2">
         <input
           type="number"
@@ -2243,6 +2227,29 @@ function SubPaymentRow({
           onChange={(e) => onPaymentField(payment.id, 'amount', e.target.value === '' ? 0 : parseFloat(e.target.value))}
           className={`w-24 text-right ${inputClass}`}
         />
+        {parentTracked && subHasLedger && (
+          <div className="text-[10px] mt-0.5 whitespace-nowrap text-right">
+            <span className="text-text-muted">{formatCurrency(subSpent)} spent</span>
+            {subRemaining > 0.005 ? (
+              <span className="text-success font-bold ml-1">{formatCurrency(subRemaining)} left</span>
+            ) : subRemaining < -0.005 ? (
+              <span className="text-warning font-bold ml-1">{formatCurrency(-subRemaining)} over</span>
+            ) : (
+              <span className="text-success font-bold ml-1">fully spent</span>
+            )}
+          </div>
+        )}
+        {parentTracked && !locked && (
+          <button
+            onClick={() => setSubSpendOpen((o) => !o)}
+            disabled={isPending}
+            title={subSpendOpen ? 'Close spend ledger' : subHasLedger ? `Edit spends (${subAdjustments.length})` : 'Log a spend on this installment'}
+            className={`mt-0.5 inline-flex items-center gap-0.5 text-[11px] font-semibold transition-colors disabled:opacity-50 ${subSpendOpen ? 'text-primary-teal' : 'text-primary hover:text-primary-teal'}`}
+          >
+            <Pencil size={12} aria-hidden="true" />
+            <span>Log{subHasLedger ? ` (${subAdjustments.length})` : ''}</span>
+          </button>
+        )}
       </td>
       {/* Account (inherits parent) */}
       <td className="px-3 py-2 text-[10px] text-text-muted whitespace-nowrap">{parentAccount || '—'}</td>
@@ -2270,5 +2277,23 @@ function SubPaymentRow({
         <input type="checkbox" checked={payment.cleared} disabled={disabled} onChange={(e) => onPaymentCleared(payment.id, e.target.checked)} className="rounded" />
       </td>
     </tr>
+    {parentTracked && subSpendOpen && (
+      <tr className="bg-[#e3eaea]">
+        <td className="px-3 py-2 pl-12" colSpan={10}>
+          <SpendLedger
+            funded={payment.amount}
+            spent={subSpent}
+            adjustments={subAdjustments}
+            onAdd={(amount, note, imageUrl) => onAddSpend(parentExpenseId, amount, note, imageUrl, payment.id)}
+            onRemove={onRemoveSpend}
+            onAttachImage={onAttachSpendImage}
+            isLocked={locked}
+            isPending={isPending}
+            inputClass={inputClass}
+          />
+        </td>
+      </tr>
+    )}
+    </>
   )
 }

@@ -134,6 +134,8 @@ export interface PeriodExpenseAdjustment {
   id: string
   household_id: string
   period_expense_id: string
+  // Set when the spend is logged against a specific split installment (else null = whole-line)
+  period_expense_payment_id: string | null
   amount: number
   note: string | null
   image_url: string | null
@@ -154,9 +156,13 @@ export interface PeriodExpensePayment {
   transferred: boolean
   paid: boolean
   cleared: boolean
+  // Booked spend for this installment (sum of its spend-ledger entries); funds the draw-down
+  paid_amount: number
   sort_order: number
   created_at: string
   updated_at: string
+  // Spend-ledger entries logged against this installment (joined for tracked split lines)
+  adjustments?: PeriodExpenseAdjustment[]
 }
 
 export interface Invoice {

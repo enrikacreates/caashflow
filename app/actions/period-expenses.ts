@@ -838,6 +838,7 @@ async function reconcileExpenseSpend(
     .select('amount')
     .eq('period_expense_id', expenseId)
     .eq('household_id', householdId)
+    .is('period_expense_payment_id', null) // whole-line spends only; installment spends reconcile per sub-payment
 
   const ledgerSum = round2((rows ?? []).reduce((s, r) => s + (Number(r.amount) || 0), 0))
   const funded = exp.amount_override ?? exp.default_amount ?? 0
@@ -873,13 +874,74 @@ async function reconcileExpenseSpend(
   return flags
 }
 
+/**
+ * Reconcile a single split installment's booked spend with its own ledger. Mirrors the line-level
+ * reconcile but scoped to a sub-payment: paid_amount = its logged total, auto-paid/cleared once
+ * fully spent. Ripples the delta to the parent line's linked debt/savings, and seals the parent
+ * once every installment is cleared.
+ */
+async function reconcilePaymentSpend(supabase: SupabaseServer, householdId: string, paymentId: string): Promise<RippleFlags> {
+  const { data: pay } = await supabase
+    .from('period_expense_payments')
+    .select('amount, paid_amount, period_expense_id')
+    .eq('id', paymentId)
+    .eq('household_id', householdId)
+    .single()
+  if (!pay) return { ...NO_RIPPLE }
+
+  const { data: rows } = await supabase
+    .from('period_expense_adjustments')
+    .select('amount')
+    .eq('period_expense_payment_id', paymentId)
+    .eq('household_id', householdId)
+
+  const ledgerSum = round2((rows ?? []).reduce((s, r) => s + (Number(r.amount) || 0), 0))
+  const funded = Number(pay.amount) || 0
+  const closed = funded > 0 && ledgerSum >= funded - 0.005
+  const newSpent = closed ? round2(Math.max(funded, ledgerSum)) : ledgerSum
+  const delta = round2(newSpent - (Number(pay.paid_amount) || 0))
+
+  // Ripple to the parent line's linked debt / savings goal.
+  const { data: parent } = await supabase
+    .from('period_expenses')
+    .select('debt_id, savings_goal_id')
+    .eq('id', pay.period_expense_id)
+    .eq('household_id', householdId)
+    .single()
+  const flags = parent ? await applyLedgerDelta(supabase, householdId, parent, delta) : { ...NO_RIPPLE }
+
+  const update: Record<string, unknown> = { paid_amount: newSpent, paid: closed, updated_at: new Date().toISOString() }
+  if (closed) { update.cleared = true; update.pay_now = false }
+  await supabase
+    .from('period_expense_payments')
+    .update(update)
+    .eq('id', paymentId)
+    .eq('household_id', householdId)
+
+  // Seal the parent split once every installment is cleared.
+  const { data: subs } = await supabase
+    .from('period_expense_payments')
+    .select('cleared')
+    .eq('period_expense_id', pay.period_expense_id)
+    .eq('household_id', householdId)
+  const allCleared = (subs ?? []).length > 0 && (subs ?? []).every((s) => s.cleared)
+  await supabase
+    .from('period_expenses')
+    .update({ is_complete: allCleared, updated_at: new Date().toISOString() })
+    .eq('id', pay.period_expense_id)
+    .eq('household_id', householdId)
+
+  return flags
+}
+
 /** Log a spend against a line (the resolved spend amount; Spent/Left math is done client-side). */
 export async function addExpenseSpend(
   expenseId: string,
   periodId: string,
   amount: number,
   note: string | null,
-  imageUrl: string | null = null
+  imageUrl: string | null = null,
+  paymentId: string | null = null
 ) {
   const supabase = await createClient()
   const householdId = await getUserHouseholdId()
@@ -896,6 +958,7 @@ export async function addExpenseSpend(
   const { error } = await supabase.from('period_expense_adjustments').insert({
     household_id: householdId,
     period_expense_id: expenseId,
+    period_expense_payment_id: paymentId,
     amount,
     note,
     image_url: imageUrl,
@@ -903,7 +966,8 @@ export async function addExpenseSpend(
   })
   if (error) throw new Error(`Failed to log spend: ${error.message}`)
 
-  await reconcileExpenseSpend(supabase, householdId, expenseId)
+  if (paymentId) await reconcilePaymentSpend(supabase, householdId, paymentId)
+  else await reconcileExpenseSpend(supabase, householdId, expenseId)
 
   revalidatePath(`/periods/${periodId}`)
   revalidatePath('/periods')
@@ -921,7 +985,7 @@ export async function updateExpenseSpend(
 
   const { data: row } = await supabase
     .from('period_expense_adjustments')
-    .select('period_expense_id')
+    .select('period_expense_id, period_expense_payment_id')
     .eq('id', adjustmentId)
     .eq('household_id', householdId)
     .single()
@@ -934,7 +998,8 @@ export async function updateExpenseSpend(
     .eq('household_id', householdId)
   if (error) throw new Error(`Failed to update spend: ${error.message}`)
 
-  await reconcileExpenseSpend(supabase, householdId, row.period_expense_id)
+  if (row.period_expense_payment_id) await reconcilePaymentSpend(supabase, householdId, row.period_expense_payment_id)
+  else await reconcileExpenseSpend(supabase, householdId, row.period_expense_id)
   revalidatePath(`/periods/${periodId}`)
   revalidatePath('/periods')
   revalidatePath('/')
@@ -947,7 +1012,7 @@ export async function removeExpenseSpend(adjustmentId: string, periodId: string)
 
   const { data: row } = await supabase
     .from('period_expense_adjustments')
-    .select('period_expense_id')
+    .select('period_expense_id, period_expense_payment_id')
     .eq('id', adjustmentId)
     .eq('household_id', householdId)
     .single()
@@ -960,7 +1025,8 @@ export async function removeExpenseSpend(adjustmentId: string, periodId: string)
     .eq('household_id', householdId)
   if (error) throw new Error(`Failed to remove spend: ${error.message}`)
 
-  await reconcileExpenseSpend(supabase, householdId, row.period_expense_id)
+  if (row.period_expense_payment_id) await reconcilePaymentSpend(supabase, householdId, row.period_expense_payment_id)
+  else await reconcileExpenseSpend(supabase, householdId, row.period_expense_id)
   revalidatePath(`/periods/${periodId}`)
   revalidatePath('/periods')
   revalidatePath('/')

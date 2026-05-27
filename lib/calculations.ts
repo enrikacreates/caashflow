@@ -106,9 +106,9 @@ export function calculateAllocationTotals(allocations: PeriodSavingsAllocation[]
  */
 export function getSpentSoFar(expense: PeriodExpense): number {
   if (expense.is_split) {
+    // Each installment: full amount once paid/cleared, else its booked draw-down (paid_amount)
     return (expense.payments ?? [])
-      .filter((p) => p.paid)
-      .reduce((sum, p) => sum + p.amount, 0)
+      .reduce((sum, p) => sum + (p.paid ? p.amount : (p.paid_amount ?? 0)), 0)
   }
   return expense.paid_amount ?? 0
 }
