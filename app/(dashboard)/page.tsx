@@ -129,7 +129,7 @@ export default async function DashboardPage({
       {/* Insight cards */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {nextBills.length > 0 && (
-          <div className="bg-bg-white rounded-lg shadow-card p-5">
+          <a href={`/periods/${selectedPeriod?.id ?? ''}`} className="block bg-bg-white rounded-lg shadow-card p-5 hover:shadow-lg transition-shadow">
             <div className={cardLabel}><CalendarClock size={16} /> Next bills due</div>
             <ul className="space-y-2">
               {nextBills.map((b) => (
@@ -142,11 +142,11 @@ export default async function DashboardPage({
                 </li>
               ))}
             </ul>
-          </div>
+          </a>
         )}
 
         {incomeDelta != null && prevPeriod && (
-          <div className="bg-bg-white rounded-lg shadow-card p-5">
+          <a href="/cashflow" className="block bg-bg-white rounded-lg shadow-card p-5 hover:shadow-lg transition-shadow">
             <div className={cardLabel}>
               {incomeDelta >= 0 ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />} Income vs last month
             </div>
@@ -156,11 +156,11 @@ export default async function DashboardPage({
             <p className="text-caption text-text-muted mt-1">
               {formatCurrencyShort(selectedPeriod?.income_amount ?? 0)} this month vs {formatCurrencyShort(prevPeriod.income_amount)} in {prevPeriod.period_name}
             </p>
-          </div>
+          </a>
         )}
 
         {activeGoals.length > 0 && (
-          <div className="bg-bg-white rounded-lg shadow-card p-5">
+          <a href="/savings" className="block bg-bg-white rounded-lg shadow-card p-5 hover:shadow-lg transition-shadow">
             <div className={cardLabel}><PiggyBank size={16} /> Savings progress</div>
             <div className="flex items-baseline justify-between mb-2">
               <span className="text-h3 font-bold text-text-heading">{formatCurrency(savedTotal)}</span>
@@ -170,7 +170,7 @@ export default async function DashboardPage({
               <div className="h-full bg-income rounded-full" style={{ width: `${savedTarget > 0 ? Math.min(100, (savedTotal / savedTarget) * 100) : 0}%` }} />
             </div>
             <p className="text-caption text-text-muted mt-2">{activeGoals.length} active {activeGoals.length === 1 ? 'goal' : 'goals'}</p>
-          </div>
+          </a>
         )}
 
         <a href="/debts" className="block bg-bg-white rounded-lg shadow-card p-5 hover:shadow-lg transition-shadow">
