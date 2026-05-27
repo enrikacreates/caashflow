@@ -30,17 +30,16 @@ export default function HeaderAvatar() {
   }, [])
 
   return (
-    <Link href="/settings" className="relative w-12 h-12 md:w-14 md:h-14 ml-1 block group">
-      {/* Colored organic blob */}
-      <div
-        className="absolute inset-0 rounded-full transition-transform group-hover:scale-110"
-        style={{
-          background: 'linear-gradient(135deg, #b7f0f4 0%, #ffd34f 50%, #ffcbcd 100%)',
-          transform: 'rotate(-12deg) scale(1.15)',
-        }}
+    <Link href="/settings" className="relative w-12 h-12 md:w-14 md:h-14 ml-1 block group" aria-label="Profile & settings">
+      {/* Green organic blob — backdrop, peeks out behind the photo */}
+      <img
+        src="/shapes/profile-blob-green.svg"
+        alt=""
+        aria-hidden="true"
+        className="pointer-events-none select-none absolute -top-1.5 -left-2 w-[135%] h-[135%] max-w-none -rotate-[18deg] transition-transform duration-200 group-hover:-rotate-6 group-hover:scale-105"
       />
-      {/* Avatar circle */}
-      <div className="relative w-full h-full rounded-full bg-surface-beige border-2 border-white flex items-center justify-center overflow-hidden">
+      {/* Profile image — circular container with a white ring */}
+      <div className="relative w-full h-full rounded-full bg-surface-beige ring-2 ring-white shadow-sm flex items-center justify-center overflow-hidden">
         {avatarUrl ? (
           <img
             src={avatarUrl}
