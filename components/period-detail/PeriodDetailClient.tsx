@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { ChevronsDownUp, ChevronsUpDown, Pencil } from 'lucide-react'
 import {
   updateExpenseField,
-  markExpensePaid,
   updateDeductionOverrides,
   linkInvoiceToPeriod,
   unlinkInvoiceFromPeriod,
@@ -14,6 +13,7 @@ import {
   recalculatePeriodIncome,
   toggleExpenseSplit,
   toggleExpenseOverdue,
+  setExpenseFunded,
   setExpenseCleared,
   bulkMarkPaid,
   settleAndResetPeriod,
@@ -371,26 +371,20 @@ export default function PeriodDetailClient({
     [startTransition]
   )
 
+  // Paid = "funded" (money set aside → enters the spend-tracking phase). It no longer books the
+  // full amount; spend is booked as it's logged, and Clear is what counts as paid in the roundup.
   const handleCheckboxChange = (expenseId: string, field: string, value: boolean) => {
-    if (field === 'paid' && value === true) {
-      const expense = optExpenses.find((e) => e.id === expenseId)
-      if (expense?.debt_id || expense?.savings_goal_id) {
-        startTransition(async () => {
-          applyExpenseOpt({ kind: 'field', id: expenseId, field, value })
-          const { exceedsMinimum, savingsExceedsMonthly, savingsAchieved } =
-            await markExpensePaid(expenseId)
-          if (savingsAchieved) {
-            await bigConfetti()
-          } else if (exceedsMinimum || savingsExceedsMonthly) {
-            await smallConfetti()
-          }
-        })
-        return
-      }
-    }
     startTransition(async () => {
       applyExpenseOpt({ kind: 'field', id: expenseId, field, value })
-      await updateExpenseField(expenseId, field, value)
+      if (field === 'paid') {
+        // Funding/unfunding reconciles booked spend back to the logged total.
+        const exp = optExpenses.find((e) => e.id === expenseId)
+        const ledger = (exp?.adjustments ?? []).reduce((s, a) => s + (a.amount || 0), 0)
+        applyExpenseOpt({ kind: 'field', id: expenseId, field: 'paid_amount', value: ledger })
+        await setExpenseFunded(expenseId, period.id, value)
+      } else {
+        await updateExpenseField(expenseId, field, value)
+      }
     })
   }
 
@@ -545,14 +539,23 @@ export default function PeriodDetailClient({
   const handleToggleSplit = (id: string, value: boolean) =>
     startTransition(() => toggleExpenseSplit(id, period.id, value))
 
-  // "Clear" is the terminal settle: drop from the live balance + seal the line.
-  const handleToggleCleared = (id: string, value: boolean) =>
+  // "Clear" is the terminal settle: the money has cleared the account → counts as paid in the
+  // roundup, tops the line up to its funded amount, drops it from the live balance + seals it.
+  const handleToggleCleared = (id: string, value: boolean) => {
+    const exp = optExpenses.find((e) => e.id === id)
+    const funded = exp ? (exp.amount_override ?? exp.default_amount) : 0
+    const ledger = (exp?.adjustments ?? []).reduce((s, a) => s + (a.amount || 0), 0)
     startTransition(async () => {
       applyExpenseOpt({ kind: 'field', id, field: 'cleared', value })
       applyExpenseOpt({ kind: 'field', id, field: 'is_complete', value })
-      if (value) applyExpenseOpt({ kind: 'field', id, field: 'pay_now', value: false })
+      applyExpenseOpt({ kind: 'field', id, field: 'paid_amount', value: value ? Math.max(funded, ledger) : ledger })
+      if (value) {
+        applyExpenseOpt({ kind: 'field', id, field: 'paid', value: true })
+        applyExpenseOpt({ kind: 'field', id, field: 'pay_now', value: false })
+      }
       await setExpenseCleared(id, period.id, value)
     })
+  }
 
   const handleToggleOverdue = (id: string, value: boolean) => {
     const exp = optExpenses.find((e) => e.id === id)
@@ -1597,15 +1600,23 @@ function ExpenseRow({
   const payments = expense.payments ?? []
   const budgeted = getBudgetedAmount(expense)
   const owed = getOwedAmount(expense)
-  const fullyPaid = isFullyPaid(expense)
-  const settled = fullyPaid || expense.is_complete
 
-  // Spend ledger (per-line draw-down) — actual spends logged against the funded amount
+  // When split, the parent's Pay/Paid/Clear are derived (read-only) from its sub-payments
+  const splitPayNow = expense.is_split && payments.length > 0 && payments.some((p) => p.pay_now)
+  const splitCleared = expense.is_split && payments.length > 0 && payments.every((p) => p.cleared)
+
+  const fullyPaid = isFullyPaid(expense)
+  // "Settled" = closed/locked (Clear or fully drawn down). Paying-mode alone no longer dims the row.
+  const settled = expense.is_complete || splitCleared
+
+  // Spend ledger (per-line draw-down). Once the line is in paid mode the Amount cell turns into a
+  // read-only "spent / left" readout and Log replaces Split.
   const adjustments = expense.adjustments ?? []
   const hasLedger = adjustments.length > 0
-  const spent = getSpentSoFar(expense)
+  const spent = getSpentSoFar(expense) // booked spend (cached in paid_amount)
   const remaining = owed - spent
-  const [spendOpen, setSpendOpen] = useState(hasLedger && !settled)
+  const inPaidMode = !expense.is_split && expense.paid // spending/logging phase
+  const [spendOpen, setSpendOpen] = useState(hasLedger && !expense.is_complete)
   const [spendMode, setSpendMode] = useState<'spent' | 'left'>('spent')
   const [spendAmt, setSpendAmt] = useState('')
   const [spendNote, setSpendNote] = useState('')
@@ -1618,10 +1629,6 @@ function ExpenseRow({
     setSpendAmt('')
     setSpendNote('')
   }
-
-  // When split, the parent's Pay/Paid/Clear are derived (read-only) from its sub-payments
-  const splitPayNow = expense.is_split && payments.length > 0 && payments.some((p) => p.pay_now)
-  const splitCleared = expense.is_split && payments.length > 0 && payments.every((p) => p.cleared)
 
   // Row is read-only when the budget is locked OR the line is marked complete
   const rowDisabled = isLocked || expense.is_complete
@@ -1698,82 +1705,88 @@ function ExpenseRow({
           </span>
         </td>
 
-        {/* Amount (flexible, with split toggle + rollup) */}
+        {/* Amount — editable while funding; locks to a spent/left readout once funded (paid mode) */}
         <td className="px-3 py-3">
-          <input
-            type="number"
-            step="0.01"
-            value={amountInput}
-            disabled={rowDisabled}
-            onChange={(e) => {
-              const raw = e.target.value
-              setAmountInput(raw)
-              const val = raw === '' ? null : parseFloat(raw)
-              if (val === null || val === expense.default_amount) {
-                onDebouncedUpdate(expense.id, 'amount_override', null)
-              } else {
-                onDebouncedUpdate(expense.id, 'amount_override', val)
-              }
-            }}
-            onBlur={(e) => {
-              // Clearing the custom amount restores the original default
-              if (e.target.value === '') {
-                setAmountInput(String(expense.default_amount))
-                onDebouncedUpdate(expense.id, 'amount_override', null)
-              }
-            }}
-            className={`w-24 text-right ${inputClass} ${hasOverride ? 'border-primary bg-primary/5' : ''}`}
-          />
-          {hasOverride && !expense.is_split && (
-            <div className="text-[10px] text-text-muted mt-0.5">
-              default: {formatCurrency(expense.default_amount)}
-            </div>
-          )}
-          {expense.is_split && (
-            <div className="text-[10px] mt-0.5 whitespace-nowrap">
-              <span className="text-text-muted">{formatCurrency(budgeted)} budgeted</span>
-              {owed - budgeted > 0.005 ? (
-                <span className="text-warning font-bold ml-1">{formatCurrency(owed - budgeted)} left</span>
-              ) : (
-                <span className="text-success font-bold ml-1">fully budgeted</span>
+          {inPaidMode ? (
+            <>
+              {/* Read-only draw-down readout: spent / left */}
+              <div className="text-right tabular-nums whitespace-nowrap">
+                <span className="font-bold text-text-heading text-caption">{formatCurrency(spent)}</span>
+                <span className="text-text-muted"> / </span>
+                {remaining < -0.005 ? (
+                  <span className="font-bold text-warning">{formatCurrency(-remaining)}</span>
+                ) : (
+                  <span className={`font-bold ${remaining <= 0.005 ? 'text-success' : 'text-text-heading'}`}>{formatCurrency(Math.max(0, remaining))}</span>
+                )}
+              </div>
+              <div className="text-[10px] text-right text-text-muted mt-0.5">
+                {remaining > 0.005 ? 'spent / left' : remaining < -0.005 ? 'spent / over' : 'fully spent'}
+              </div>
+              {!isLocked && (
+                <button
+                  onClick={() => setSpendOpen((o) => !o)}
+                  disabled={isPending}
+                  title={spendOpen ? 'Close spend ledger' : hasLedger ? `Edit spends (${adjustments.length})` : 'Log a spend'}
+                  aria-label="Log or adjust spend"
+                  className={`mt-1 inline-flex items-center gap-0.5 text-[11px] font-semibold transition-colors disabled:opacity-50 ${spendOpen ? 'text-primary-teal' : 'text-primary hover:text-primary-teal'}`}
+                >
+                  <Pencil size={12} aria-hidden="true" />
+                  <span>Log{hasLedger ? ` (${adjustments.length})` : ''}</span>
+                </button>
               )}
-            </div>
-          )}
-          {/* Spend draw-down readout (logged spends vs funded amount) */}
-          {!expense.is_split && hasLedger && (
-            <div className="text-[10px] mt-0.5 whitespace-nowrap">
-              <span className="text-text-muted">{formatCurrency(spent)} spent</span>
-              {remaining > 0.005 ? (
-                <span className="text-success font-bold ml-1">{formatCurrency(remaining)} left</span>
-              ) : remaining < -0.005 ? (
-                <span className="text-warning font-bold ml-1">{formatCurrency(-remaining)} over</span>
-              ) : (
-                <span className="text-success font-bold ml-1">fully spent</span>
+            </>
+          ) : (
+            <>
+              <input
+                type="number"
+                step="0.01"
+                value={amountInput}
+                disabled={rowDisabled}
+                onChange={(e) => {
+                  const raw = e.target.value
+                  setAmountInput(raw)
+                  const val = raw === '' ? null : parseFloat(raw)
+                  if (val === null || val === expense.default_amount) {
+                    onDebouncedUpdate(expense.id, 'amount_override', null)
+                  } else {
+                    onDebouncedUpdate(expense.id, 'amount_override', val)
+                  }
+                }}
+                onBlur={(e) => {
+                  // Clearing the custom amount restores the original default
+                  if (e.target.value === '') {
+                    setAmountInput(String(expense.default_amount))
+                    onDebouncedUpdate(expense.id, 'amount_override', null)
+                  }
+                }}
+                className={`w-24 text-right ${inputClass} ${hasOverride ? 'border-primary bg-primary/5' : ''}`}
+              />
+              {hasOverride && !expense.is_split && (
+                <div className="text-[10px] text-text-muted mt-0.5">
+                  default: {formatCurrency(expense.default_amount)}
+                </div>
               )}
-            </div>
-          )}
-          {/* Toggle: spend ledger — pencil icon (hidden while split) */}
-          {!isLocked && !expense.is_split && (
-            <button
-              onClick={() => setSpendOpen((o) => !o)}
-              disabled={isPending}
-              title={spendOpen ? 'Close spend ledger' : hasLedger ? `Edit spends (${adjustments.length})` : 'Log a spend'}
-              aria-label="Log or adjust spend"
-              className={`mt-1 inline-flex items-center gap-0.5 text-[11px] font-semibold transition-colors disabled:opacity-50 ${spendOpen ? 'text-primary-teal' : 'text-primary hover:text-primary-teal'}`}
-            >
-              <Pencil size={12} aria-hidden="true" />
-              <span>Log{hasLedger ? ` (${adjustments.length})` : ''}</span>
-            </button>
-          )}
-          {/* Toggle: split (hidden once a spend is logged — the two modes are exclusive) */}
-          {!isLocked && !hasLedger && (
-            <button
-              onClick={() => onToggleSplit(expense.id, !expense.is_split)}
-              disabled={isPending}
-              className="text-[10px] text-primary font-semibold hover:underline mt-0.5 block disabled:opacity-50"
-            >
-              {expense.is_split ? '✕ Unsplit' : '+ Split / partial'}
-            </button>
+              {expense.is_split && (
+                <div className="text-[10px] mt-0.5 whitespace-nowrap">
+                  <span className="text-text-muted">{formatCurrency(budgeted)} budgeted</span>
+                  {owed - budgeted > 0.005 ? (
+                    <span className="text-warning font-bold ml-1">{formatCurrency(owed - budgeted)} left</span>
+                  ) : (
+                    <span className="text-success font-bold ml-1">fully budgeted</span>
+                  )}
+                </div>
+              )}
+              {/* Split / partial — budgeting-phase action, shown before the line is funded */}
+              {!isLocked && (
+                <button
+                  onClick={() => onToggleSplit(expense.id, !expense.is_split)}
+                  disabled={isPending}
+                  className="text-[10px] text-primary font-semibold hover:underline mt-0.5 block disabled:opacity-50"
+                >
+                  {expense.is_split ? '✕ Unsplit' : '+ Split / partial'}
+                </button>
+              )}
+            </>
           )}
         </td>
 

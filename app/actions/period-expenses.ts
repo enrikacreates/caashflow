@@ -727,14 +727,25 @@ async function applyLedgerDelta(
 }
 
 /**
- * Recompute a line's spent cache (paid_amount = sum of spend entries) and sync its
- * settle flags: fully spent (spent ≥ funded) closes the line (paid + cleared + complete,
- * dropped from the live balance); otherwise it stays open and in-progress.
+ * Reconcile a line's booked spend with its ledger + settle state. The invariant:
+ * `paid_amount` always equals the amount currently booked (and rippled to any linked
+ * debt/savings). On each call we recompute the target booked spend and ripple only the
+ * delta, so debt/savings stay correct across logging, editing, clearing, and reopening.
+ *
+ *   • Booked spend = funded amount when the line is closed (cleared / fully drawn down);
+ *     otherwise the logged ledger total.
+ *   • Closing (cleared) = "the money actually left the account" → counts as paid in the
+ *     roundup, tops the line up to its funded amount, and drops it from the live balance.
  */
-async function syncExpenseFromLedger(supabase: SupabaseServer, householdId: string, expenseId: string) {
+async function reconcileExpenseSpend(
+  supabase: SupabaseServer,
+  householdId: string,
+  expenseId: string,
+  opts: { forceClosed?: boolean } = {}
+) {
   const { data: exp } = await supabase
     .from('period_expenses')
-    .select('default_amount, amount_override')
+    .select('default_amount, amount_override, paid_amount, paid, is_complete, debt_id, savings_goal_id')
     .eq('id', expenseId)
     .eq('household_id', householdId)
     .single()
@@ -746,15 +757,22 @@ async function syncExpenseFromLedger(supabase: SupabaseServer, householdId: stri
     .eq('period_expense_id', expenseId)
     .eq('household_id', householdId)
 
-  const spent = round2((rows ?? []).reduce((s, r) => s + (Number(r.amount) || 0), 0))
+  const ledgerSum = round2((rows ?? []).reduce((s, r) => s + (Number(r.amount) || 0), 0))
   const funded = exp.amount_override ?? exp.default_amount ?? 0
-  const closed = funded > 0 && spent >= funded - 0.005
+  const autoClose = funded > 0 && ledgerSum >= funded - 0.005
+  const closed = opts.forceClosed !== undefined ? opts.forceClosed || autoClose : exp.is_complete || autoClose
+
+  const newSpent = closed ? round2(Math.max(funded, ledgerSum)) : ledgerSum
+  const prevBooked = Number(exp.paid_amount) || 0
+  const delta = round2(newSpent - prevBooked)
+
+  await applyLedgerDelta(supabase, householdId, exp, delta)
 
   const update: Record<string, unknown> = {
-    paid_amount: spent,
-    paid: closed,
+    paid_amount: newSpent,
     cleared: closed,
     is_complete: closed,
+    paid: closed ? true : exp.paid, // funded/paying mode stays on; closing implies it
     updated_at: new Date().toISOString(),
   }
   if (closed) update.pay_now = false
@@ -776,14 +794,6 @@ export async function addExpenseSpend(
   const supabase = await createClient()
   const householdId = await getUserHouseholdId()
 
-  const { data: expense } = await supabase
-    .from('period_expenses')
-    .select('debt_id, savings_goal_id')
-    .eq('id', expenseId)
-    .eq('household_id', householdId)
-    .single()
-  if (!expense) throw new Error('Expense not found')
-
   const { data: existing } = await supabase
     .from('period_expense_adjustments')
     .select('sort_order')
@@ -802,8 +812,7 @@ export async function addExpenseSpend(
   })
   if (error) throw new Error(`Failed to log spend: ${error.message}`)
 
-  await applyLedgerDelta(supabase, householdId, expense, amount)
-  await syncExpenseFromLedger(supabase, householdId, expenseId)
+  await reconcileExpenseSpend(supabase, householdId, expenseId)
 
   revalidatePath(`/periods/${periodId}`)
   revalidatePath('/periods')
@@ -821,7 +830,7 @@ export async function updateExpenseSpend(
 
   const { data: row } = await supabase
     .from('period_expense_adjustments')
-    .select('amount, period_expense_id')
+    .select('period_expense_id')
     .eq('id', adjustmentId)
     .eq('household_id', householdId)
     .single()
@@ -834,17 +843,7 @@ export async function updateExpenseSpend(
     .eq('household_id', householdId)
   if (error) throw new Error(`Failed to update spend: ${error.message}`)
 
-  if (data.amount !== undefined && data.amount !== row.amount) {
-    const { data: expense } = await supabase
-      .from('period_expenses')
-      .select('debt_id, savings_goal_id')
-      .eq('id', row.period_expense_id)
-      .eq('household_id', householdId)
-      .single()
-    if (expense) await applyLedgerDelta(supabase, householdId, expense, data.amount - row.amount)
-  }
-
-  await syncExpenseFromLedger(supabase, householdId, row.period_expense_id)
+  await reconcileExpenseSpend(supabase, householdId, row.period_expense_id)
   revalidatePath(`/periods/${periodId}`)
   revalidatePath('/periods')
   revalidatePath('/')
@@ -857,7 +856,7 @@ export async function removeExpenseSpend(adjustmentId: string, periodId: string)
 
   const { data: row } = await supabase
     .from('period_expense_adjustments')
-    .select('amount, period_expense_id')
+    .select('period_expense_id')
     .eq('id', adjustmentId)
     .eq('household_id', householdId)
     .single()
@@ -870,15 +869,7 @@ export async function removeExpenseSpend(adjustmentId: string, periodId: string)
     .eq('household_id', householdId)
   if (error) throw new Error(`Failed to remove spend: ${error.message}`)
 
-  const { data: expense } = await supabase
-    .from('period_expenses')
-    .select('debt_id, savings_goal_id')
-    .eq('id', row.period_expense_id)
-    .eq('household_id', householdId)
-    .single()
-  if (expense) await applyLedgerDelta(supabase, householdId, expense, -row.amount)
-
-  await syncExpenseFromLedger(supabase, householdId, row.period_expense_id)
+  await reconcileExpenseSpend(supabase, householdId, row.period_expense_id)
   revalidatePath(`/periods/${periodId}`)
   revalidatePath('/periods')
   revalidatePath('/')
@@ -889,24 +880,36 @@ export async function removeExpenseSpend(adjustmentId: string, periodId: string)
  * out of the live balance (pay_now off) and seals the line (is_complete + locked).
  * Unchecking reopens it. Done remains available as a manual seal.
  */
+/**
+ * Toggle a line's "funded" flag (the Paid checkbox = money set aside → spend-tracking phase).
+ * Reconciles booked spend so funding/unfunding keeps paid_amount in step with the ledger
+ * (and releases any stale booking back to the logged total when unfunded).
+ */
+export async function setExpenseFunded(expenseId: string, periodId: string, value: boolean) {
+  const supabase = await createClient()
+  const householdId = await getUserHouseholdId()
+
+  await supabase
+    .from('period_expenses')
+    .update({ paid: value, updated_at: new Date().toISOString() })
+    .eq('id', expenseId)
+    .eq('household_id', householdId)
+
+  await reconcileExpenseSpend(supabase, householdId, expenseId)
+
+  revalidatePath(`/periods/${periodId}`)
+  revalidatePath('/periods')
+  revalidatePath('/')
+}
+
 export async function setExpenseCleared(expenseId: string, periodId: string, value: boolean) {
   const supabase = await createClient()
   const householdId = await getUserHouseholdId()
 
-  const update: Record<string, unknown> = {
-    cleared: value,
-    is_complete: value,
-    updated_at: new Date().toISOString(),
-  }
-  if (value) update.pay_now = false
+  // Clearing books the line to its funded amount (counts as paid in the roundup) and seals it;
+  // unchecking reverses the top-up back to the logged total. reconcile ripples the delta.
+  await reconcileExpenseSpend(supabase, householdId, expenseId, { forceClosed: value })
 
-  const { error } = await supabase
-    .from('period_expenses')
-    .update(update)
-    .eq('id', expenseId)
-    .eq('household_id', householdId)
-
-  if (error) throw new Error(`Failed to update cleared: ${error.message}`)
   revalidatePath(`/periods/${periodId}`)
   revalidatePath('/')
 }

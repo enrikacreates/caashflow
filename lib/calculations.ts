@@ -99,34 +99,31 @@ export function calculateAllocationTotals(allocations: PeriodSavingsAllocation[]
 }
 
 /**
- * Total logged against the per-line spend ledger (sum of all spend entries).
- * This is the "spent so far" for a line being drawn down toward $0.
+ * Booked spend on a line ("spent so far" for the draw-down readout).
+ *   Split  → sum of paid sub-payments
+ *   Single → paid_amount, the cached booked total (grows as spends are logged;
+ *            topped up to the funded amount once the line clears)
  */
 export function getSpentSoFar(expense: PeriodExpense): number {
-  return (expense.adjustments ?? []).reduce((sum, a) => sum + (a.amount || 0), 0)
+  if (expense.is_split) {
+    return (expense.payments ?? [])
+      .filter((p) => p.paid)
+      .reduce((sum, p) => sum + p.amount, 0)
+  }
+  return expense.paid_amount ?? 0
 }
 
 /**
- * What's left to spend on a line: funded amount minus logged spends.
+ * What's left to spend on a line: funded amount minus booked spend.
  * Can go negative when overspent (caller decides whether to clamp for display).
  */
 export function getRemainingToSpend(expense: PeriodExpense): number {
   return getOwedAmount(expense) - getSpentSoFar(expense)
 }
 
-/**
- * How much of an expense has actually been paid.
- *   Split  → sum of paid sub-payments
- *   Single → the full owed amount once marked paid; otherwise the spend ledger total
- *            (so incremental spends count toward "paid so far").
- */
+/** How much of an expense counts as paid in the roundup — same as booked spend. */
 export function getPaidSoFar(expense: PeriodExpense): number {
-  if (expense.is_split) {
-    return (expense.payments ?? [])
-      .filter((p) => p.paid)
-      .reduce((sum, p) => sum + p.amount, 0)
-  }
-  return expense.paid ? getOwedAmount(expense) : getSpentSoFar(expense)
+  return getSpentSoFar(expense)
 }
 
 /** Whether an expense is fully settled (handles split + single). */
