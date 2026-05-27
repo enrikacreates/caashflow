@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useCallback, useRef, useEffect, useOptimistic } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronsDownUp, ChevronsUpDown } from 'lucide-react'
+import { ChevronsDownUp, ChevronsUpDown, Pencil } from 'lucide-react'
 import {
   updateExpenseField,
   markExpensePaid,
@@ -1752,14 +1752,17 @@ function ExpenseRow({
               )}
             </div>
           )}
-          {/* Toggle: spend ledger (hidden while split) */}
+          {/* Toggle: spend ledger — pencil icon (hidden while split) */}
           {!isLocked && !expense.is_split && (
             <button
               onClick={() => setSpendOpen((o) => !o)}
               disabled={isPending}
-              className="text-[10px] text-primary font-semibold hover:underline mt-0.5 block disabled:opacity-50"
+              title={spendOpen ? 'Close spend ledger' : hasLedger ? `Edit spends (${adjustments.length})` : 'Log a spend'}
+              aria-label="Log or adjust spend"
+              className={`mt-1 inline-flex items-center gap-0.5 text-[11px] font-semibold transition-colors disabled:opacity-50 ${spendOpen ? 'text-primary-teal' : 'text-primary hover:text-primary-teal'}`}
             >
-              {spendOpen ? '✕ Close spends' : hasLedger ? `Spends (${adjustments.length})` : '＋ Log spend'}
+              <Pencil size={12} aria-hidden="true" />
+              {hasLedger && <span className="text-[10px]">{adjustments.length}</span>}
             </button>
           )}
           {/* Toggle: split (hidden once a spend is logged — the two modes are exclusive) */}
