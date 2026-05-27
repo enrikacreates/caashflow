@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useCallback, useRef, useEffect, useOptimistic } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronsDownUp, ChevronsUpDown, Pencil } from 'lucide-react'
+import { ChevronsDownUp, ChevronsUpDown, Pencil, Camera } from 'lucide-react'
 import {
   updateExpenseField,
   updateDeductionOverrides,
@@ -21,7 +21,9 @@ import {
   updateExpensePayment,
   removeExpensePayment,
   addExpenseSpend,
+  updateExpenseSpend,
   removeExpenseSpend,
+  uploadReceiptImage,
   toggleManualIncomeDone,
   setManualIncomeExcluded,
   toggleLinkedInvoiceDone,
@@ -594,11 +596,15 @@ export default function PeriodDetailClient({
     startTransition(() => removeExpensePayment(paymentId, period.id))
 
   // ─── Spend ledger (per-line draw-down) ───────────────────────
-  const handleAddSpend = (id: string, amount: number, note: string | null) =>
-    startTransition(() => addExpenseSpend(id, period.id, amount, note))
+  const handleAddSpend = (id: string, amount: number, note: string | null, imageUrl: string | null = null) =>
+    startTransition(() => addExpenseSpend(id, period.id, amount, note, imageUrl))
 
   const handleRemoveSpend = (adjustmentId: string) =>
     startTransition(() => removeExpenseSpend(adjustmentId, period.id))
+
+  // Attach (or clear) a receipt photo on an existing spend entry.
+  const handleAttachSpendImage = (adjustmentId: string, imageUrl: string | null) =>
+    startTransition(() => updateExpenseSpend(adjustmentId, period.id, { image_url: imageUrl }))
 
   const debouncedPaymentUpdate = useCallback(
     (paymentId: string, field: string, value: string | number | boolean | null) => {
@@ -1395,6 +1401,7 @@ export default function PeriodDetailClient({
                     onRemovePayment={handleRemovePayment}
                     onAddSpend={handleAddSpend}
                     onRemoveSpend={handleRemoveSpend}
+                    onAttachSpendImage={handleAttachSpendImage}
                     onEdit={setEditExpense}
                     inputClass={inputClass}
                     categoryColorMap={categoryColorMap}
@@ -1520,6 +1527,7 @@ export default function PeriodDetailClient({
                       onRemovePayment={handleRemovePayment}
                       onAddSpend={handleAddSpend}
                       onRemoveSpend={handleRemoveSpend}
+                      onAttachSpendImage={handleAttachSpendImage}
                       onRemove={handleRemoveOneTime}
                       onEdit={setEditExpense}
                       inputClass={inputClass}
@@ -1584,6 +1592,7 @@ function ExpenseRow({
   onRemovePayment,
   onAddSpend,
   onRemoveSpend,
+  onAttachSpendImage,
   onRemove,
   onEdit,
   inputClass,
@@ -1602,8 +1611,9 @@ function ExpenseRow({
   onPaymentToggle: (paymentId: string, field: string, value: boolean) => void
   onPaymentCleared: (paymentId: string, value: boolean) => void
   onRemovePayment: (paymentId: string) => void
-  onAddSpend: (id: string, amount: number, note: string | null) => void
+  onAddSpend: (id: string, amount: number, note: string | null, imageUrl?: string | null) => void
   onRemoveSpend: (adjustmentId: string) => void
+  onAttachSpendImage: (adjustmentId: string, imageUrl: string | null) => void
   onRemove?: (id: string) => void
   onEdit?: (expense: PeriodExpense) => void
   inputClass: string
@@ -1642,11 +1652,40 @@ function ExpenseRow({
   const r2 = (n: number) => Math.round(n * 100) / 100
   const enteredSpend = spendAmt === '' ? NaN : parseFloat(spendAmt)
   const resolvedSpend = isNaN(enteredSpend) ? NaN : spendMode === 'left' ? r2(remaining - enteredSpend) : enteredSpend
+  // Receipt photo capture. A null target uploads onto the new spend being entered;
+  // a set target attaches the photo to that existing ledger entry.
+  const [spendImage, setSpendImage] = useState<string | null>(null)
+  const [uploadingReceipt, setUploadingReceipt] = useState(false)
+  const [attachTarget, setAttachTarget] = useState<string | null>(null)
+  const receiptInputRef = useRef<HTMLInputElement>(null)
+  const pickReceipt = (targetId: string | null) => {
+    setAttachTarget(targetId)
+    receiptInputRef.current?.click()
+  }
+  const handleReceiptFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingReceipt(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const url = await uploadReceiptImage(fd)
+      if (attachTarget) onAttachSpendImage(attachTarget, url)
+      else setSpendImage(url)
+    } catch (err) {
+      console.error('Receipt upload failed', err)
+    } finally {
+      setUploadingReceipt(false)
+      setAttachTarget(null)
+      if (receiptInputRef.current) receiptInputRef.current.value = ''
+    }
+  }
   const handleLogSpend = () => {
     if (isNaN(resolvedSpend) || resolvedSpend === 0) return
-    onAddSpend(expense.id, resolvedSpend, spendNote.trim() || null)
+    onAddSpend(expense.id, resolvedSpend, spendNote.trim() || null, spendImage)
     setSpendAmt('')
     setSpendNote('')
+    setSpendImage(null)
   }
 
   // Row is read-only when the budget is locked OR the line is marked complete
@@ -1938,6 +1977,20 @@ function ExpenseRow({
                     <span className="text-text-muted text-[10px] w-14 shrink-0">{formatDate(a.created_at)}</span>
                     <span className="flex-1 text-text-heading truncate">{a.note || '—'}</span>
                     <span className="font-bold text-text-heading">{formatCurrency(a.amount)}</span>
+                    {a.image_url ? (
+                      <a href={a.image_url} target="_blank" rel="noopener noreferrer" title="View receipt" className="shrink-0">
+                        <img src={a.image_url} alt="Receipt" className="h-6 w-6 object-cover rounded border border-border" />
+                      </a>
+                    ) : !isLocked ? (
+                      <button
+                        onClick={() => pickReceipt(a.id)}
+                        disabled={uploadingReceipt}
+                        title="Attach a receipt photo"
+                        className="text-text-muted hover:text-primary disabled:opacity-50"
+                      >
+                        <Camera size={13} aria-hidden="true" />
+                      </button>
+                    ) : null}
                     {!isLocked && (
                       <button
                         onClick={() => onRemoveSpend(a.id)}
@@ -1989,14 +2042,40 @@ function ExpenseRow({
                   placeholder="Note (e.g. Trader Joe's)"
                   className={`w-44 ${inputClass}`}
                 />
+                {/* Receipt camera — capture a photo to attach to this spend */}
+                <input
+                  ref={receiptInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={handleReceiptFile}
+                />
+                {spendImage ? (
+                  <span className="inline-flex items-center gap-1">
+                    <img src={spendImage} alt="Receipt" className="h-7 w-7 object-cover rounded border border-border" />
+                    <button type="button" onClick={() => setSpendImage(null)} title="Remove photo" className="text-text-muted hover:text-warning text-[10px]">✕</button>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => pickReceipt(null)}
+                    disabled={uploadingReceipt}
+                    title="Snap a receipt photo"
+                    className="inline-flex items-center text-text-muted hover:text-primary disabled:opacity-50 p-1"
+                  >
+                    <Camera size={15} aria-hidden="true" />
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={handleLogSpend}
-                  disabled={isPending || isNaN(resolvedSpend) || resolvedSpend === 0}
+                  disabled={isPending || uploadingReceipt || isNaN(resolvedSpend) || resolvedSpend === 0}
                   className="bg-primary-teal text-text-inverse rounded-full px-3 py-1 text-[10px] font-bold hover:opacity-90 disabled:opacity-50 transition-opacity"
                 >
                   Log
                 </button>
+                {uploadingReceipt && <span className="text-[10px] text-text-muted">uploading…</span>}
                 {spendMode === 'left' && !isNaN(resolvedSpend) && (
                   <span className="text-[10px] text-text-muted">→ logs {formatCurrency(resolvedSpend)} spent</span>
                 )}

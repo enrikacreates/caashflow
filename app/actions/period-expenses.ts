@@ -4,10 +4,42 @@ import { createClient } from '@/lib/supabase/server'
 import { getUserHouseholdId } from '@/lib/supabase/helpers'
 import { calculateDeductions } from '@/lib/calculations'
 import { revalidatePath } from 'next/cache'
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 
 type SupabaseServer = Awaited<ReturnType<typeof createClient>>
 
 const round2 = (n: number) => Math.round(n * 100) / 100
+
+// Cloudflare R2 (S3-compatible) — shared image store; receipts live under a receipts/ prefix.
+const r2 = new S3Client({
+  region: 'auto',
+  endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+  credentials: {
+    accessKeyId: process.env.R2_ACCESS_KEY_ID ?? '',
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY ?? '',
+  },
+})
+
+/** Upload a receipt photo for a spend entry; returns its public URL. */
+export async function uploadReceiptImage(formData: FormData): Promise<string> {
+  const householdId = await getUserHouseholdId()
+  const file = formData.get('file') as File | null
+  if (!file || file.size === 0) throw new Error('No file provided')
+
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
+  const key = `${householdId}/receipts/${crypto.randomUUID()}.${ext}`
+
+  await r2.send(
+    new PutObjectCommand({
+      Bucket: process.env.R2_BUCKET_NAME,
+      Key: key,
+      Body: Buffer.from(await file.arrayBuffer()),
+      ContentType: file.type || undefined,
+    })
+  )
+
+  return `${process.env.R2_PUBLIC_URL}/${key}`
+}
 
 /**
  * Log the deductions for a just-settled income item into the period ledger.
@@ -806,7 +838,8 @@ export async function addExpenseSpend(
   expenseId: string,
   periodId: string,
   amount: number,
-  note: string | null
+  note: string | null,
+  imageUrl: string | null = null
 ) {
   const supabase = await createClient()
   const householdId = await getUserHouseholdId()
@@ -825,6 +858,7 @@ export async function addExpenseSpend(
     period_expense_id: expenseId,
     amount,
     note,
+    image_url: imageUrl,
     sort_order: nextOrder,
   })
   if (error) throw new Error(`Failed to log spend: ${error.message}`)
@@ -840,7 +874,7 @@ export async function addExpenseSpend(
 export async function updateExpenseSpend(
   adjustmentId: string,
   periodId: string,
-  data: Partial<{ amount: number; note: string | null }>
+  data: Partial<{ amount: number; note: string | null; image_url: string | null }>
 ) {
   const supabase = await createClient()
   const householdId = await getUserHouseholdId()
