@@ -39,10 +39,10 @@ export default function DashboardLayout({
         <div className="flex items-center gap-3">
           {/* Camp dash divider — playful break between the YTD stats and the controls */}
           <img
-            src="/shapes/navshapes/campDashDivider.svg"
+            src="/shapes/navshapes/campDashDivider2.svg"
             alt=""
             aria-hidden="true"
-            className="hidden lg:block h-12 w-[12px] mr-1 select-none pointer-events-none"
+            className="hidden lg:block h-12 w-[4px] mr-2 select-none pointer-events-none"
           />
           {/* Settings icon */}
           <Link
