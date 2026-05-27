@@ -37,6 +37,13 @@ export default function DashboardLayout({
 
         {/* Right side: profile blob + settings */}
         <div className="flex items-center gap-3">
+          {/* Camp dash divider — playful break between the YTD stats and the controls */}
+          <img
+            src="/shapes/navshapes/campDashDivider.svg"
+            alt=""
+            aria-hidden="true"
+            className="hidden lg:block h-12 w-[3px] mr-1 select-none pointer-events-none"
+          />
           {/* Settings icon */}
           <Link
             href="/settings"
