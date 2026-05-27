@@ -689,7 +689,7 @@ export default function PeriodDetailClient({
   const handleReopen = () => startTransition(() => reopenPeriod(period.id))
 
   const inputClass = 'bg-bg-white border border-border rounded-sm px-2 py-1 text-caption focus:outline-none focus:border-primary transition-colors'
-  const thClass = 'text-left text-caption font-bold uppercase text-text-muted px-3 py-3 whitespace-nowrap cursor-pointer hover:text-text-heading select-none'
+  const thClass = 'text-left text-caption font-bold uppercase text-text-muted px-2 py-3 whitespace-nowrap cursor-pointer hover:text-text-heading select-none'
 
   return (
     <div className="space-y-8">
@@ -1415,8 +1415,8 @@ export default function PeriodDetailClient({
                   <th className={thClass} onClick={() => handleSort('name')}>
                     Name<SortIcon col="name" />
                   </th>
-                  <th className={thClass} onClick={() => handleSort('default_amount')}>
-                    Amount<SortIcon col="default_amount" />
+                  <th className={`${thClass} w-[1%]`} onClick={() => handleSort('default_amount')}>
+                    Amt<SortIcon col="default_amount" />
                   </th>
                   <th className={`${thClass} w-[1%]`} onClick={() => handleSort('account')}>
                     Acct<SortIcon col="account" />
@@ -1861,7 +1861,7 @@ function ExpenseRow({
         </td>
 
         {/* Name */}
-        <td className="px-3 py-3">
+        <td className="px-2 py-3">
           {!rowDisabled && (
             <button
               type="button"
@@ -1905,7 +1905,7 @@ function ExpenseRow({
         </td>
 
         {/* Amount — editable while funding; locks to a spent/left readout once funded (paid mode) */}
-        <td className="px-3 py-3">
+        <td className="px-2 py-3">
           {inPaidMode ? (
             <>
               {/* Read-only draw-down readout: spent / left */}
@@ -1958,7 +1958,7 @@ function ExpenseRow({
                     onDebouncedUpdate(expense.id, 'amount_override', null)
                   }
                 }}
-                className={`w-24 text-right ${inputClass} ${hasOverride ? 'border-primary bg-primary/5' : ''}`}
+                className={`w-16 text-right ${inputClass} ${hasOverride ? 'border-primary bg-primary/5' : ''}`}
               />
               {hasOverride && !expense.is_split && (
                 <div className="text-[10px] text-text-muted mt-0.5">
@@ -2008,7 +2008,7 @@ function ExpenseRow({
                   disabled={isPending}
                   className="text-[10px] text-primary font-semibold hover:underline mt-0.5 block disabled:opacity-50"
                 >
-                  {expense.is_split ? '✕ Unsplit' : '+ Split / partial'}
+                  {expense.is_split ? '✕ Unsplit' : '+ Split'}
                 </button>
               )}
             </>
