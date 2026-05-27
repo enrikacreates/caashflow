@@ -684,22 +684,27 @@ export async function removeExpensePayment(paymentId: string, periodId: string) 
 
 // ── Spend ledger (per-line adjustments) ──────────────────────────────────────
 
-/** Apply a spend delta to a line's linked debt / savings goal (mirrors markExpensePaid). */
+type RippleFlags = { exceedsMinimum: boolean; savingsExceedsMonthly: boolean; savingsAchieved: boolean }
+const NO_RIPPLE: RippleFlags = { exceedsMinimum: false, savingsExceedsMonthly: false, savingsAchieved: false }
+
+/** Apply a spend delta to a line's linked debt / savings goal; returns milestone flags for confetti. */
 async function applyLedgerDelta(
   supabase: SupabaseServer,
   householdId: string,
   expense: { debt_id: string | null; savings_goal_id: string | null },
   delta: number
-) {
-  if (delta === 0) return
+): Promise<RippleFlags> {
+  const flags: RippleFlags = { ...NO_RIPPLE }
+  if (delta === 0) return flags
   if (expense.debt_id) {
     const { data: debt } = await supabase
       .from('debts')
-      .select('current_balance')
+      .select('current_balance, minimum_payment')
       .eq('id', expense.debt_id)
       .eq('household_id', householdId)
       .single()
     if (debt) {
+      if (delta > 0 && debt.minimum_payment !== null) flags.exceedsMinimum = delta > Number(debt.minimum_payment)
       await supabase
         .from('debts')
         .update({ current_balance: Math.max(0, Number(debt.current_balance) - delta), updated_at: new Date().toISOString() })
@@ -711,19 +716,25 @@ async function applyLedgerDelta(
   if (expense.savings_goal_id) {
     const { data: goal } = await supabase
       .from('savings_goals')
-      .select('current_amount')
+      .select('current_amount, target_amount, monthly_contribution')
       .eq('id', expense.savings_goal_id)
       .eq('household_id', householdId)
       .single()
     if (goal) {
+      const newAmount = Math.max(0, Number(goal.current_amount) + delta)
+      if (delta > 0) {
+        if (goal.monthly_contribution !== null) flags.savingsExceedsMonthly = delta > Number(goal.monthly_contribution)
+        flags.savingsAchieved = newAmount >= Number(goal.target_amount) && Number(goal.current_amount) < Number(goal.target_amount)
+      }
       await supabase
         .from('savings_goals')
-        .update({ current_amount: Math.max(0, Number(goal.current_amount) + delta), updated_at: new Date().toISOString() })
+        .update({ current_amount: newAmount, updated_at: new Date().toISOString() })
         .eq('id', expense.savings_goal_id)
         .eq('household_id', householdId)
       revalidatePath('/savings')
     }
   }
+  return flags
 }
 
 /**
@@ -734,6 +745,8 @@ async function applyLedgerDelta(
  *
  *   • Booked spend = funded amount when the line is closed (cleared / fully drawn down);
  *     otherwise the logged ledger total.
+ *   • Debt/savings lines aren't pay-as-you-go: funding them (Paid) books the full amount
+ *     immediately (the payment is made, just waiting to clear) and ripples to the balance.
  *   • Closing (cleared) = "the money actually left the account" → counts as paid in the
  *     roundup, tops the line up to its funded amount, and drops it from the live balance.
  */
@@ -742,14 +755,14 @@ async function reconcileExpenseSpend(
   householdId: string,
   expenseId: string,
   opts: { forceClosed?: boolean } = {}
-) {
+): Promise<RippleFlags> {
   const { data: exp } = await supabase
     .from('period_expenses')
     .select('default_amount, amount_override, paid_amount, paid, is_complete, debt_id, savings_goal_id')
     .eq('id', expenseId)
     .eq('household_id', householdId)
     .single()
-  if (!exp) return
+  if (!exp) return { ...NO_RIPPLE }
 
   const { data: rows } = await supabase
     .from('period_expense_adjustments')
@@ -759,14 +772,16 @@ async function reconcileExpenseSpend(
 
   const ledgerSum = round2((rows ?? []).reduce((s, r) => s + (Number(r.amount) || 0), 0))
   const funded = exp.amount_override ?? exp.default_amount ?? 0
+  const linked = !!(exp.debt_id || exp.savings_goal_id)
+  const bookFull = linked && exp.paid // debt/savings: funded = fully booked (not draw-down)
   const autoClose = funded > 0 && ledgerSum >= funded - 0.005
   const closed = opts.forceClosed !== undefined ? opts.forceClosed || autoClose : exp.is_complete || autoClose
 
-  const newSpent = closed ? round2(Math.max(funded, ledgerSum)) : ledgerSum
+  const newSpent = closed || bookFull ? round2(Math.max(funded, ledgerSum)) : ledgerSum
   const prevBooked = Number(exp.paid_amount) || 0
   const delta = round2(newSpent - prevBooked)
 
-  await applyLedgerDelta(supabase, householdId, exp, delta)
+  const flags = await applyLedgerDelta(supabase, householdId, exp, delta)
 
   const update: Record<string, unknown> = {
     paid_amount: newSpent,
@@ -782,6 +797,8 @@ async function reconcileExpenseSpend(
     .update(update)
     .eq('id', expenseId)
     .eq('household_id', householdId)
+
+  return flags
 }
 
 /** Log a spend against a line (the resolved spend amount; Spent/Left math is done client-side). */
@@ -885,7 +902,7 @@ export async function removeExpenseSpend(adjustmentId: string, periodId: string)
  * Reconciles booked spend so funding/unfunding keeps paid_amount in step with the ledger
  * (and releases any stale booking back to the logged total when unfunded).
  */
-export async function setExpenseFunded(expenseId: string, periodId: string, value: boolean) {
+export async function setExpenseFunded(expenseId: string, periodId: string, value: boolean): Promise<RippleFlags> {
   const supabase = await createClient()
   const householdId = await getUserHouseholdId()
 
@@ -895,23 +912,25 @@ export async function setExpenseFunded(expenseId: string, periodId: string, valu
     .eq('id', expenseId)
     .eq('household_id', householdId)
 
-  await reconcileExpenseSpend(supabase, householdId, expenseId)
+  const flags = await reconcileExpenseSpend(supabase, householdId, expenseId)
 
   revalidatePath(`/periods/${periodId}`)
   revalidatePath('/periods')
   revalidatePath('/')
+  return flags
 }
 
-export async function setExpenseCleared(expenseId: string, periodId: string, value: boolean) {
+export async function setExpenseCleared(expenseId: string, periodId: string, value: boolean): Promise<RippleFlags> {
   const supabase = await createClient()
   const householdId = await getUserHouseholdId()
 
   // Clearing books the line to its funded amount (counts as paid in the roundup) and seals it;
   // unchecking reverses the top-up back to the logged total. reconcile ripples the delta.
-  await reconcileExpenseSpend(supabase, householdId, expenseId, { forceClosed: value })
+  const flags = await reconcileExpenseSpend(supabase, householdId, expenseId, { forceClosed: value })
 
   revalidatePath(`/periods/${periodId}`)
   revalidatePath('/')
+  return flags
 }
 
 /**

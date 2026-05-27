@@ -381,7 +381,12 @@ export default function PeriodDetailClient({
         const exp = optExpenses.find((e) => e.id === expenseId)
         const ledger = (exp?.adjustments ?? []).reduce((s, a) => s + (a.amount || 0), 0)
         applyExpenseOpt({ kind: 'field', id: expenseId, field: 'paid_amount', value: ledger })
-        await setExpenseFunded(expenseId, period.id, value)
+        const res = await setExpenseFunded(expenseId, period.id, value)
+        // Debt/savings book in full on funding → celebrate the milestone.
+        if (value && res) {
+          if (res.savingsAchieved) await bigConfetti()
+          else if (res.exceedsMinimum || res.savingsExceedsMonthly) await smallConfetti()
+        }
       } else {
         await updateExpenseField(expenseId, field, value)
       }
@@ -553,7 +558,12 @@ export default function PeriodDetailClient({
         applyExpenseOpt({ kind: 'field', id, field: 'paid', value: true })
         applyExpenseOpt({ kind: 'field', id, field: 'pay_now', value: false })
       }
-      await setExpenseCleared(id, period.id, value)
+      const res = await setExpenseCleared(id, period.id, value)
+      // Clearing a debt/savings line that wasn't funded first books it now → celebrate.
+      if (value && res) {
+        if (res.savingsAchieved) await bigConfetti()
+        else if (res.exceedsMinimum || res.savingsExceedsMonthly) await smallConfetti()
+      }
     })
   }
 
@@ -1615,6 +1625,8 @@ function ExpenseRow({
   const hasLedger = adjustments.length > 0
   const spent = getSpentSoFar(expense) // booked spend (cached in paid_amount)
   const remaining = owed - spent
+  // Debt/savings lines aren't pay-as-you-go — funding books them in full, no draw-down logging.
+  const isLinked = !!(expense.debt_id || expense.savings_goal_id)
   const inPaidMode = !expense.is_split && expense.paid // spending/logging phase
   const [spendOpen, setSpendOpen] = useState(hasLedger && !expense.is_complete)
   const [spendMode, setSpendMode] = useState<'spent' | 'left'>('spent')
@@ -1722,7 +1734,7 @@ function ExpenseRow({
               <div className="text-[10px] text-right text-text-muted mt-0.5">
                 {remaining > 0.005 ? 'spent / left' : remaining < -0.005 ? 'spent / over' : 'fully spent'}
               </div>
-              {!isLocked && (
+              {!isLocked && !isLinked && (
                 <button
                   onClick={() => setSpendOpen((o) => !o)}
                   disabled={isPending}
@@ -1892,7 +1904,7 @@ function ExpenseRow({
       )}
 
       {/* Spend ledger — actual spends drawn down against the funded amount */}
-      {!expense.is_split && spendOpen && (
+      {!expense.is_split && !isLinked && spendOpen && (
         <tr className="bg-[#ebf0f0]">
           <td />
           <td className="px-3 py-3 pl-8" colSpan={onRemove ? 9 : 8}>
