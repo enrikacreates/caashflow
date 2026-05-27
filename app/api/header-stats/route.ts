@@ -68,7 +68,7 @@ export async function GET() {
       .in('period_id', periodIds)
 
     const expenseList = (expenses ?? []) as PeriodExpense[]
-    // Attach split sub-payments so getPaidSoFar can sum them
+    // Attach split sub-payments + spend-ledger entries so getPaidSoFar can sum them
     const expenseIds = expenseList.map((e) => e.id)
     if (expenseIds.length > 0) {
       const { data: payments } = await supabase
@@ -82,6 +82,18 @@ export async function GET() {
         byExpense.set(p.period_expense_id, arr)
       }
       for (const e of expenseList) e.payments = (byExpense.get(e.id) ?? []) as PeriodExpense['payments']
+
+      const { data: adjustments } = await supabase
+        .from('period_expense_adjustments')
+        .select('*')
+        .in('period_expense_id', expenseIds)
+      const adjByExpense = new Map<string, typeof adjustments>()
+      for (const a of adjustments ?? []) {
+        const arr = adjByExpense.get(a.period_expense_id) ?? []
+        arr.push(a)
+        adjByExpense.set(a.period_expense_id, arr)
+      }
+      for (const e of expenseList) e.adjustments = (adjByExpense.get(e.id) ?? []) as PeriodExpense['adjustments']
     }
     spent = expenseList.reduce((sum, e) => sum + getPaidSoFar(e), 0)
   }

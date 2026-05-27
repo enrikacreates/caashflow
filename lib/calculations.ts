@@ -99,9 +99,26 @@ export function calculateAllocationTotals(allocations: PeriodSavingsAllocation[]
 }
 
 /**
+ * Total logged against the per-line spend ledger (sum of all spend entries).
+ * This is the "spent so far" for a line being drawn down toward $0.
+ */
+export function getSpentSoFar(expense: PeriodExpense): number {
+  return (expense.adjustments ?? []).reduce((sum, a) => sum + (a.amount || 0), 0)
+}
+
+/**
+ * What's left to spend on a line: funded amount minus logged spends.
+ * Can go negative when overspent (caller decides whether to clamp for display).
+ */
+export function getRemainingToSpend(expense: PeriodExpense): number {
+  return getOwedAmount(expense) - getSpentSoFar(expense)
+}
+
+/**
  * How much of an expense has actually been paid.
  *   Split  → sum of paid sub-payments
- *   Single → the full owed amount once marked paid, else 0
+ *   Single → the full owed amount once marked paid; otherwise the spend ledger total
+ *            (so incremental spends count toward "paid so far").
  */
 export function getPaidSoFar(expense: PeriodExpense): number {
   if (expense.is_split) {
@@ -109,7 +126,7 @@ export function getPaidSoFar(expense: PeriodExpense): number {
       .filter((p) => p.paid)
       .reduce((sum, p) => sum + p.amount, 0)
   }
-  return expense.paid ? getOwedAmount(expense) : 0
+  return expense.paid ? getOwedAmount(expense) : getSpentSoFar(expense)
 }
 
 /** Whether an expense is fully settled (handles split + single). */

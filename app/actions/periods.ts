@@ -220,6 +220,7 @@ export async function getPeriodDetail(periodId: string) {
   // Sub-payments for split expenses — attach to each expense
   const expenseIds = (expenses ?? []).map((e) => e.id)
   const paymentsByExpense: Record<string, unknown[]> = {}
+  const adjustmentsByExpense: Record<string, unknown[]> = {}
   if (expenseIds.length > 0) {
     const { data: payments, error: paymentsError } = await supabase
       .from('period_expense_payments')
@@ -232,10 +233,24 @@ export async function getPeriodDetail(periodId: string) {
     for (const p of payments ?? []) {
       ;(paymentsByExpense[p.period_expense_id] ??= []).push(p)
     }
+
+    // Spend-ledger entries (per-line adjustments) — attach to each expense
+    const { data: adjustments, error: adjustmentsError } = await supabase
+      .from('period_expense_adjustments')
+      .select('*')
+      .in('period_expense_id', expenseIds)
+      .order('sort_order', { ascending: true })
+
+    if (adjustmentsError) throw new Error(`Failed to fetch expense spends: ${adjustmentsError.message}`)
+
+    for (const a of adjustments ?? []) {
+      ;(adjustmentsByExpense[a.period_expense_id] ??= []).push(a)
+    }
   }
   const expensesWithPayments = (expenses ?? []).map((e) => ({
     ...e,
     payments: paymentsByExpense[e.id] ?? [],
+    adjustments: adjustmentsByExpense[e.id] ?? [],
   }))
 
   const { data: linkedInvoices, error: linkedError } = await supabase

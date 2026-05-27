@@ -20,6 +20,8 @@ import {
   addExpensePayment,
   updateExpensePayment,
   removeExpensePayment,
+  addExpenseSpend,
+  removeExpenseSpend,
   toggleManualIncomeDone,
   setManualIncomeExcluded,
   toggleLinkedInvoiceDone,
@@ -34,9 +36,9 @@ import {
 } from '@/app/actions/period-expenses'
 import { completePeriod, reopenPeriod } from '@/app/actions/periods'
 import { smallConfetti, bigConfetti } from '@/lib/confetti'
-import { formatCurrency, getOwedAmount, getPriorityPill } from '@/lib/utils'
+import { formatCurrency, formatDate, getOwedAmount, getPriorityPill } from '@/lib/utils'
 import BudgetSummaryBar from '@/components/dashboard/BudgetSummaryBar'
-import { calculateDeductions, calculatePayNowTotal, calculateAccountTransferDetail, getDeductionAccountAllocations, getBudgetedAmount, isFullyPaid, calculatePeriodPaymentSummary } from '@/lib/calculations'
+import { calculateDeductions, calculatePayNowTotal, calculateAccountTransferDetail, getDeductionAccountAllocations, getBudgetedAmount, isFullyPaid, calculatePeriodPaymentSummary, getSpentSoFar } from '@/lib/calculations'
 import type { DeductionMode } from '@/lib/calculations'
 import SavingsAllocationSection from '@/components/period-detail/SavingsAllocationSection'
 import PeriodRequestsPanel from '@/components/period-detail/PeriodRequestsPanel'
@@ -572,6 +574,13 @@ export default function PeriodDetailClient({
 
   const handleRemovePayment = (paymentId: string) =>
     startTransition(() => removeExpensePayment(paymentId, period.id))
+
+  // ─── Spend ledger (per-line draw-down) ───────────────────────
+  const handleAddSpend = (id: string, amount: number, note: string | null) =>
+    startTransition(() => addExpenseSpend(id, period.id, amount, note))
+
+  const handleRemoveSpend = (adjustmentId: string) =>
+    startTransition(() => removeExpenseSpend(adjustmentId, period.id))
 
   const debouncedPaymentUpdate = useCallback(
     (paymentId: string, field: string, value: string | number | boolean | null) => {
@@ -1364,6 +1373,8 @@ export default function PeriodDetailClient({
                     onPaymentToggle={handlePaymentToggle}
                     onPaymentCleared={handlePaymentCleared}
                     onRemovePayment={handleRemovePayment}
+                    onAddSpend={handleAddSpend}
+                    onRemoveSpend={handleRemoveSpend}
                     onEdit={setEditExpense}
                     inputClass={inputClass}
                     categoryColorMap={categoryColorMap}
@@ -1487,6 +1498,8 @@ export default function PeriodDetailClient({
                       onPaymentToggle={handlePaymentToggle}
                       onPaymentCleared={handlePaymentCleared}
                       onRemovePayment={handleRemovePayment}
+                      onAddSpend={handleAddSpend}
+                      onRemoveSpend={handleRemoveSpend}
                       onRemove={handleRemoveOneTime}
                       onEdit={setEditExpense}
                       inputClass={inputClass}
@@ -1549,6 +1562,8 @@ function ExpenseRow({
   onPaymentToggle,
   onPaymentCleared,
   onRemovePayment,
+  onAddSpend,
+  onRemoveSpend,
   onRemove,
   onEdit,
   inputClass,
@@ -1567,6 +1582,8 @@ function ExpenseRow({
   onPaymentToggle: (paymentId: string, field: string, value: boolean) => void
   onPaymentCleared: (paymentId: string, value: boolean) => void
   onRemovePayment: (paymentId: string) => void
+  onAddSpend: (id: string, amount: number, note: string | null) => void
+  onRemoveSpend: (adjustmentId: string) => void
   onRemove?: (id: string) => void
   onEdit?: (expense: PeriodExpense) => void
   inputClass: string
@@ -1582,6 +1599,25 @@ function ExpenseRow({
   const owed = getOwedAmount(expense)
   const fullyPaid = isFullyPaid(expense)
   const settled = fullyPaid || expense.is_complete
+
+  // Spend ledger (per-line draw-down) — actual spends logged against the funded amount
+  const adjustments = expense.adjustments ?? []
+  const hasLedger = adjustments.length > 0
+  const spent = getSpentSoFar(expense)
+  const remaining = owed - spent
+  const [spendOpen, setSpendOpen] = useState(hasLedger && !settled)
+  const [spendMode, setSpendMode] = useState<'spent' | 'left'>('spent')
+  const [spendAmt, setSpendAmt] = useState('')
+  const [spendNote, setSpendNote] = useState('')
+  const r2 = (n: number) => Math.round(n * 100) / 100
+  const enteredSpend = spendAmt === '' ? NaN : parseFloat(spendAmt)
+  const resolvedSpend = isNaN(enteredSpend) ? NaN : spendMode === 'left' ? r2(remaining - enteredSpend) : enteredSpend
+  const handleLogSpend = () => {
+    if (isNaN(resolvedSpend) || resolvedSpend === 0) return
+    onAddSpend(expense.id, resolvedSpend, spendNote.trim() || null)
+    setSpendAmt('')
+    setSpendNote('')
+  }
 
   // When split, the parent's Pay/Paid/Clear are derived (read-only) from its sub-payments
   const splitPayNow = expense.is_split && payments.length > 0 && payments.some((p) => p.pay_now)
@@ -1703,7 +1739,31 @@ function ExpenseRow({
               )}
             </div>
           )}
-          {!isLocked && (
+          {/* Spend draw-down readout (logged spends vs funded amount) */}
+          {!expense.is_split && hasLedger && (
+            <div className="text-[10px] mt-0.5 whitespace-nowrap">
+              <span className="text-text-muted">{formatCurrency(spent)} spent</span>
+              {remaining > 0.005 ? (
+                <span className="text-success font-bold ml-1">{formatCurrency(remaining)} left</span>
+              ) : remaining < -0.005 ? (
+                <span className="text-warning font-bold ml-1">{formatCurrency(-remaining)} over</span>
+              ) : (
+                <span className="text-success font-bold ml-1">fully spent</span>
+              )}
+            </div>
+          )}
+          {/* Toggle: spend ledger (hidden while split) */}
+          {!isLocked && !expense.is_split && (
+            <button
+              onClick={() => setSpendOpen((o) => !o)}
+              disabled={isPending}
+              className="text-[10px] text-primary font-semibold hover:underline mt-0.5 block disabled:opacity-50"
+            >
+              {spendOpen ? '✕ Close spends' : hasLedger ? `Spends (${adjustments.length})` : '＋ Log spend'}
+            </button>
+          )}
+          {/* Toggle: split (hidden once a spend is logged — the two modes are exclusive) */}
+          {!isLocked && !hasLedger && (
             <button
               onClick={() => onToggleSplit(expense.id, !expense.is_split)}
               disabled={isPending}
@@ -1811,6 +1871,102 @@ function ExpenseRow({
             >
               + Add payment
             </button>
+          </td>
+        </tr>
+      )}
+
+      {/* Spend ledger — actual spends drawn down against the funded amount */}
+      {!expense.is_split && spendOpen && (
+        <tr className="bg-[#ebf0f0]">
+          <td />
+          <td className="px-3 py-3 pl-8" colSpan={onRemove ? 9 : 8}>
+            {/* Summary line */}
+            <div className="text-[11px] text-text-muted mb-2">
+              Funded <span className="font-bold text-text-heading">{formatCurrency(owed)}</span>
+              <span className="mx-1">·</span>
+              Spent <span className="font-bold text-text-heading">{formatCurrency(spent)}</span>
+              <span className="mx-1">·</span>
+              {remaining > 0.005 ? (
+                <span className="text-success font-bold">{formatCurrency(remaining)} left</span>
+              ) : remaining < -0.005 ? (
+                <span className="text-warning font-bold">{formatCurrency(-remaining)} over</span>
+              ) : (
+                <span className="text-success font-bold">fully spent</span>
+              )}
+            </div>
+
+            {/* Logged entries */}
+            {hasLedger && (
+              <ul className="space-y-1 mb-2 max-w-md">
+                {adjustments.map((a) => (
+                  <li key={a.id} className="flex items-center gap-2 text-caption">
+                    <span className="text-text-muted text-[10px] w-14 shrink-0">{formatDate(a.created_at)}</span>
+                    <span className="flex-1 text-text-heading truncate">{a.note || '—'}</span>
+                    <span className="font-bold text-text-heading">{formatCurrency(a.amount)}</span>
+                    {!isLocked && (
+                      <button
+                        onClick={() => onRemoveSpend(a.id)}
+                        disabled={isPending}
+                        title="Remove this spend"
+                        className="text-text-muted hover:text-warning text-[10px] disabled:opacity-50"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {/* Add a spend — enter the amount Spent, or the amount you want Left (back-solved) */}
+            {!isLocked && (
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="inline-flex rounded-full border border-border overflow-hidden text-[10px] font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setSpendMode('spent')}
+                    className={`px-2.5 py-1 transition-colors ${spendMode === 'spent' ? 'bg-text-heading text-white' : 'bg-bg-white text-text-muted hover:text-text-heading'}`}
+                  >
+                    Spent
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSpendMode('left')}
+                    className={`px-2.5 py-1 transition-colors ${spendMode === 'left' ? 'bg-text-heading text-white' : 'bg-bg-white text-text-muted hover:text-text-heading'}`}
+                  >
+                    Left
+                  </button>
+                </div>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={spendAmt}
+                  onChange={(e) => setSpendAmt(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleLogSpend() }}
+                  placeholder={spendMode === 'spent' ? 'Spent' : 'Left'}
+                  className={`w-24 text-right ${inputClass}`}
+                />
+                <input
+                  type="text"
+                  value={spendNote}
+                  onChange={(e) => setSpendNote(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleLogSpend() }}
+                  placeholder="Note (e.g. Trader Joe's)"
+                  className={`w-44 ${inputClass}`}
+                />
+                <button
+                  type="button"
+                  onClick={handleLogSpend}
+                  disabled={isPending || isNaN(resolvedSpend) || resolvedSpend === 0}
+                  className="bg-primary-teal text-text-inverse rounded-full px-3 py-1 text-[10px] font-bold hover:opacity-90 disabled:opacity-50 transition-opacity"
+                >
+                  Log
+                </button>
+                {spendMode === 'left' && !isNaN(resolvedSpend) && (
+                  <span className="text-[10px] text-text-muted">→ logs {formatCurrency(resolvedSpend)} spent</span>
+                )}
+              </div>
+            )}
           </td>
         </tr>
       )}

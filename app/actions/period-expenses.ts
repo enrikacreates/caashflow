@@ -682,6 +682,208 @@ export async function removeExpensePayment(paymentId: string, periodId: string) 
   revalidatePath(`/periods/${periodId}`)
 }
 
+// ── Spend ledger (per-line adjustments) ──────────────────────────────────────
+
+/** Apply a spend delta to a line's linked debt / savings goal (mirrors markExpensePaid). */
+async function applyLedgerDelta(
+  supabase: SupabaseServer,
+  householdId: string,
+  expense: { debt_id: string | null; savings_goal_id: string | null },
+  delta: number
+) {
+  if (delta === 0) return
+  if (expense.debt_id) {
+    const { data: debt } = await supabase
+      .from('debts')
+      .select('current_balance')
+      .eq('id', expense.debt_id)
+      .eq('household_id', householdId)
+      .single()
+    if (debt) {
+      await supabase
+        .from('debts')
+        .update({ current_balance: Math.max(0, Number(debt.current_balance) - delta), updated_at: new Date().toISOString() })
+        .eq('id', expense.debt_id)
+        .eq('household_id', householdId)
+      revalidatePath('/debts')
+    }
+  }
+  if (expense.savings_goal_id) {
+    const { data: goal } = await supabase
+      .from('savings_goals')
+      .select('current_amount')
+      .eq('id', expense.savings_goal_id)
+      .eq('household_id', householdId)
+      .single()
+    if (goal) {
+      await supabase
+        .from('savings_goals')
+        .update({ current_amount: Math.max(0, Number(goal.current_amount) + delta), updated_at: new Date().toISOString() })
+        .eq('id', expense.savings_goal_id)
+        .eq('household_id', householdId)
+      revalidatePath('/savings')
+    }
+  }
+}
+
+/**
+ * Recompute a line's spent cache (paid_amount = sum of spend entries) and sync its
+ * settle flags: fully spent (spent ≥ funded) closes the line (paid + cleared + complete,
+ * dropped from the live balance); otherwise it stays open and in-progress.
+ */
+async function syncExpenseFromLedger(supabase: SupabaseServer, householdId: string, expenseId: string) {
+  const { data: exp } = await supabase
+    .from('period_expenses')
+    .select('default_amount, amount_override')
+    .eq('id', expenseId)
+    .eq('household_id', householdId)
+    .single()
+  if (!exp) return
+
+  const { data: rows } = await supabase
+    .from('period_expense_adjustments')
+    .select('amount')
+    .eq('period_expense_id', expenseId)
+    .eq('household_id', householdId)
+
+  const spent = round2((rows ?? []).reduce((s, r) => s + (Number(r.amount) || 0), 0))
+  const funded = exp.amount_override ?? exp.default_amount ?? 0
+  const closed = funded > 0 && spent >= funded - 0.005
+
+  const update: Record<string, unknown> = {
+    paid_amount: spent,
+    paid: closed,
+    cleared: closed,
+    is_complete: closed,
+    updated_at: new Date().toISOString(),
+  }
+  if (closed) update.pay_now = false
+
+  await supabase
+    .from('period_expenses')
+    .update(update)
+    .eq('id', expenseId)
+    .eq('household_id', householdId)
+}
+
+/** Log a spend against a line (the resolved spend amount; Spent/Left math is done client-side). */
+export async function addExpenseSpend(
+  expenseId: string,
+  periodId: string,
+  amount: number,
+  note: string | null
+) {
+  const supabase = await createClient()
+  const householdId = await getUserHouseholdId()
+
+  const { data: expense } = await supabase
+    .from('period_expenses')
+    .select('debt_id, savings_goal_id')
+    .eq('id', expenseId)
+    .eq('household_id', householdId)
+    .single()
+  if (!expense) throw new Error('Expense not found')
+
+  const { data: existing } = await supabase
+    .from('period_expense_adjustments')
+    .select('sort_order')
+    .eq('period_expense_id', expenseId)
+    .eq('household_id', householdId)
+    .order('sort_order', { ascending: false })
+    .limit(1)
+  const nextOrder = existing && existing.length > 0 ? existing[0].sort_order + 1 : 0
+
+  const { error } = await supabase.from('period_expense_adjustments').insert({
+    household_id: householdId,
+    period_expense_id: expenseId,
+    amount,
+    note,
+    sort_order: nextOrder,
+  })
+  if (error) throw new Error(`Failed to log spend: ${error.message}`)
+
+  await applyLedgerDelta(supabase, householdId, expense, amount)
+  await syncExpenseFromLedger(supabase, householdId, expenseId)
+
+  revalidatePath(`/periods/${periodId}`)
+  revalidatePath('/periods')
+  revalidatePath('/')
+}
+
+/** Edit a spend entry (amount and/or note). Ripples the amount delta to linked debt/savings. */
+export async function updateExpenseSpend(
+  adjustmentId: string,
+  periodId: string,
+  data: Partial<{ amount: number; note: string | null }>
+) {
+  const supabase = await createClient()
+  const householdId = await getUserHouseholdId()
+
+  const { data: row } = await supabase
+    .from('period_expense_adjustments')
+    .select('amount, period_expense_id')
+    .eq('id', adjustmentId)
+    .eq('household_id', householdId)
+    .single()
+  if (!row) throw new Error('Spend entry not found')
+
+  const { error } = await supabase
+    .from('period_expense_adjustments')
+    .update({ ...data, updated_at: new Date().toISOString() })
+    .eq('id', adjustmentId)
+    .eq('household_id', householdId)
+  if (error) throw new Error(`Failed to update spend: ${error.message}`)
+
+  if (data.amount !== undefined && data.amount !== row.amount) {
+    const { data: expense } = await supabase
+      .from('period_expenses')
+      .select('debt_id, savings_goal_id')
+      .eq('id', row.period_expense_id)
+      .eq('household_id', householdId)
+      .single()
+    if (expense) await applyLedgerDelta(supabase, householdId, expense, data.amount - row.amount)
+  }
+
+  await syncExpenseFromLedger(supabase, householdId, row.period_expense_id)
+  revalidatePath(`/periods/${periodId}`)
+  revalidatePath('/periods')
+  revalidatePath('/')
+}
+
+/** Remove a spend entry. Reverses its amount on linked debt/savings. */
+export async function removeExpenseSpend(adjustmentId: string, periodId: string) {
+  const supabase = await createClient()
+  const householdId = await getUserHouseholdId()
+
+  const { data: row } = await supabase
+    .from('period_expense_adjustments')
+    .select('amount, period_expense_id')
+    .eq('id', adjustmentId)
+    .eq('household_id', householdId)
+    .single()
+  if (!row) throw new Error('Spend entry not found')
+
+  const { error } = await supabase
+    .from('period_expense_adjustments')
+    .delete()
+    .eq('id', adjustmentId)
+    .eq('household_id', householdId)
+  if (error) throw new Error(`Failed to remove spend: ${error.message}`)
+
+  const { data: expense } = await supabase
+    .from('period_expenses')
+    .select('debt_id, savings_goal_id')
+    .eq('id', row.period_expense_id)
+    .eq('household_id', householdId)
+    .single()
+  if (expense) await applyLedgerDelta(supabase, householdId, expense, -row.amount)
+
+  await syncExpenseFromLedger(supabase, householdId, row.period_expense_id)
+  revalidatePath(`/periods/${periodId}`)
+  revalidatePath('/periods')
+  revalidatePath('/')
+}
+
 /**
  * "Clear" doubles as the terminal settle: a cleared bill is finished, so it drops
  * out of the live balance (pay_now off) and seals the line (is_complete + locked).

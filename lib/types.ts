@@ -124,6 +124,21 @@ export interface PeriodExpense {
   updated_at: string
   // Sub-payment rows when is_split is true (joined by getPeriodDetail)
   payments?: PeriodExpensePayment[]
+  // Spend-ledger entries — actual spends logged against this line (joined by getPeriodDetail)
+  adjustments?: PeriodExpenseAdjustment[]
+}
+
+export interface PeriodExpenseAdjustment {
+  id: string
+  household_id: string
+  period_expense_id: string
+  amount: number
+  note: string | null
+  image_url: string | null
+  spent_at: string
+  sort_order: number
+  created_at: string
+  updated_at: string
 }
 
 export interface PeriodExpensePayment {
