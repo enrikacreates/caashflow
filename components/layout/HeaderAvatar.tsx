@@ -30,7 +30,7 @@ export default function HeaderAvatar() {
   }, [])
 
   return (
-    <Link href="/settings" className="relative w-14 h-14 md:w-16 md:h-16 ml-1 block group" aria-label="Profile & settings">
+    <Link href="/settings" className="relative w-12 h-12 md:w-14 md:h-14 ml-1 block group" aria-label="Profile & settings">
       {/* Green organic blob — backdrop at its natural orientation, centered behind the photo (matches the mockup) */}
       <img
         src="/shapes/profile-blob-green.svg"
