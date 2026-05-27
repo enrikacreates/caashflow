@@ -1729,7 +1729,7 @@ function ExpenseRow({
           {inPaidMode ? (
             <>
               {/* Read-only draw-down readout: spent / left */}
-              <div className="text-right tabular-nums whitespace-nowrap">
+              <div className="text-right tabular-nums whitespace-nowrap leading-tight">
                 <span className="font-bold text-text-heading text-caption">{formatCurrency(spent)}</span>
                 <span className="text-text-muted"> / </span>
                 {remaining < -0.005 ? (
@@ -1737,9 +1737,9 @@ function ExpenseRow({
                 ) : (
                   <span className={`font-bold ${remaining <= 0.005 ? 'text-success' : 'text-text-heading'}`}>{formatCurrency(Math.max(0, remaining))}</span>
                 )}
-              </div>
-              <div className="text-[10px] text-right text-text-muted mt-0.5">
-                {remaining > 0.005 ? 'spent / left' : remaining < -0.005 ? 'spent / over' : 'fully spent'}
+                <span className="block text-[10px] text-text-muted font-normal">
+                  {remaining > 0.005 ? 'spent / left' : remaining < -0.005 ? 'spent / over' : 'fully spent'}
+                </span>
               </div>
               {!isLocked && !isLinked && (
                 <button
@@ -1747,7 +1747,7 @@ function ExpenseRow({
                   disabled={isPending}
                   title={spendOpen ? 'Close spend ledger' : hasLedger ? `Edit spends (${adjustments.length})` : 'Log a spend'}
                   aria-label="Log or adjust spend"
-                  className={`mt-1 inline-flex items-center gap-0.5 text-[11px] font-semibold transition-colors disabled:opacity-50 ${spendOpen ? 'text-primary-teal' : 'text-primary hover:text-primary-teal'}`}
+                  className={`mt-0.5 inline-flex items-center gap-0.5 text-[11px] font-semibold transition-colors disabled:opacity-50 ${spendOpen ? 'text-primary-teal' : 'text-primary hover:text-primary-teal'}`}
                 >
                   <Pencil size={12} aria-hidden="true" />
                   <span>Log{hasLedger ? ` (${adjustments.length})` : ''}</span>
