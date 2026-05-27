@@ -17,6 +17,7 @@ import {
   setExpenseCleared,
   bulkMarkPaid,
   settleAndResetPeriod,
+  clearAllPayNow,
   addExpensePayment,
   updateExpensePayment,
   removeExpensePayment,
@@ -63,7 +64,7 @@ import type {
   BudgetRequest,
 } from '@/lib/types'
 
-type SortKey = 'name' | 'default_amount' | 'priority_category' | 'account' | 'due_day' | 'frequency' | 'pay_now' | 'is_cash'
+type SortKey = 'name' | 'default_amount' | 'priority_category' | 'account' | 'due_day' | 'frequency' | 'pay_now' | 'is_cash' | 'cleared'
 type SortDir = 'asc' | 'desc'
 
 /** Compact priority label — "P1: Essentials" → "P1" (keeps the table narrow). */
@@ -345,6 +346,11 @@ export default function PeriodDetailClient({
       return (pa - pb) * mul
     }
     if (sortKey === 'is_cash') return (Number(a.is_cash) - Number(b.is_cash)) * mul
+    if (sortKey === 'cleared') {
+      const ca = a.is_split ? ((a.payments ?? []).length > 0 && (a.payments ?? []).every((p) => p.cleared)) : a.cleared
+      const cb = b.is_split ? ((b.payments ?? []).length > 0 && (b.payments ?? []).every((p) => p.cleared)) : b.cleared
+      return (Number(ca) - Number(cb)) * mul
+    }
     const aVal = a[sortKey] ?? ''
     const bVal = b[sortKey] ?? ''
     if (typeof aVal === 'number' && typeof bVal === 'number') return (aVal - bVal) * mul
@@ -668,6 +674,10 @@ export default function PeriodDetailClient({
   const handleSettleReset = () => {
     if (!confirm('Clear all PAID items and reset for the next check?\n\nSettles & locks every paid item, logs the active income to the ledger, and clears adjustments. Unpaid items stay live. Nothing is deleted — reopen any row individually.')) return
     startTransition(async () => { await settleAndResetPeriod(period.id) })
+  }
+  const handleClearAllPayNow = () => {
+    if (!confirm('Clear all pay-now items?\n\nSettles every line checked to Pay (like clicking Clear on each). Rows not set to Pay are untouched. Nothing is deleted — reopen any row individually.')) return
+    startTransition(async () => { await clearAllPayNow(period.id) })
   }
 
   // ─── Budget complete / reopen ────────────────────────────────
@@ -1381,11 +1391,20 @@ export default function PeriodDetailClient({
             value={expenseSearch}
             onChange={(e) => setExpenseSearch(e.target.value)}
             placeholder="Search expenses — name, amount, account, priority…"
-            className={`${inputClass} w-full sm:max-w-sm`}
+            className={`${inputClass} flex-1 sm:max-w-sm`}
           />
           {expenseSearch && (
-            <button type="button" onClick={() => setExpenseSearch('')} className="text-caption text-text-muted hover:text-warning font-semibold shrink-0">Clear</button>
+            <button type="button" onClick={() => setExpenseSearch('')} title="Clear search" className="text-caption text-text-muted hover:text-warning font-semibold shrink-0">✕</button>
           )}
+          <button
+            type="button"
+            onClick={handleClearAllPayNow}
+            disabled={isLocked}
+            title="Clear all pay-now items — settles every row checked to Pay (rows not set to Pay are untouched)"
+            className="ml-auto shrink-0 text-[10px] font-bold uppercase bg-primary-teal/10 text-primary rounded-full px-3 py-1.5 hover:bg-primary-teal/20 transition-colors disabled:opacity-50"
+          >
+            All
+          </button>
         </div>
         <div className="rounded-lg overflow-auto max-h-[70vh]">
             <table className="w-full border-separate border-spacing-0">
@@ -1411,9 +1430,7 @@ export default function PeriodDetailClient({
                   <th className="text-center px-1.5 py-3">
                     <button type="button" onClick={handleBulkPaid} disabled={isLocked} title="Mark all to-pay items paid" className="text-caption font-bold uppercase text-text-muted hover:text-primary transition-colors disabled:opacity-50">Paid</button>
                   </th>
-                  <th className="text-center px-1.5 py-3">
-                    <button type="button" onClick={handleSettleReset} disabled={isLocked} title="Clear all paid items & reset income — zeroes the budget for the next check (unpaid items stay live)" className="text-[10px] font-bold uppercase bg-primary-teal/10 text-primary rounded-full px-2.5 py-1 hover:bg-primary-teal/20 transition-colors disabled:opacity-50">Clear</button>
-                  </th>
+                  <th className="text-center px-1.5 py-3 text-caption font-bold uppercase text-text-muted cursor-pointer hover:text-text-heading select-none whitespace-nowrap" onClick={() => handleSort('cleared')} title="Sort by cleared">Clear<SortIcon col="cleared" /></th>
                 </tr>
               </thead>
               <tbody>

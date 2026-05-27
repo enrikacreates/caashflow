@@ -1008,6 +1008,56 @@ export async function setExpenseCleared(expenseId: string, periodId: string, val
 }
 
 /**
+ * Bulk "clear" — settles every line that's checked to Pay (like clicking each row's Clear),
+ * leaving pay-now=false rows untouched. Single lines book to funded + seal; split lines clear
+ * their pay-now installments and seal once none remain.
+ */
+export async function clearAllPayNow(periodId: string) {
+  const supabase = await createClient()
+  const householdId = await getUserHouseholdId()
+
+  const { data: singles } = await supabase
+    .from('period_expenses')
+    .select('id')
+    .eq('period_id', periodId).eq('household_id', householdId)
+    .eq('pay_now', true).eq('is_split', false).eq('is_complete', false)
+  for (const e of singles ?? []) {
+    await reconcileExpenseSpend(supabase, householdId, e.id, { forceClosed: true })
+  }
+
+  const { data: splits } = await supabase
+    .from('period_expenses').select('id')
+    .eq('period_id', periodId).eq('household_id', householdId)
+    .eq('is_split', true).eq('is_complete', false)
+  const splitIds = (splits ?? []).map((s) => s.id)
+  if (splitIds.length) {
+    const { data: subs } = await supabase
+      .from('period_expense_payments').select('id, period_expense_id')
+      .eq('household_id', householdId).eq('pay_now', true).in('period_expense_id', splitIds)
+    if (subs && subs.length) {
+      await supabase.from('period_expense_payments')
+        .update({ cleared: true, pay_now: false, updated_at: new Date().toISOString() })
+        .in('id', subs.map((s) => s.id))
+      const affected = [...new Set(subs.map((s) => s.period_expense_id))]
+      const { data: remaining } = await supabase
+        .from('period_expense_payments').select('period_expense_id')
+        .eq('household_id', householdId).eq('pay_now', true).in('period_expense_id', affected)
+      const stillActive = new Set((remaining ?? []).map((r) => r.period_expense_id))
+      const sealed = affected.filter((id) => !stillActive.has(id))
+      if (sealed.length) {
+        await supabase.from('period_expenses')
+          .update({ is_complete: true, updated_at: new Date().toISOString() })
+          .eq('household_id', householdId).in('id', sealed)
+      }
+    }
+  }
+
+  revalidatePath(`/periods/${periodId}`)
+  revalidatePath('/periods')
+  revalidatePath('/')
+}
+
+/**
  * Flag a line as overdue (carried over from a prior period).
  * On flag, a non-split bill auto-doubles its amount (last month + this month) and
  * marks itself to-pay so this period's income covers it. Clearing restores the default.
