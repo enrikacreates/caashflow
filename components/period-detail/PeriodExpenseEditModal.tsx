@@ -23,11 +23,20 @@ export default function PeriodExpenseEditModal({
   const [trackSpending, setTrackSpending] = useState(expense.track_spending)
   const inputClass = 'w-full bg-bg-white border border-border rounded-sm px-4 py-2.5 text-caption focus:outline-none focus:border-primary transition-colors'
 
-  // ─── Move funds — reallocate this line's funded dollars to/from another line (zero-sum) ──
-  const bookedSpent = Number(expense.paid_amount) || 0
-  const [funded, setFunded] = useState<number>(expense.amount_override ?? expense.default_amount ?? 0)
-  const available = round2(funded - bookedSpent)
-  const [moveTo, setMoveTo] = useState('')
+  // ─── Move funds — reallocate funded dollars between this line and another (zero-sum) ──
+  // Local optimistic funded-amount overrides, keyed by line id (snapshot + session moves).
+  const [funds, setFunds] = useState<Record<string, number>>({})
+  const snapFunded = (id: string) => {
+    const e = expenses.find((x) => x.id === id)
+    return e ? (e.amount_override ?? e.default_amount ?? 0) : 0
+  }
+  const fundedOf = (e: PeriodExpense) => funds[e.id] ?? (e.amount_override ?? e.default_amount ?? 0)
+  const availOf = (e: PeriodExpense) => round2(fundedOf(e) - (Number(e.paid_amount) || 0))
+  const applyDelta = (id: string, delta: number) =>
+    setFunds((f) => ({ ...f, [id]: round2((f[id] ?? snapFunded(id)) + delta) }))
+
+  const [moveDir, setMoveDir] = useState<'to' | 'from'>('to')
+  const [moveOther, setMoveOther] = useState('')
   const [moveAmount, setMoveAmount] = useState('')
   const [moveError, setMoveError] = useState<string | null>(null)
   const [moving, startMove] = useTransition()
@@ -36,20 +45,27 @@ export default function PeriodExpenseEditModal({
   )
   const nameById = new Map(expenses.map((e) => [e.id, e.name]))
   const moveTargets = expenses.filter((e) => e.id !== expense.id)
+  const otherExp = expenses.find((e) => e.id === moveOther)
+  // The line money comes OUT of bounds the move: "to" drains this line, "from" drains the other.
+  const capSource = moveDir === 'to' ? expense : otherExp ?? null
+  const moveCap = capSource ? availOf(capSource) : 0
 
   const handleMove = () => {
     const amt = round2(parseFloat(moveAmount))
     setMoveError(null)
-    if (!moveTo) { setMoveError('Pick a destination line'); return }
+    if (!moveOther) { setMoveError(moveDir === 'to' ? 'Pick a destination line' : 'Pick a source line'); return }
     if (!(amt > 0)) { setMoveError('Enter an amount greater than 0'); return }
-    if (amt > available + 0.005) { setMoveError(`Only ${formatCurrency(available)} available to move`); return }
+    if (amt > moveCap + 0.005) { setMoveError(`Only ${formatCurrency(moveCap)} available to move`); return }
+    const fromId = moveDir === 'to' ? expense.id : moveOther
+    const toId = moveDir === 'to' ? moveOther : expense.id
     startMove(async () => {
       try {
-        const row = await transferFunds(expense.id, moveTo, amt)
+        const row = await transferFunds(fromId, toId, amt)
         if (row) setHistory((h) => [row, ...h])
-        setFunded((f) => round2(f - amt))
+        applyDelta(fromId, -amt)
+        applyDelta(toId, amt)
         setMoveAmount('')
-        setMoveTo('')
+        setMoveOther('')
       } catch (err) {
         setMoveError(err instanceof Error ? err.message : 'Move failed')
       }
@@ -61,9 +77,8 @@ export default function PeriodExpenseEditModal({
       try {
         await undoTransfer(t.id)
         setHistory((h) => h.filter((x) => x.id !== t.id))
-        // Undo restores this line: incoming reverses to −amount, outgoing returns +amount.
-        const delta = t.from_expense_id === expense.id ? Number(t.amount) : -Number(t.amount)
-        setFunded((f) => round2(f + delta))
+        applyDelta(t.from_expense_id, Number(t.amount))
+        applyDelta(t.to_expense_id, -Number(t.amount))
       } catch {
         setMoveError('Undo failed')
       }
@@ -142,19 +157,23 @@ export default function PeriodExpenseEditModal({
             <textarea name="notes" rows={2} defaultValue={expense.notes || ''} className={inputClass + ' resize-y'} />
           </div>
 
-          {/* Move funds — reallocate this line's funded dollars to/from another line (zero-sum) */}
+          {/* Move funds — reallocate funded dollars to/from another line (zero-sum, both directions) */}
           <div className="bg-surface-beige rounded-sm p-3 space-y-2.5">
             <div className="flex items-baseline justify-between">
               <span className="text-caption font-semibold text-text-heading">Move funds</span>
-              <span className="text-caption text-text-muted">{formatCurrency(available)} available</span>
+              <span className="text-caption text-text-muted">{formatCurrency(availOf(expense))} available here</span>
             </div>
             <div className="flex gap-2">
+              <div className="inline-flex rounded-full border border-border overflow-hidden text-[11px] font-bold shrink-0">
+                <button type="button" onClick={() => { setMoveDir('to'); setMoveError(null) }} className={`px-3 py-2.5 transition-colors ${moveDir === 'to' ? 'bg-text-heading text-white' : 'bg-bg-white text-text-muted hover:text-text-heading'}`}>To</button>
+                <button type="button" onClick={() => { setMoveDir('from'); setMoveError(null) }} className={`px-3 py-2.5 transition-colors ${moveDir === 'from' ? 'bg-text-heading text-white' : 'bg-bg-white text-text-muted hover:text-text-heading'}`}>From</button>
+              </div>
               <select
-                value={moveTo}
-                onChange={(e) => { setMoveTo(e.target.value); setMoveError(null) }}
+                value={moveOther}
+                onChange={(e) => { setMoveOther(e.target.value); setMoveError(null) }}
                 className={inputClass + ' flex-1'}
               >
-                <option value="">Move to…</option>
+                <option value="">{moveDir === 'to' ? 'Move to…' : 'Move from…'}</option>
                 {moveTargets.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
               </select>
               <div className="relative w-28 shrink-0">
@@ -168,7 +187,7 @@ export default function PeriodExpenseEditModal({
                 />
                 <button
                   type="button"
-                  onClick={() => { setMoveAmount(String(available)); setMoveError(null) }}
+                  onClick={() => { setMoveAmount(String(moveCap)); setMoveError(null) }}
                   className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-primary hover:underline"
                 >
                   All
@@ -177,12 +196,15 @@ export default function PeriodExpenseEditModal({
               <button
                 type="button"
                 onClick={handleMove}
-                disabled={moving || available <= 0}
+                disabled={moving || moveCap <= 0}
                 className="bg-primary-teal text-text-inverse rounded-full px-4 py-2.5 text-caption font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity shrink-0"
               >
                 Move
               </button>
             </div>
+            {moveDir === 'from' && otherExp && (
+              <p className="text-[11px] text-text-muted">{otherExp.name} has {formatCurrency(availOf(otherExp))} available</p>
+            )}
             {moveError && <p className="text-[11px] text-red-500">{moveError}</p>}
             {history.length > 0 && (
               <ul className="space-y-1 pt-0.5">
