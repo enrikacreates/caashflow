@@ -1780,8 +1780,8 @@ function ExpenseRow({
           {inPaidMode ? (
             <>
               {/* Read-only draw-down readout: spent / left */}
-              <div className="text-right tabular-nums whitespace-nowrap leading-tight">
-                <span className="font-bold text-text-heading text-caption">{formatCurrency(spent)}</span>
+              <div className="text-right tabular-nums whitespace-nowrap leading-tight text-caption">
+                <span className="font-bold text-text-heading">{formatCurrency(spent)}</span>
                 <span className="text-text-muted"> / </span>
                 {remaining < -0.005 ? (
                   <span className="font-bold text-warning">{formatCurrency(-remaining)}</span>
