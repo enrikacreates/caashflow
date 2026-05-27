@@ -145,7 +145,7 @@ export default function DashboardLayout({
           {/* CAA$H watermark — oversized live text that fills the banner width and scales with the
               window (vw units); clipped top/bottom by the band like the FLOW watermark. */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
-            <span className="font-display leading-none whitespace-nowrap text-white/10 text-[40vw]">CAA$H</span>
+            <span className="font-display leading-none whitespace-nowrap text-white/10 text-[14vw]">CAA$H</span>
           </div>
 
           <div className="relative h-28 md:h-32">
