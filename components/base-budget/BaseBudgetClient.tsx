@@ -2,12 +2,18 @@
 
 import { useState, useTransition, useEffect } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { deleteBaseBudgetItem, resetBaseBudgetToDefaults } from '@/app/actions/base-budget'
+import { deleteBaseBudgetItem, resetBaseBudgetToDefaults, setBaseItemTrackSpending } from '@/app/actions/base-budget'
 import { formatCurrency, getPriorityColor } from '@/lib/utils'
 import type { BaseBudgetItem, Frequency, Account, PriorityCategoryRecord } from '@/lib/types'
 import ExpenseFormModal from './ExpenseFormModal'
 
 const FREQUENCY_ORDER: Frequency[] = ['Monthly', 'Weekly', 'Annually', 'One-Time']
+
+/** Short priority code (e.g. "P1") from a category name like "P1: UpNext". */
+function priorityCode(name: string): string {
+  const m = name.match(/p\s*\d+/i)
+  return (m ? m[0] : name.split(':')[0]).replace(/\s+/g, '').toUpperCase().slice(0, 3)
+}
 
 type SortKey = 'name' | 'default_amount' | 'due_day' | 'account' | 'priority_category'
 
@@ -118,6 +124,7 @@ export default function BaseBudgetClient({ items, accounts, categories }: Props)
                     <th className={thClass('due_day')} onClick={() => toggleSort('due_day')}>Due {sortKey === 'due_day' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
                     <th className={thClass('account')} onClick={() => toggleSort('account')}>Account {sortKey === 'account' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
                     <th className={thClass('priority_category')} onClick={() => toggleSort('priority_category')}>Priority {sortKey === 'priority_category' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+                    <th className="text-center text-caption font-bold uppercase text-text-muted px-4 py-3" title="Track spending — draw this line down as you spend (groceries, gas, etc.)">Track</th>
                     <th className="text-left text-caption font-bold uppercase text-text-muted px-4 py-3">AutoPay</th>
                     <th className="text-left text-caption font-bold uppercase text-text-muted px-4 py-3">Actions</th>
                   </tr>
@@ -130,9 +137,23 @@ export default function BaseBudgetClient({ items, accounts, categories }: Props)
                       <td className="px-4 py-3 text-caption text-text-muted">{item.due_day || '—'}</td>
                       <td className="px-4 py-3 text-caption text-text-muted">{item.account || '—'}</td>
                       <td className="px-4 py-3">
-                        <span className={`inline-block max-w-[120px] truncate px-3 py-1 rounded-full text-caption font-bold uppercase ${getPriorityColor(categoryColorMap.get(item.priority_category || ''))}`}>
-                          {item.priority_category || '—'}
-                        </span>
+                        {item.priority_category ? (
+                          <span title={item.priority_category} className={`inline-block px-2.5 py-1 rounded-full text-caption font-bold uppercase ${getPriorityColor(categoryColorMap.get(item.priority_category))}`}>
+                            {priorityCode(item.priority_category)}
+                          </span>
+                        ) : (
+                          <span className="text-text-muted">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={item.track_spending}
+                          disabled={isPending}
+                          onChange={(e) => startTransition(() => setBaseItemTrackSpending(item.id, e.target.checked))}
+                          title={item.track_spending ? 'Tracking spending — tap to turn off' : 'Track spending on this line'}
+                          className="w-4 h-4 accent-primary-teal cursor-pointer disabled:opacity-50"
+                        />
                       </td>
                       <td className="px-4 py-3 text-caption text-text-muted">{item.auto_pay ? '✓' : ''}</td>
                       <td className="px-4 py-3">

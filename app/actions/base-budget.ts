@@ -78,6 +78,22 @@ export async function updateBaseBudgetItem(formData: FormData) {
   revalidatePath('/base-budget')
 }
 
+/** Quick inline toggle of a baseline item's draw-down (track-spending) flag. */
+export async function setBaseItemTrackSpending(id: string, value: boolean) {
+  const supabase = await createClient()
+  const householdId = await getUserHouseholdId()
+
+  const { error } = await supabase
+    .from('base_budget_items')
+    .update({ track_spending: value, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .eq('household_id', householdId)
+
+  if (error) throw new Error(`Failed to update track spending: ${error.message}`)
+
+  revalidatePath('/base-budget')
+}
+
 export async function deleteBaseBudgetItem(id: string) {
   const supabase = await createClient()
   const householdId = await getUserHouseholdId()
