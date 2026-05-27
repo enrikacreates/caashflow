@@ -42,7 +42,7 @@ export default function DashboardLayout({
             src="/shapes/navshapes/campDashDivider.svg"
             alt=""
             aria-hidden="true"
-            className="hidden lg:block h-12 w-[3px] mr-1 select-none pointer-events-none"
+            className="hidden lg:block h-12 w-[6px] mr-1 select-none pointer-events-none"
           />
           {/* Settings icon */}
           <Link
