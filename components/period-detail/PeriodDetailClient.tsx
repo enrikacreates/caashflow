@@ -1366,7 +1366,7 @@ export default function PeriodDetailClient({
                   <th className={`${thClass} w-[1%]`} onClick={() => handleSort('account')}>
                     Acct<SortIcon col="account" />
                   </th>
-                  <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted w-[1%] cursor-pointer hover:text-text-heading select-none" onClick={() => handleSort('is_cash')} title="Sort by cash"><span className="inline-block align-middle text-[12px] leading-none translate-y-[2px]">💵</span><SortIcon col="is_cash" /></th>
+                  <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted w-[1%] whitespace-nowrap cursor-pointer hover:text-text-heading select-none" onClick={() => handleSort('is_cash')} title="Sort by cash"><span className="inline-block align-middle text-[12px] leading-none">💵</span><SortIcon col="is_cash" /></th>
                   <th className={`${thClass} w-[1%]`} onClick={() => handleSort('priority_category')}>
                     Pri<SortIcon col="priority_category" />
                   </th>
@@ -1499,7 +1499,7 @@ export default function PeriodDetailClient({
                     <th className="text-left px-3 py-3 text-caption font-bold uppercase text-text-muted">Name</th>
                     <th className="text-left px-3 py-3 text-caption font-bold uppercase text-text-muted">Amount</th>
                     <th className="text-left px-2 py-3 text-caption font-bold uppercase text-text-muted w-[1%]">Acct</th>
-                    <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted w-[1%]" title="Withdraw as cash"><span className="inline-block align-middle text-[12px] leading-none translate-y-[2px]">💵</span></th>
+                    <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted w-[1%]" title="Withdraw as cash"><span className="inline-block align-middle text-[12px] leading-none">💵</span></th>
                     <th className="text-left px-2 py-3 text-caption font-bold uppercase text-text-muted w-[1%]">Pri</th>
                     <th className="text-left px-2 py-3 text-caption font-bold uppercase text-text-muted w-[1%]">Due</th>
                     <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted">Paid</th>
