@@ -102,7 +102,7 @@ export default function DashboardLayout({
       />
 
       {/* Main content — offset for floating nav on desktop; grows to push footer flush to bottom */}
-      <main className="flex-1 px-6 pt-10 pb-6 md:pl-[220px] md:pr-10 md:pt-14 md:pb-6">
+      <main className="flex-1 px-6 pt-10 pb-[230px] md:pl-[220px] md:pr-10 md:pt-14 md:pb-[270px]">
         <div className="max-w-3xl mx-auto">
           {children}
         </div>
@@ -111,7 +111,7 @@ export default function DashboardLayout({
       {/* Footer — full-bleed teal band, flush to the very bottom (nothing beneath it).
           Shapes perch on the band's TOP edge (mostly above it, base dipping in); the band itself
           holds the big transparent CAA$H watermark + the logo. */}
-      <div className="sticky bottom-0 z-20 w-full mt-20">
+      <div className="sticky bottom-0 z-20 w-full">
         {/* Perched shapes — rest ON TOP of the band, bottoms sitting right on its top edge
             (bottom-full, no downward nudge) so the green never contains them. Width-only sizing
             preserves each shape's natural aspect (no skew). Rendered outside the band so they aren't clipped. */}
