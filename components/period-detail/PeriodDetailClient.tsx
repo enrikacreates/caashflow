@@ -1641,9 +1641,11 @@ function ExpenseRow({
   const hasLedger = adjustments.length > 0
   const spent = getSpentSoFar(expense) // booked spend (cached in paid_amount)
   const remaining = owed - spent
-  // Debt/savings lines aren't pay-as-you-go — funding books them in full, no draw-down logging.
+  // Draw-down (funded readout + Log) is only for tracked, non-linked categories (groceries, gas…).
+  // Fixed bills + debt/savings aren't pay-as-you-go: funding books them in full, no logging.
   const isLinked = !!(expense.debt_id || expense.savings_goal_id)
-  const inPaidMode = !expense.is_split && expense.paid // spending/logging phase
+  const isDrawDown = expense.track_spending && !isLinked
+  const inPaidMode = !expense.is_split && expense.paid && isDrawDown // spending/logging phase
   const [spendOpen, setSpendOpen] = useState(hasLedger && !expense.is_complete)
   const [spendMode, setSpendMode] = useState<'spent' | 'left'>('spent')
   const [spendAmt, setSpendAmt] = useState('')
@@ -1960,7 +1962,7 @@ function ExpenseRow({
       )}
 
       {/* Spend ledger — actual spends drawn down against the funded amount */}
-      {!expense.is_split && !isLinked && spendOpen && (
+      {!expense.is_split && isDrawDown && spendOpen && (
         <tr className="bg-[#ebf0f0]">
           <td />
           <td className="px-3 py-3 pl-8" colSpan={onRemove ? 9 : 8}>

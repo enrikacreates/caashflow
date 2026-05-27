@@ -133,6 +133,15 @@ export default function ExpenseFormModal({
             <label htmlFor="auto_pay" className="text-caption font-medium text-text-heading">Auto Pay</label>
           </div>
 
+          <div className="flex items-start gap-3">
+            <input type="checkbox" name="track_spending" id="track_spending" defaultChecked={editItem?.track_spending || false}
+              className="mt-0.5 w-5 h-5 accent-primary-teal shrink-0" />
+            <label htmlFor="track_spending" className="text-caption font-medium text-text-heading">
+              Track spending
+              <span className="block text-text-muted font-normal">Draw this down as you spend (log spends + receipts) — for variable categories like groceries or gas. Leave off for fixed bills.</span>
+            </label>
+          </div>
+
           <div>
             <label className="block text-caption font-semibold text-text-heading mb-1">Payment URL</label>
             <input type="text" name="pay_url" placeholder="https://..." defaultValue={editItem?.pay_url || ''} className={inputClass} />

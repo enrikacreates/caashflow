@@ -58,6 +58,7 @@ export interface BaseBudgetItem {
   tags: string[]
   debt_id: string | null
   savings_goal_id: string | null
+  track_spending: boolean
   sort_order: number
   created_at: string
   updated_at: string
@@ -114,6 +115,7 @@ export interface PeriodExpense {
   is_split: boolean
   is_complete: boolean
   is_overdue: boolean
+  track_spending: boolean
   amount_override: number | null
   override_notes: string | null
   paid_amount: number

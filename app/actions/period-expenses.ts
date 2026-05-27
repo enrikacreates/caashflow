@@ -268,6 +268,7 @@ export async function updatePeriodExpenseDetails(
     due_day: number | null
     pay_url: string | null
     notes: string | null
+    track_spending: boolean
   },
   alsoMasterBaseItemId?: string | null
 ) {
@@ -826,7 +827,7 @@ async function reconcileExpenseSpend(
 ): Promise<RippleFlags> {
   const { data: exp } = await supabase
     .from('period_expenses')
-    .select('default_amount, amount_override, paid_amount, paid, is_complete, debt_id, savings_goal_id')
+    .select('default_amount, amount_override, paid_amount, paid, is_complete, track_spending, debt_id, savings_goal_id')
     .eq('id', expenseId)
     .eq('household_id', householdId)
     .single()
@@ -840,8 +841,11 @@ async function reconcileExpenseSpend(
 
   const ledgerSum = round2((rows ?? []).reduce((s, r) => s + (Number(r.amount) || 0), 0))
   const funded = exp.amount_override ?? exp.default_amount ?? 0
+  // A line is "draw-down" (logs spends, starts $0) only when it's a tracked, non-linked category.
+  // Everything else — fixed bills + debt/savings — books the full amount the moment it's funded.
   const linked = !!(exp.debt_id || exp.savings_goal_id)
-  const bookFull = linked && exp.paid // debt/savings: funded = fully booked (not draw-down)
+  const drawDown = exp.track_spending && !linked
+  const bookFull = exp.paid && !drawDown
   const autoClose = funded > 0 && ledgerSum >= funded - 0.005
   const closed = opts.forceClosed !== undefined ? opts.forceClosed || autoClose : exp.is_complete || autoClose
 

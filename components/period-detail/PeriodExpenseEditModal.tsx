@@ -15,6 +15,7 @@ export default function PeriodExpenseEditModal({
 }) {
   const [isPending, startTransition] = useTransition()
   const [alsoMaster, setAlsoMaster] = useState(false)
+  const [trackSpending, setTrackSpending] = useState(expense.track_spending)
   const inputClass = 'w-full bg-bg-white border border-border rounded-sm px-4 py-2.5 text-caption focus:outline-none focus:border-primary transition-colors'
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -30,6 +31,7 @@ export default function PeriodExpenseEditModal({
         due_day: due ? parseInt(due, 10) : null,
         pay_url: ((fd.get('pay_url') as string) || '').trim() || null,
         notes: ((fd.get('notes') as string) || '').trim() || null,
+        track_spending: trackSpending,
       }, alsoMaster ? expense.base_item_id : null)
       onClose()
     })
@@ -87,6 +89,20 @@ export default function PeriodExpenseEditModal({
             <label className="block text-caption font-semibold text-text-heading mb-1">Notes</label>
             <textarea name="notes" rows={2} defaultValue={expense.notes || ''} className={inputClass + ' resize-y'} />
           </div>
+
+          {/* Track spending — turns this line into a draw-down category (log spends, attach receipts) */}
+          <label className="flex items-start gap-2.5 bg-surface-beige rounded-sm p-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={trackSpending}
+              onChange={(e) => setTrackSpending(e.target.checked)}
+              className="mt-0.5 w-4 h-4 accent-primary-teal shrink-0"
+            />
+            <span className="text-caption text-text-heading">
+              <span className="font-semibold">Track spending</span>
+              <span className="text-text-muted"> — draw this down as you spend (log spends + receipts). Leave off for fixed bills you just pay in full.</span>
+            </span>
+          </label>
 
           {expense.base_item_id && (
             <label className="flex items-start gap-2.5 bg-surface-beige rounded-sm p-3 cursor-pointer">

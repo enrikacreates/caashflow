@@ -94,6 +94,7 @@ export async function createBudgetPeriod(formData: FormData) {
       tags: item.tags || [],
       debt_id: item.debt_id ?? null,
       savings_goal_id: item.savings_goal_id ?? null,
+      track_spending: item.track_spending ?? false,
       pay_now: false,
       transferred: false,
       paid: false,
