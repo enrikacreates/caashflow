@@ -111,7 +111,7 @@ export default function DashboardLayout({
       {/* Footer — full-bleed teal band, flush to the very bottom (nothing beneath it).
           Shapes perch on the band's TOP edge (mostly above it, base dipping in); the band itself
           holds the big transparent CAA$H watermark + the logo. */}
-      <div className="relative w-full mt-20">
+      <div className="sticky bottom-0 z-20 w-full mt-20">
         {/* Perched shapes — rest ON TOP of the band, bottoms sitting right on its top edge
             (bottom-full, no downward nudge) so the green never contains them. Width-only sizing
             preserves each shape's natural aspect (no skew). Rendered outside the band so they aren't clipped. */}

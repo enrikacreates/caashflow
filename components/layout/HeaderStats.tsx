@@ -21,11 +21,12 @@ const BLOBS: {
   h: number
   overlap: number // px the blob is pulled left over the previous one (tighter cluster)
   nudge?: string // vertical nudge for shapes whose visual mass isn't centered (e.g. triangle)
+  scale?: number // per-blob size multiplier — give the narrower shapes more room around the text
 }[] = [
   { key: 'earned', label: 'Earned', shape: '/shapes/navshapes/irregularblueEarned.svg', w: 125, h: 94, overlap: 0 },
   { key: 'spent', label: 'Spent', shape: '/shapes/navshapes/NavPinkRoundRect.svg', w: 155, h: 84, overlap: 8 },
-  { key: 'owed', label: 'Owed', shape: '/shapes/navshapes/wonkyTriangleOwed.svg', w: 121, h: 98, overlap: 24, nudge: 'translate-y-[28%]' },
-  { key: 'saved', label: 'Saved', shape: '/shapes/navshapes/NavYellowCircle.svg', w: 107, h: 101, overlap: 15 },
+  { key: 'owed', label: 'Owed', shape: '/shapes/navshapes/wonkyTriangleOwed.svg', w: 121, h: 98, overlap: 22, nudge: 'translate-y-[24%]', scale: 1.25 },
+  { key: 'saved', label: 'Saved', shape: '/shapes/navshapes/NavYellowCircle.svg', w: 107, h: 101, overlap: 14, scale: 1.25 },
 ]
 
 // Natural-language money: <$1k shows full ($889); <$10k rounds to whole k ($9k);
@@ -50,18 +51,19 @@ export default function HeaderStats({ className = '' }: { className?: string }) 
 
   if (!stats) return null
 
-  const H = 48 // common blob height in px; each blob's width follows its natural aspect
+  const H = 54 // base blob height in px; each blob's width follows its natural aspect
 
   return (
     <div className={`flex-col items-center ${className}`}>
       <div className="flex items-center">
         {BLOBS.map((b) => {
-          const w = Math.round(H * (b.w / b.h))
+          const bh = Math.round(H * (b.scale ?? 1))
+          const w = Math.round(bh * (b.w / b.h))
           return (
             <div
               key={b.key}
               className="relative flex items-center justify-center shrink-0"
-              style={{ width: w, height: H, marginLeft: -b.overlap }}
+              style={{ width: w, height: bh, marginLeft: -b.overlap }}
             >
               <img
                 src={b.shape}
@@ -77,7 +79,7 @@ export default function HeaderStats({ className = '' }: { className?: string }) 
           )
         })}
       </div>
-      <div className="flex justify-center mt-1">
+      <div className="flex justify-center -mt-2 relative z-10">
         <span className="bg-[#E3C7AB] rounded-full px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.2em] text-text-heading/75">
           YTD
         </span>
