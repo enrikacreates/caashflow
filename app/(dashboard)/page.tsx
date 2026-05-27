@@ -59,11 +59,12 @@ export default async function DashboardPage({
     const adjustment = (detail.adjustments ?? []).reduce((sum, a) => sum + (a.amount || 0), 0)
     incomeAfterDeductions = deductions.incomeAfterDeductions
     amountLeft = deductions.incomeAfterDeductions + adjustment - payNowTotal
-    totalExpenses = detail.expenses.reduce((sum, e) => {
-      if (e.is_split) return sum + (e.payments ?? []).reduce((s: number, p: { amount: number }) => s + p.amount, 0)
-      return sum + getOwedAmount(e)
-    }, 0)
-    stillToFund = Math.max(0, totalExpenses - payNowTotal)
+    const expenseOwed = (e: typeof detail.expenses[number]) =>
+      e.is_split ? (e.payments ?? []).reduce((s: number, p: { amount: number }) => s + p.amount, 0) : getOwedAmount(e)
+    totalExpenses = detail.expenses.reduce((sum, e) => sum + expenseOwed(e), 0)
+    // Already settled (cleared) expenses are funded — exclude them from "still to fund".
+    const clearedExpenseTotal = detail.expenses.reduce((sum, e) => (e.is_complete ? sum + expenseOwed(e) : sum), 0)
+    stillToFund = Math.max(0, totalExpenses - payNowTotal - clearedExpenseTotal)
     // Soonest unpaid bills with a due day
     nextBills = detail.expenses
       .filter((e) => !e.paid && !e.is_complete && e.due_day != null)
