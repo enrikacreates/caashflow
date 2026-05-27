@@ -44,7 +44,7 @@ export default function HeaderStats({ className = '' }: { className?: string }) 
 
   if (!stats) return null
 
-  const H = 56 // common blob height in px; each blob's width follows its natural aspect
+  const H = 48 // common blob height in px; each blob's width follows its natural aspect
 
   return (
     <div className={`flex-col items-center ${className}`}>
