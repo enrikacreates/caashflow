@@ -286,12 +286,14 @@ export default function PeriodDetailClient({
         .filter((inv) => inv.status !== 'received' && (inv.month === periodMonth || inv.projected_date?.startsWith(periodMonth) || inv.actual_received_date?.startsWith(periodMonth)))
         .reduce((sum, inv) => sum + inv.amount, 0)
     : 0
-  const totalExpenses = optExpenses.reduce((sum, e) => {
-    if (e.is_split) return sum + (e.payments ?? []).reduce((s, p) => s + p.amount, 0)
-    return sum + getOwedAmount(e)
-  }, 0)
-  // Expenses with no income behind them yet — what new income should go toward
-  const stillToFund = Math.max(0, totalExpenses - payNowTotal)
+  const expenseOwed = (e: PeriodExpense) =>
+    e.is_split ? (e.payments ?? []).reduce((s, p) => s + p.amount, 0) : getOwedAmount(e)
+  const totalExpenses = optExpenses.reduce((sum, e) => sum + expenseOwed(e), 0)
+  // Already settled (cleared/complete) — funded by income that has come and gone.
+  const clearedExpenseTotal = optExpenses.reduce((sum, e) => (e.is_complete ? sum + expenseOwed(e) : sum), 0)
+  // Expenses with no income behind them yet — what new income should go toward.
+  // Excludes both what's committed this period (pay-now) AND what's already cleared.
+  const stillToFund = Math.max(0, totalExpenses - payNowTotal - clearedExpenseTotal)
   const paymentSummary = calculatePeriodPaymentSummary(optExpenses)
   // Total deducted off the gross (for the collapsed Deductions hint)
   const totalDeductions = period.income_amount - deductions.incomeAfterDeductions
