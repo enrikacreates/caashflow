@@ -1,7 +1,8 @@
-import { getPeriodDetail } from '@/app/actions/periods'
+import { getPeriodDetail, getBudgetPeriods } from '@/app/actions/periods'
 import { getPriorityCategories } from '@/app/actions/settings'
 import { getBudgetRequests } from '@/app/actions/requests'
 import PeriodDetailClient from '@/components/period-detail/PeriodDetailClient'
+import PeriodPicker from '@/components/period-detail/PeriodPicker'
 
 export default async function PeriodDetailPage({
   params,
@@ -9,16 +10,17 @@ export default async function PeriodDetailPage({
   params: Promise<{ periodId: string }>
 }) {
   const { periodId } = await params
-  const [detail, categories, requests] = await Promise.all([
+  const [detail, categories, requests, allPeriods] = await Promise.all([
     getPeriodDetail(periodId),
     getPriorityCategories(),
     getBudgetRequests(),
+    getBudgetPeriods(),
   ])
 
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-h1 font-bold text-text-heading">{detail.period.period_name}</h1>
+        <PeriodPicker current={detail.period} periods={allPeriods ?? []} />
         <p className="text-caption text-text-muted mt-1">Manage income, deductions, and expenses for this period</p>
       </div>
       <PeriodDetailClient
