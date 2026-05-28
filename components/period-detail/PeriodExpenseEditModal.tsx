@@ -4,6 +4,7 @@ import { useState, useTransition, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { updatePeriodExpenseDetails, transferFunds, undoTransfer } from '@/app/actions/period-expenses'
 import { formatCurrency } from '@/lib/utils'
+import { getBudgetedAmount, getSpentSoFar } from '@/lib/calculations'
 import type { PeriodExpense, PeriodExpenseTransfer, Account, PriorityCategoryRecord } from '@/lib/types'
 
 const round2 = (n: number) => Math.round(n * 100) / 100
@@ -24,17 +25,25 @@ export default function PeriodExpenseEditModal({
   const [trackSpending, setTrackSpending] = useState(expense.track_spending)
   const inputClass = 'w-full bg-bg-white border border-border rounded-sm px-4 py-2.5 text-caption focus:outline-none focus:border-primary transition-colors'
 
-  // ─── Move funds — reallocate funded dollars between this line and another (zero-sum) ──
-  // Local optimistic funded-amount overrides, keyed by line id (snapshot + session moves).
+  // ─── Move funds — reallocate committed dollars between this line and another (zero-sum) ──
+  // Only lines marked Pay hold real funds this check, so we work in committed dollars
+  // (budgeted − booked spend), not the line's face amount. Local optimistic overrides track
+  // the committed amount of single Pay lines as moves land in this session.
   const [funds, setFunds] = useState<Record<string, number>>({})
-  const snapFunded = (id: string) => {
-    const e = expenses.find((x) => x.id === id)
-    return e ? (e.amount_override ?? e.default_amount ?? 0) : 0
+  // Is this line actually funded this check? Single → marked Pay & not settled; split → has Pay installments.
+  const isActive = (e: PeriodExpense) => (e.is_split ? getBudgetedAmount(e) > 0 : !!e.pay_now && !e.is_complete)
+  // Committed dollars on a line — reflects in-session moves for single Pay lines.
+  const committedOf = (e: PeriodExpense) => {
+    if (e.is_split) return getBudgetedAmount(e)
+    if (!isActive(e)) return 0
+    return funds[e.id] ?? (e.amount_override ?? e.default_amount ?? 0)
   }
-  const fundedOf = (e: PeriodExpense) => funds[e.id] ?? (e.amount_override ?? e.default_amount ?? 0)
-  const availOf = (e: PeriodExpense) => round2(fundedOf(e) - (Number(e.paid_amount) || 0))
-  const applyDelta = (id: string, delta: number) =>
-    setFunds((f) => ({ ...f, [id]: round2((f[id] ?? snapFunded(id)) + delta) }))
+  const availOf = (e: PeriodExpense) => round2(committedOf(e) - getSpentSoFar(e))
+  const applyDelta = (id: string, delta: number) => {
+    const e = expenses.find((x) => x.id === id)
+    const base = e ? (e.amount_override ?? e.default_amount ?? 0) : 0
+    setFunds((f) => ({ ...f, [id]: round2((f[id] ?? base) + delta) }))
+  }
 
   const [moveDir, setMoveDir] = useState<'to' | 'from'>(focusMove ? 'from' : 'to')
   const [moveOther, setMoveOther] = useState('')
@@ -50,15 +59,22 @@ export default function PeriodExpenseEditModal({
     transfers.filter((t) => t.from_expense_id === expense.id || t.to_expense_id === expense.id),
   )
   const nameById = new Map(expenses.map((e) => [e.id, e.name]))
-  const moveTargets = expenses.filter((e) => e.id !== expense.id)
+  // Eligible lines depend on direction: a destination just needs to be Pay (active); a source
+  // also needs spare committed funds. Either way, non-Pay lines never appear (no real funds).
+  const moveCandidates = expenses
+    .filter((e) => e.id !== expense.id)
+    .filter((e) => (moveDir === 'to' ? isActive(e) : availOf(e) > 0.005))
   const otherExp = expenses.find((e) => e.id === moveOther)
-  // The line money comes OUT of bounds the move: "to" drains this line, "from" drains the other.
+  // The line money comes OUT of in the move: "to" drains this line, "from" drains the other.
   const capSource = moveDir === 'to' ? expense : otherExp ?? null
   const moveCap = capSource ? availOf(capSource) : 0
+  // This line must itself be Pay to take part (give in "to" mode, receive in "from" mode).
+  const thisActive = isActive(expense)
 
   const handleMove = () => {
     const amt = round2(parseFloat(moveAmount))
     setMoveError(null)
+    if (!thisActive) { setMoveError('Mark this line Pay to move funds'); return }
     if (!moveOther) { setMoveError(moveDir === 'to' ? 'Pick a destination line' : 'Pick a source line'); return }
     if (!(amt > 0)) { setMoveError('Enter an amount greater than 0'); return }
     if (amt > moveCap + 0.005) { setMoveError(`Only ${formatCurrency(moveCap)} available to move`); return }
@@ -167,7 +183,9 @@ export default function PeriodExpenseEditModal({
           <div ref={moveSectionRef} className={`bg-surface-beige rounded-sm p-3 space-y-2.5 transition-shadow ${focusMove ? 'ring-2 ring-primary-teal' : ''}`}>
             <div className="flex items-baseline justify-between">
               <span className="text-caption font-semibold text-text-heading">Move funds</span>
-              <span className="text-caption text-text-muted">{formatCurrency(availOf(expense))} available here</span>
+              <span className="text-caption text-text-muted">
+                {thisActive ? `${formatCurrency(availOf(expense))} available here` : 'not marked Pay'}
+              </span>
             </div>
             <div className="flex gap-2">
               <div className="inline-flex rounded-full border border-border overflow-hidden text-[11px] font-bold shrink-0">
@@ -180,7 +198,7 @@ export default function PeriodExpenseEditModal({
                 className={inputClass + ' flex-1'}
               >
                 <option value="">{moveDir === 'to' ? 'Move to…' : 'Move from…'}</option>
-                {moveTargets.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+                {moveCandidates.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
               </select>
               <div className="relative w-28 shrink-0">
                 <input
@@ -202,12 +220,15 @@ export default function PeriodExpenseEditModal({
               <button
                 type="button"
                 onClick={handleMove}
-                disabled={moving || moveCap <= 0}
+                disabled={moving || !thisActive || moveCap <= 0}
                 className="bg-primary-teal text-text-inverse rounded-full px-4 py-2.5 text-caption font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity shrink-0"
               >
                 Move
               </button>
             </div>
+            {!thisActive && (
+              <p className="text-[11px] text-text-muted">Mark this line Pay to move committed funds in or out.</p>
+            )}
             {moveDir === 'from' && otherExp && (
               <p className="text-[11px] text-text-muted">{otherExp.name} has {formatCurrency(availOf(otherExp))} available</p>
             )}

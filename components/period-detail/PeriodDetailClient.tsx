@@ -1918,10 +1918,11 @@ function ExpenseRow({
   const isDrawDown = expense.track_spending && !isLinked
   const inPaidMode = !expense.is_split && expense.paid && isDrawDown // spending/logging phase
 
-  // Other lines we can pull funded dollars from to cover an overage (available = funded − booked spend)
+  // Other lines we can pull funded dollars from to cover an overage. Only lines marked Pay hold
+  // real committed dollars this check, so available = budgeted (Pay-gated) − booked spend.
   const coverSources = (siblingExpenses ?? [])
     .filter((e) => e.id !== expense.id)
-    .map((e) => ({ id: e.id, name: e.name, available: Math.round((getOwedAmount(e) - getSpentSoFar(e)) * 100) / 100 }))
+    .map((e) => ({ id: e.id, name: e.name, available: Math.round((getBudgetedAmount(e) - getSpentSoFar(e)) * 100) / 100 }))
     .filter((s) => s.available > 0.005)
   const [spendOpen, setSpendOpen] = useState(hasLedger && !expense.is_complete)
 
