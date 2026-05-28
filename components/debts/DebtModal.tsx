@@ -251,7 +251,7 @@ export default function DebtModal({ debt, budgetItems, onClose }: Props) {
             <button
               type="submit"
               disabled={isPending}
-              className="flex-1 bg-blue text-white rounded-[12px] px-5 py-2.5 text-sm font-bold hover:opacity-90 disabled:opacity-50 transition-opacity"
+              className="flex-1 bg-primary-teal text-text-inverse rounded-[12px] px-5 py-2.5 text-sm font-bold hover:opacity-90 disabled:opacity-50 transition-opacity"
             >
               {isPending ? 'Saving…' : isEdit ? 'Save Changes' : 'Add Debt'}
             </button>
