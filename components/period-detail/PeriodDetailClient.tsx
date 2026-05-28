@@ -49,6 +49,7 @@ import SavingsAllocationSection from '@/components/period-detail/SavingsAllocati
 import PeriodRequestsPanel from '@/components/period-detail/PeriodRequestsPanel'
 import PeriodExpenseEditModal from '@/components/period-detail/PeriodExpenseEditModal'
 import MathInput from '@/components/ui/MathInput'
+import RecentActivity from '@/components/period-detail/RecentActivity'
 import type {
   BudgetPeriod,
   PeriodExpense,
@@ -780,6 +781,13 @@ export default function PeriodDetailClient({
           totalExpenses={totalExpenses}
           stillToFund={stillToFund}
           stillProjected={stillProjectedIncome}
+        />
+        <RecentActivity
+          expenses={optExpenses}
+          adjustments={adjustments}
+          manualIncome={optManual}
+          linkedInvoices={optLinked}
+          expenseTransfers={expenseTransfers}
         />
       </div>
 
