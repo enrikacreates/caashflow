@@ -1977,8 +1977,8 @@ function ExpenseRow({
               <button
                 type="button"
                 onClick={() => onEdit(expense)}
-                title="Edit this expense"
-                className="text-caption font-medium text-text-heading hover:text-primary hover:underline transition-colors text-left"
+                title="Click to edit"
+                className="text-caption font-medium text-text-heading underline decoration-dotted decoration-text-muted underline-offset-4 hover:text-primary hover:decoration-solid hover:decoration-primary transition-colors text-left cursor-pointer"
               >
                 {expense.name}
               </button>
