@@ -288,7 +288,6 @@ export default function PeriodDetailClient({
   // Adjustments reduce/raise what's left to budget — deductions stay on the full check
   const adjustment = adjustments.reduce((sum, a) => sum + (a.amount || 0), 0)
   const availableToBudget = deductions.incomeAfterDeductions + adjustment
-  const amountLeft = availableToBudget - payNowTotal
   // Still projected = this month's invoices not yet received — income still expected to land
   const periodMonth = period.period_month?.slice(0, 7) ?? ''
   const stillProjectedIncome = periodMonth
@@ -301,6 +300,10 @@ export default function PeriodDetailClient({
   const totalExpenses = optExpenses.reduce((sum, e) => sum + expenseOwed(e), 0)
   // Already settled (cleared/complete) — funded by income that has come and gone.
   const clearedExpenseTotal = optExpenses.reduce((sum, e) => (e.is_complete ? sum + expenseOwed(e) : sum), 0)
+  // Amount Left = unspent income capacity. Cleared dollars are locked away (already left the
+  // account), so they stay subtracted — checking Clear must NOT release the amount back into
+  // the live balance the way unchecking Pay does.
+  const amountLeft = availableToBudget - payNowTotal - clearedExpenseTotal
   // Expenses with no income behind them yet — what new income should go toward.
   // Excludes both what's committed this period (pay-now) AND what's already cleared.
   const stillToFund = Math.max(0, totalExpenses - payNowTotal - clearedExpenseTotal)

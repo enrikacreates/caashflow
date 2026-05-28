@@ -58,12 +58,14 @@ export default async function DashboardPage({
     const deductions = calculateDeductions(selectedPeriod.income_amount, settings, selectedPeriod.deduction_overrides)
     const adjustment = (detail.adjustments ?? []).reduce((sum, a) => sum + (a.amount || 0), 0)
     incomeAfterDeductions = deductions.incomeAfterDeductions
-    amountLeft = deductions.incomeAfterDeductions + adjustment - payNowTotal
     const expenseOwed = (e: typeof detail.expenses[number]) =>
       e.is_split ? (e.payments ?? []).reduce((s: number, p: { amount: number }) => s + p.amount, 0) : getOwedAmount(e)
     totalExpenses = detail.expenses.reduce((sum, e) => sum + expenseOwed(e), 0)
     // Already settled (cleared) expenses are funded — exclude them from "still to fund".
     const clearedExpenseTotal = detail.expenses.reduce((sum, e) => (e.is_complete ? sum + expenseOwed(e) : sum), 0)
+    // Amount Left = unspent income capacity. Cleared dollars are locked (already left the
+    // account), so they stay subtracted alongside the committed pay-now total.
+    amountLeft = deductions.incomeAfterDeductions + adjustment - payNowTotal - clearedExpenseTotal
     stillToFund = Math.max(0, totalExpenses - payNowTotal - clearedExpenseTotal)
     // Soonest unpaid bills with a due day
     nextBills = detail.expenses
