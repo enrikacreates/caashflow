@@ -132,7 +132,16 @@ export default function BaseBudgetClient({ items, accounts, categories }: Props)
                 <tbody>
                   {sortItems(group.items).map((item) => (
                     <tr key={item.id} className="odd:bg-bg-white even:bg-[#ebf0f0] hover:bg-[#f2e9e9] transition-colors">
-                      <td className="px-4 py-3 text-caption font-medium text-text-heading">{item.name}</td>
+                      <td className="px-4 py-3">
+                        <button
+                          type="button"
+                          onClick={() => { setEditItem(item); setModalOpen(true) }}
+                          title="Click to edit"
+                          className="text-caption font-medium text-text-heading underline decoration-dotted decoration-text-muted underline-offset-4 hover:text-primary hover:decoration-solid hover:decoration-primary transition-colors text-left cursor-pointer"
+                        >
+                          {item.name}
+                        </button>
+                      </td>
                       <td className="px-4 py-3 text-caption font-bold text-text-heading">{formatCurrency(item.default_amount)}</td>
                       <td className="px-4 py-3 text-caption text-text-muted">{item.due_day || '—'}</td>
                       <td className="px-4 py-3 text-caption text-text-muted">{item.account || '—'}</td>
