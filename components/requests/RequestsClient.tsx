@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useMemo, useTransition } from 'react'
-import { ShoppingCart, LayoutGrid, List, ImagePlus, SlidersHorizontal, Mic, Trash2 } from 'lucide-react'
+import { useState, useEffect, useMemo, useRef, useTransition } from 'react'
+import Link from 'next/link'
+import { ShoppingCart, LayoutGrid, List, ImagePlus, SlidersHorizontal, Mic, Trash2, Share2 } from 'lucide-react'
 import { deleteBudgetRequest, setRequestStatus, allocateRequestToPeriod, quickAddRequest } from '@/app/actions/requests'
 import { formatCurrency, getPillColor, getPriorityColor } from '@/lib/utils'
 import type { BudgetRequest, PriorityCategoryRecord } from '@/lib/types'
@@ -12,6 +13,7 @@ interface Props {
   requests: BudgetRequest[]
   categories: PriorityCategoryRecord[]
   activePeriod: { id: string; period_name: string } | null
+  familyShare: { name: string; slug: string | null } | null
 }
 
 const STATUSES = ['requested', 'approved', 'purchased', 'obtained'] as const
@@ -37,7 +39,7 @@ function priorityCode(name: string): string {
 
 const defaultDir = (key: SortKey): 'asc' | 'desc' => (key === 'amount' || key === 'recent' ? 'desc' : 'asc')
 
-export default function RequestsClient({ requests, categories, activePeriod }: Props) {
+export default function RequestsClient({ requests, categories, activePeriod, familyShare }: Props) {
   const [isPending, startTransition] = useTransition()
   const [modalOpen, setModalOpen] = useState(false)
   const [editItem, setEditItem] = useState<BudgetRequest | null>(null)
@@ -52,6 +54,32 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
   const [manageOpen, setManageOpen] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
   const [listening, setListening] = useState(false)
+  // Family share popover — link to give to family members so they can add requests without an account
+  const [shareOpen, setShareOpen] = useState(false)
+  const [shareCopied, setShareCopied] = useState(false)
+  const [origin, setOrigin] = useState('')
+  const shareWrapRef = useRef<HTMLDivElement>(null)
+  useEffect(() => { setOrigin(window.location.origin) }, [])
+  useEffect(() => {
+    if (!shareOpen) return
+    const onClick = (e: MouseEvent) => {
+      if (shareWrapRef.current && !shareWrapRef.current.contains(e.target as Node)) setShareOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setShareOpen(false) }
+    document.addEventListener('mousedown', onClick)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onClick)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [shareOpen])
+  const shareLink = familyShare?.slug ? `${origin}/request/${familyShare.slug}` : ''
+  const copyShareLink = () => {
+    if (!shareLink) return
+    navigator.clipboard.writeText(shareLink)
+    setShareCopied(true)
+    setTimeout(() => setShareCopied(false), 1500)
+  }
 
   // Browser voice dictation → append spoken text into the quick-add box (no auto-submit, so you can review)
   const startVoice = () => {
@@ -375,6 +403,62 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
         >
           Manage names
         </button>
+        {/* Share request form — give this link to family members so they can add requests without an account */}
+        <div ref={shareWrapRef} className="relative">
+          <button
+            onClick={() => setShareOpen((v) => !v)}
+            title={familyShare?.slug ? 'Share the public request form with family' : 'Set a family name in Settings to enable the share link'}
+            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-caption font-semibold border border-border bg-bg-white text-text-muted hover:border-primary hover:text-text-heading transition-colors"
+          >
+            <Share2 size={14} />
+            Share form
+          </button>
+          {shareOpen && (
+            <div className="absolute right-0 top-full mt-2 z-30 w-80 bg-bg-white rounded-lg shadow-lg p-4">
+              <div className="text-caption font-bold text-text-heading mb-1">Family request link</div>
+              <p className="text-[11px] text-text-muted mb-3">
+                Anyone with this link can add to your list — no account needed.
+              </p>
+              {familyShare?.slug ? (
+                <>
+                  <div className="flex items-center gap-2 bg-surface-beige rounded-sm px-3 py-2 mb-3">
+                    <span className="text-[11px] text-text-muted truncate flex-1">{shareLink || `/request/${familyShare.slug}`}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={copyShareLink}
+                      className="bg-primary-teal text-text-inverse rounded-full px-4 py-2 text-caption font-semibold hover:opacity-90 transition-opacity"
+                    >
+                      {shareCopied ? 'Copied!' : 'Copy link'}
+                    </button>
+                    {shareLink && (
+                      <a
+                        href={shareLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="bg-bg-white text-text-heading border border-border rounded-full px-4 py-2 text-caption font-semibold hover:border-primary transition-colors"
+                      >
+                        Open ↗
+                      </a>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-[11px] text-text-muted mb-3">
+                    Set a family name first to generate the link.
+                  </p>
+                  <Link
+                    href="/settings"
+                    className="inline-block bg-primary-teal text-text-inverse rounded-full px-4 py-2 text-caption font-semibold hover:opacity-90 transition-opacity"
+                  >
+                    Go to Settings →
+                  </Link>
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {showFilters && (
