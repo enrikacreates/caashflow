@@ -48,6 +48,7 @@ import type { DeductionMode } from '@/lib/calculations'
 import SavingsAllocationSection from '@/components/period-detail/SavingsAllocationSection'
 import PeriodRequestsPanel from '@/components/period-detail/PeriodRequestsPanel'
 import PeriodExpenseEditModal from '@/components/period-detail/PeriodExpenseEditModal'
+import MathInput from '@/components/ui/MathInput'
 import type {
   BudgetPeriod,
   PeriodExpense,
@@ -1159,19 +1160,18 @@ export default function PeriodDetailClient({
                   </button>
                 </div>
                 <div className="flex items-center justify-center gap-1 mb-1">
-                  <input
-                    type="number"
-                    step={detail.mode === '%' ? '0.1' : '0.01'}
+                  <MathInput
                     key={`${pctKey}-${detail.mode}`}
                     defaultValue={detail.value}
                     disabled={isLocked}
-                    onChange={(e) => handleDeductionChange(
+                    onChange={(value) => handleDeductionChange(
                       detail.mode === '%' ? pctKey : amtKey,
-                      e.target.value
+                      String(value),
                     )}
+                    title="Type a number or a quick calc — e.g. 435-18"
                     className={`w-20 text-center text-caption font-bold rounded-sm border px-2 py-1 focus:outline-none focus:border-primary disabled:opacity-60 ${
                       hasOverride ? 'border-primary bg-primary/5' : 'border-border'
-                    }`}
+                    } data-[math=pending]:border-primary data-[math=pending]:bg-primary/10`}
                   />
                   <span className="text-caption text-text-muted">{detail.mode === '%' ? '%' : '$'}</span>
                 </div>
