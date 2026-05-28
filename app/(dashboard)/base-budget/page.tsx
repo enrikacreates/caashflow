@@ -20,7 +20,7 @@ export default async function BaseBudgetPage() {
     <div className="space-y-8">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-h1 font-bold text-text-heading">Base Budget Template</h1>
+          <h1 className="text-h1 font-bold text-text-heading">Baseline Budget</h1>
           <p className="text-body text-text-muted mt-1">Master list of all recurring expenses</p>
         </div>
 
