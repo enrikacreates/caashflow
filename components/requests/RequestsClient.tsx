@@ -351,7 +351,7 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
           onClick={() => { setEditItem(null); setModalOpen(true) }}
           className="bg-primary-teal text-text-inverse rounded-full px-5 py-2.5 text-label font-bold hover:opacity-90 transition-opacity"
         >
-          + Add to List
+          + Add Request
         </button>
         <button
           onClick={() => setShowFilters((v) => !v)}
@@ -415,7 +415,7 @@ export default function RequestsClient({ requests, categories, activePeriod }: P
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-text-muted gap-3">
           <ShoppingCart size={40} className="opacity-30" />
-          <p className="text-body">{requests.length === 0 ? 'No next buys yet — add something to your list!' : 'Nothing matches your filters.'}</p>
+          <p className="text-body">{requests.length === 0 ? 'No requests yet — add your first one!' : 'Nothing matches your filters.'}</p>
         </div>
       ) : grouped ? (
         <div className="space-y-8">

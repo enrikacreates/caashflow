@@ -55,7 +55,7 @@ export default function RequestFormModal({
     <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-bg-white rounded-lg shadow-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-[36px] leading-tight font-bold text-text-heading">{editItem ? 'Edit Next Buy' : 'Add to List'}</h2>
+          <h2 className="text-[36px] leading-tight font-bold text-text-heading">{editItem ? 'Edit Request' : 'Add Request'}</h2>
           <button onClick={onClose} className="text-text-muted hover:text-text-heading text-xl transition-colors">✕</button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">

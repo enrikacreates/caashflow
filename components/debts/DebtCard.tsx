@@ -101,7 +101,14 @@ export default function DebtCard({ debt, onEdit }: Props) {
           <div className="flex items-center gap-3">
             <Trophy size={22} className="text-warning flex-shrink-0" />
             <div>
-              <p className="font-semibold text-text-heading line-through">{debt.name}</p>
+              <button
+                type="button"
+                onClick={() => onEdit(debt)}
+                title="Click to edit"
+                className="font-semibold text-text-heading line-through underline decoration-dotted decoration-text-muted underline-offset-4 hover:text-primary hover:decoration-solid hover:decoration-primary transition-colors text-left cursor-pointer"
+              >
+                {debt.name}
+              </button>
               <p className="text-caption text-text-muted">
                 Paid off {debt.paid_off_at
                   ? new Date(debt.paid_off_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
@@ -126,7 +133,14 @@ export default function DebtCard({ debt, onEdit }: Props) {
       {/* Header */}
       <div className="flex items-start justify-between mb-4">
         <div>
-          <h3 className="text-h3 font-semibold text-text-heading">{debt.name}</h3>
+          <button
+            type="button"
+            onClick={() => onEdit(debt)}
+            title="Click to edit"
+            className="text-h3 font-semibold text-text-heading underline decoration-dotted decoration-text-muted underline-offset-4 hover:text-primary hover:decoration-solid hover:decoration-primary transition-colors text-left cursor-pointer"
+          >
+            {debt.name}
+          </button>
           <div className="flex items-center gap-2 mt-0.5">
             {debt.interest_rate !== null && (
               <span className="text-caption bg-warning/10 text-warning font-semibold px-2 py-0.5 rounded-full">
