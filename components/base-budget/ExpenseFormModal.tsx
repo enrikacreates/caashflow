@@ -46,7 +46,7 @@ export default function ExpenseFormModal({
     <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-bg-white rounded-lg shadow-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-h3 font-bold text-text-heading">
+          <h2 className="text-[36px] leading-tight font-bold text-text-heading">
             {editItem ? 'Edit Expense' : 'Add Expense'}
           </h2>
           <button onClick={onClose} className="text-text-muted hover:text-text-heading text-xl transition-colors">✕</button>

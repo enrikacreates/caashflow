@@ -113,7 +113,7 @@ export default function DebtModal({ debt, budgetItems, onClose }: Props) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-h3 font-bold text-text-heading">
+          <h2 className="text-[36px] leading-tight font-bold text-text-heading">
             {isEdit ? 'Edit Debt' : 'Add Debt'}
           </h2>
           <button onClick={onClose} className="text-text-muted hover:text-text-heading text-xl transition-colors">
