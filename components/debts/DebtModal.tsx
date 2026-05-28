@@ -100,8 +100,8 @@ export default function DebtModal({ debt, budgetItems, onClose }: Props) {
   }
 
   const inputClass =
-    'w-full bg-white border border-line rounded-[12px] px-4 py-2.5 text-sm focus:outline-none focus:border-blue transition-colors'
-  const labelClass = 'block text-xs font-bold text-muted mb-1.5 uppercase tracking-wide'
+    'w-full bg-white border border-border rounded-[12px] px-4 py-2.5 text-sm focus:outline-none focus:border-primary transition-colors'
+  const labelClass = 'block text-xs font-bold text-text-muted mb-1.5 uppercase tracking-wide'
 
   return (
     <div
@@ -113,16 +113,16 @@ export default function DebtModal({ debt, budgetItems, onClose }: Props) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-black font-display text-ink">
+          <h2 className="text-xl font-black font-display text-text-heading">
             {isEdit ? 'Edit Debt' : 'Add Debt'}
           </h2>
-          <button onClick={onClose} className="text-muted hover:text-ink text-xl leading-none">
+          <button onClick={onClose} className="text-text-muted hover:text-text-heading text-xl leading-none">
             ✕
           </button>
         </div>
 
         {error && (
-          <div className="bg-orange/10 border border-orange/20 rounded-[12px] px-4 py-3 mb-4 text-sm text-orange font-medium">
+          <div className="bg-warning/10 border border-warning/20 rounded-[12px] px-4 py-3 mb-4 text-sm text-warning font-medium">
             {error}
           </div>
         )}
@@ -224,7 +224,7 @@ export default function DebtModal({ debt, budgetItems, onClose }: Props) {
                 </option>
               ))}
             </select>
-            <p className="text-[11px] text-muted mt-1">
+            <p className="text-[11px] text-text-muted mt-1">
               Pick the matching debt expense — it fills in the payment &amp; due day, and links so the debt balance updates when that expense is marked paid.
             </p>
           </div>
@@ -244,7 +244,7 @@ export default function DebtModal({ debt, budgetItems, onClose }: Props) {
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 bg-white text-ink border border-line rounded-[12px] px-5 py-2.5 text-sm font-bold hover:border-blue transition-colors"
+              className="flex-1 bg-white text-text-heading border border-border rounded-[12px] px-5 py-2.5 text-sm font-bold hover:border-primary transition-colors"
             >
               Cancel
             </button>
