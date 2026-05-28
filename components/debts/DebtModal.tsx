@@ -100,8 +100,8 @@ export default function DebtModal({ debt, budgetItems, onClose }: Props) {
   }
 
   const inputClass =
-    'w-full bg-white border border-border rounded-[12px] px-4 py-2.5 text-sm focus:outline-none focus:border-primary transition-colors'
-  const labelClass = 'block text-xs font-bold text-text-muted mb-1.5 uppercase tracking-wide'
+    'w-full bg-bg-white border border-border rounded-sm px-4 py-2.5 text-caption focus:outline-none focus:border-primary transition-colors'
+  const labelClass = 'block text-caption font-semibold text-text-heading mb-1'
 
   return (
     <div
@@ -109,20 +109,20 @@ export default function DebtModal({ debt, budgetItems, onClose }: Props) {
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-[28px] p-6 w-full max-w-md max-h-[90vh] overflow-y-auto"
+        className="bg-bg-white rounded-lg shadow-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-black font-display text-text-heading">
+          <h2 className="text-h3 font-bold text-text-heading">
             {isEdit ? 'Edit Debt' : 'Add Debt'}
           </h2>
-          <button onClick={onClose} className="text-text-muted hover:text-text-heading text-xl leading-none">
+          <button onClick={onClose} className="text-text-muted hover:text-text-heading text-xl transition-colors">
             ✕
           </button>
         </div>
 
         {error && (
-          <div className="bg-warning/10 border border-warning/20 rounded-[12px] px-4 py-3 mb-4 text-sm text-warning font-medium">
+          <div className="bg-warning/10 border border-warning/20 rounded-sm px-4 py-3 mb-4 text-caption text-warning font-semibold">
             {error}
           </div>
         )}
@@ -224,7 +224,7 @@ export default function DebtModal({ debt, budgetItems, onClose }: Props) {
                 </option>
               ))}
             </select>
-            <p className="text-[11px] text-text-muted mt-1">
+            <p className="text-caption text-text-muted mt-1">
               Pick the matching debt expense — it fills in the payment &amp; due day, and links so the debt balance updates when that expense is marked paid.
             </p>
           </div>
@@ -240,18 +240,18 @@ export default function DebtModal({ debt, budgetItems, onClose }: Props) {
             />
           </div>
 
-          <div className="flex gap-3 pt-2">
+          <div className="flex justify-end gap-3 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 bg-white text-text-heading border border-border rounded-[12px] px-5 py-2.5 text-sm font-bold hover:border-primary transition-colors"
+              className="bg-bg-white text-text-heading border border-border rounded-full px-5 py-2.5 text-caption font-semibold hover:border-primary transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isPending}
-              className="flex-1 bg-primary-teal text-text-inverse rounded-[12px] px-5 py-2.5 text-sm font-bold hover:opacity-90 disabled:opacity-50 transition-opacity"
+              className="bg-primary-teal text-text-inverse rounded-full px-5 py-2.5 text-caption font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity"
             >
               {isPending ? 'Saving…' : isEdit ? 'Save Changes' : 'Add Debt'}
             </button>
