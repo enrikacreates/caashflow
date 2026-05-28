@@ -68,7 +68,7 @@ import type {
   BudgetRequest,
 } from '@/lib/types'
 
-type SortKey = 'name' | 'default_amount' | 'priority_category' | 'account' | 'due_day' | 'frequency' | 'pay_now' | 'is_cash' | 'cleared'
+type SortKey = 'name' | 'default_amount' | 'priority_category' | 'account' | 'due_day' | 'frequency' | 'pay_now' | 'is_cash' | 'cleared' | 'auto_pay' | 'paid'
 type SortDir = 'asc' | 'desc'
 
 /** Compact priority label — "P1: Essentials" → "P1" (keeps the table narrow). */
@@ -358,6 +358,12 @@ export default function PeriodDetailClient({
       return (pa - pb) * mul
     }
     if (sortKey === 'is_cash') return (Number(a.is_cash) - Number(b.is_cash)) * mul
+    if (sortKey === 'auto_pay') return (Number(a.auto_pay) - Number(b.auto_pay)) * mul
+    if (sortKey === 'paid') {
+      const pa = a.is_split ? ((a.payments ?? []).length > 0 && (a.payments ?? []).every((p) => p.paid)) : a.paid
+      const pb = b.is_split ? ((b.payments ?? []).length > 0 && (b.payments ?? []).every((p) => p.paid)) : b.paid
+      return (Number(pa) - Number(pb)) * mul
+    }
     if (sortKey === 'cleared') {
       const ca = a.is_split ? ((a.payments ?? []).length > 0 && (a.payments ?? []).every((p) => p.cleared)) : a.cleared
       const cb = b.is_split ? ((b.payments ?? []).length > 0 && (b.payments ?? []).every((p) => p.cleared)) : b.cleared
@@ -1411,15 +1417,26 @@ export default function PeriodDetailClient({
           {expenseSearch && (
             <button type="button" onClick={() => setExpenseSearch('')} title="Clear search" className="text-caption text-text-muted hover:text-warning font-semibold shrink-0">✕</button>
           )}
-          <button
-            type="button"
-            onClick={handleClearAllPayNow}
-            disabled={isLocked}
-            title="Clear all pay-now items — settles every row checked to Pay (rows not set to Pay are untouched)"
-            className="ml-auto shrink-0 text-[10px] font-bold uppercase bg-primary-teal/10 text-primary rounded-full px-3 py-1.5 hover:bg-primary-teal/20 transition-colors disabled:opacity-50"
-          >
-            All
-          </button>
+          <div className="ml-auto flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={handleBulkPaid}
+              disabled={isLocked}
+              title="Fund all pay-now items — marks every row checked to Pay as Funded (rows not set to Pay are untouched)"
+              className="text-[10px] font-bold uppercase bg-primary-teal/10 text-primary rounded-full px-3 py-1.5 hover:bg-primary-teal/20 transition-colors disabled:opacity-50"
+            >
+              Fund all
+            </button>
+            <button
+              type="button"
+              onClick={handleClearAllPayNow}
+              disabled={isLocked}
+              title="Clear all pay-now items — settles every row checked to Pay (rows not set to Pay are untouched)"
+              className="text-[10px] font-bold uppercase bg-primary-teal/10 text-primary rounded-full px-3 py-1.5 hover:bg-primary-teal/20 transition-colors disabled:opacity-50"
+            >
+              Clear all
+            </button>
+          </div>
         </div>
         <div className="rounded-lg overflow-auto max-h-[70vh]">
             <table className="w-full border-separate border-spacing-0">
@@ -1442,8 +1459,19 @@ export default function PeriodDetailClient({
                   <th className={`${thClass} w-[1%]`} onClick={() => handleSort('due_day')}>
                     Due<SortIcon col="due_day" />
                   </th>
-                  <th className="text-center px-1.5 py-3">
-                    <button type="button" onClick={handleBulkPaid} disabled={isLocked} title="Funded — money set aside for this expense this period (not necessarily cleared the bank yet). Click to mark all pay-now items funded." className="text-caption font-bold uppercase text-text-muted hover:text-primary transition-colors disabled:opacity-50 whitespace-nowrap">Paid&#8201;/&#8201;Funded</button>
+                  <th
+                    className="text-center px-2 py-3 text-caption font-bold uppercase text-text-muted w-[1%] whitespace-nowrap cursor-pointer hover:text-text-heading select-none"
+                    onClick={() => handleSort('auto_pay')}
+                    title="Auto-pay — this bill pays itself. Click to sort."
+                  >
+                    Auto<SortIcon col="auto_pay" />
+                  </th>
+                  <th
+                    className="text-center px-1.5 py-3 text-caption font-bold uppercase text-text-muted cursor-pointer hover:text-text-heading select-none whitespace-nowrap"
+                    onClick={() => handleSort('paid')}
+                    title="Paid / Funded — money set aside this period (not necessarily cleared the account yet). Click to sort."
+                  >
+                    Paid&#8201;/&#8201;Funded<SortIcon col="paid" />
                   </th>
                   <th className="text-center px-1.5 py-3 text-caption font-bold uppercase text-text-muted cursor-pointer hover:text-text-heading select-none whitespace-nowrap" onClick={() => handleSort('cleared')} title="Cleared — the money has actually left the account. Click to sort.">Clear<SortIcon col="cleared" /></th>
                 </tr>
@@ -1482,7 +1510,7 @@ export default function PeriodDetailClient({
                   <td className="px-3 py-3" />
                   <td className="px-3 py-3 font-bold text-text-heading text-caption">Pay Now</td>
                   <td className="px-3 py-3 font-bold text-text-heading text-caption">{formatCurrency(baselinePayNow)}</td>
-                  <td colSpan={6} />
+                  <td colSpan={7} />
                 </tr>
               </tfoot>
             </table>
@@ -1613,7 +1641,7 @@ export default function PeriodDetailClient({
                     <td className="px-3 py-3" />
                     <td className="px-3 py-3 font-bold text-text-heading text-caption">Pay Now</td>
                     <td className="px-3 py-3 font-bold text-text-heading text-caption">{formatCurrency(oneTimePayNow)}</td>
-                    <td colSpan={7} />
+                    <td colSpan={8} />
                   </tr>
                 </tfoot>
               </table>
@@ -1988,9 +2016,6 @@ function ExpenseRow({
             ) : (
               <span className="text-caption font-medium text-text-heading">{expense.name}</span>
             )}
-            {expense.auto_pay && (
-              <span className="text-[10px] bg-success/10 text-success px-1.5 py-0.5 rounded-full font-bold">AUTO</span>
-            )}
             {expense.pay_url && (
               <a
                 href={expense.pay_url}
@@ -2145,6 +2170,13 @@ function ExpenseRow({
         {/* Due Day */}
         <td className="px-3 py-3 text-caption text-text-muted text-center">{expense.due_day || '—'}</td>
 
+        {/* Auto-pay badge — sortable column; pill appears only when the line is set to auto-pay */}
+        <td className="text-center px-2 py-3">
+          {expense.auto_pay && (
+            <span className="text-[10px] bg-success/10 text-success px-1.5 py-0.5 rounded-full font-bold">AUTO</span>
+          )}
+        </td>
+
         {/* Paid */}
         <td className="text-center px-1.5 py-3">
           <input
@@ -2209,7 +2241,7 @@ function ExpenseRow({
       {expense.is_split && !rowDisabled && (
         <tr className="bg-[#ebf0f0]">
           <td />
-          <td className="px-3 py-2 pl-8" colSpan={onRemove ? 9 : 8}>
+          <td className="px-3 py-2 pl-8" colSpan={onRemove ? 10 : 9}>
             <button
               onClick={() => onAddPayment(expense.id)}
               disabled={isPending}
@@ -2225,7 +2257,7 @@ function ExpenseRow({
       {!expense.is_split && isDrawDown && spendOpen && (
         <tr className="bg-[#ebf0f0]">
           <td />
-          <td className="px-3 py-3 pl-8" colSpan={onRemove ? 9 : 8}>
+          <td className="px-3 py-3 pl-8" colSpan={onRemove ? 10 : 9}>
             <SpendLedger
               funded={owed}
               spent={spent}

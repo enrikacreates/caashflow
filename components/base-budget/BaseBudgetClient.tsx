@@ -15,7 +15,7 @@ function priorityCode(name: string): string {
   return (m ? m[0] : name.split(':')[0]).replace(/\s+/g, '').toUpperCase().slice(0, 3)
 }
 
-type SortKey = 'name' | 'default_amount' | 'due_day' | 'account' | 'priority_category'
+type SortKey = 'name' | 'default_amount' | 'due_day' | 'account' | 'priority_category' | 'track_spending' | 'auto_pay'
 
 interface Props {
   items: BaseBudgetItem[]
@@ -68,6 +68,8 @@ export default function BaseBudgetClient({ items, accounts, categories }: Props)
         case 'due_day': vA = a.due_day || 99; vB = b.due_day || 99; break
         case 'account': vA = a.account || ''; vB = b.account || ''; break
         case 'priority_category': vA = a.priority_category || 'Z'; vB = b.priority_category || 'Z'; break
+        case 'track_spending': vA = Number(a.track_spending); vB = Number(b.track_spending); break
+        case 'auto_pay': vA = Number(a.auto_pay); vB = Number(b.auto_pay); break
         default: return 0
       }
       const cmp = vA < vB ? -1 : vA > vB ? 1 : 0
@@ -124,8 +126,8 @@ export default function BaseBudgetClient({ items, accounts, categories }: Props)
                     <th className={thClass('due_day')} onClick={() => toggleSort('due_day')}>Due {sortKey === 'due_day' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
                     <th className={thClass('account')} onClick={() => toggleSort('account')}>Account {sortKey === 'account' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
                     <th className={thClass('priority_category')} onClick={() => toggleSort('priority_category')}>Priority {sortKey === 'priority_category' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
-                    <th className="text-center text-caption font-bold uppercase text-text-muted px-4 py-3" title="Track spending — draw this line down as you spend (groceries, gas, etc.)">Track</th>
-                    <th className="text-left text-caption font-bold uppercase text-text-muted px-4 py-3">AutoPay</th>
+                    <th className={`${thClass('track_spending')} text-center`} onClick={() => toggleSort('track_spending')} title="Track spending — draw this line down as you spend (groceries, gas, etc.). Click to sort.">Track {sortKey === 'track_spending' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+                    <th className={thClass('auto_pay')} onClick={() => toggleSort('auto_pay')} title="Auto-pay — this bill pays itself. Click to sort.">AutoPay {sortKey === 'auto_pay' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
                     <th className="text-left text-caption font-bold uppercase text-text-muted px-4 py-3">Actions</th>
                   </tr>
                 </thead>
