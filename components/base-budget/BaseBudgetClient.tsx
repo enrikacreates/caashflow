@@ -133,16 +133,16 @@ export default function BaseBudgetClient({ items, accounts, categories }: Props)
                 </thead>
                 <tbody>
                   {sortItems(group.items).map((item) => (
-                    <tr key={item.id} className="odd:bg-bg-white even:bg-[#ebf0f0] hover:bg-[#f2e9e9] transition-colors">
+                    <tr
+                      key={item.id}
+                      onClick={() => { setEditItem(item); setModalOpen(true) }}
+                      title="Click to edit"
+                      className="odd:bg-bg-white even:bg-[#ebf0f0] hover:bg-[#f2e9e9] transition-colors cursor-pointer"
+                    >
                       <td className="px-4 py-3">
-                        <button
-                          type="button"
-                          onClick={() => { setEditItem(item); setModalOpen(true) }}
-                          title="Click to edit"
-                          className="text-caption font-medium text-text-heading underline decoration-dotted decoration-text-muted underline-offset-4 hover:text-primary hover:decoration-solid hover:decoration-primary transition-colors text-left cursor-pointer"
-                        >
+                        <span className="text-caption font-medium text-text-heading underline decoration-dotted decoration-text-muted underline-offset-4">
                           {item.name}
-                        </button>
+                        </span>
                       </td>
                       <td className="px-4 py-3 text-caption font-bold text-text-heading">{formatCurrency(item.default_amount)}</td>
                       <td className="px-4 py-3 text-caption text-text-muted">{item.due_day || '—'}</td>
@@ -156,11 +156,12 @@ export default function BaseBudgetClient({ items, accounts, categories }: Props)
                           <span className="text-text-muted">—</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-center">
+                      <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
                           checked={item.track_spending}
                           disabled={isPending}
+                          onClick={(e) => e.stopPropagation()}
                           onChange={(e) => startTransition(() => setBaseItemTrackSpending(item.id, e.target.checked))}
                           title={item.track_spending ? 'Tracking spending — tap to turn off' : 'Track spending on this line'}
                           className="w-4 h-4 accent-primary-teal cursor-pointer disabled:opacity-50"
@@ -169,9 +170,9 @@ export default function BaseBudgetClient({ items, accounts, categories }: Props)
                       <td className="px-4 py-3 text-caption text-text-muted">{item.auto_pay ? '✓' : ''}</td>
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
-                          <button onClick={() => { setEditItem(item); setModalOpen(true) }}
+                          <button onClick={(e) => { e.stopPropagation(); setEditItem(item); setModalOpen(true) }}
                             className="text-caption text-primary font-semibold hover:underline">Edit</button>
-                          <button onClick={() => handleDelete(item.id, item.name)}
+                          <button onClick={(e) => { e.stopPropagation(); handleDelete(item.id, item.name) }}
                             className="text-caption text-text-muted hover:text-warning font-semibold transition-colors">Delete</button>
                         </div>
                       </td>
