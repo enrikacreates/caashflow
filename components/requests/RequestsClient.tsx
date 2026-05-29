@@ -280,9 +280,11 @@ export default function RequestsClient({ requests, categories, activePeriod, fam
             <button onClick={(e) => { e.stopPropagation(); setEditItem(req); setModalOpen(true) }} className="text-caption text-text-muted font-semibold hover:text-text-heading transition-colors">Edit</button>
             <button onClick={(e) => { e.stopPropagation(); handleDelete(req.id, req.name) }} disabled={isPending} aria-label="Delete" title="Delete" className="text-text-muted hover:text-warning transition-colors disabled:opacity-50"><Trash2 size={15} /></button>
           </div>
-          <button onClick={(e) => { e.stopPropagation(); cycleStatus(req) }} disabled={isPending} title="Click to change status" className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${statusColor(req.status)}`}>
-            {statusLabel(req.status)}
-          </button>
+          {req.status !== 'requested' && (
+            <button onClick={(e) => { e.stopPropagation(); cycleStatus(req) }} disabled={isPending} title="Click to change status" className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${statusColor(req.status)}`}>
+              {statusLabel(req.status)}
+            </button>
+          )}
         </div>
       </div>
     </div>
