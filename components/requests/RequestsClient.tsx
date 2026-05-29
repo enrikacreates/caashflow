@@ -46,7 +46,7 @@ export default function RequestsClient({ requests, categories, activePeriod, fam
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [personFilter, setPersonFilter] = useState<string>('all')
-  const [sortKey, setSortKey] = useState<SortKey>('priority')
+  const [sortKey, setSortKey] = useState<SortKey>('recent')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [groupByPerson, setGroupByPerson] = useState(false)
   const [view, setView] = useState<'card' | 'list'>('card')
@@ -204,6 +204,11 @@ export default function RequestsClient({ requests, categories, activePeriod, fam
   }
 
   const statusLabel = (s: string) => (s === 'obtained' ? 'Got it' : s)
+  // Short "added" label — "1/24/26"
+  const addedLabel = (iso: string) => {
+    const d = new Date(iso)
+    return isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined, { month: 'numeric', day: 'numeric', year: '2-digit' })
+  }
   const statusColor = (s: string) =>
     s === 'obtained' ? 'bg-pill-teal text-text-heading'
     : s === 'purchased' ? 'bg-pill-green text-text-heading'
@@ -250,6 +255,9 @@ export default function RequestsClient({ requests, categories, activePeriod, fam
             </div>
           )}
           {req.notes && <p className="text-caption text-text-muted italic line-clamp-2">{req.notes}</p>}
+          {req.created_at && (
+            <p className="text-[10px] text-text-muted mt-2">Added {addedLabel(req.created_at)}</p>
+          )}
         </div>
 
         {activePeriod && req.status !== 'purchased' && (
@@ -308,6 +316,9 @@ export default function RequestsClient({ requests, categories, activePeriod, fam
           {req.requested_for && (req.tags?.length || req.url) ? ' · ' : ''}
           {req.tags?.join(', ')}
           {req.url && <a href={req.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-primary font-semibold hover:underline ml-1">↗</a>}
+          {req.created_at && (
+            <span className="ml-2">· Added {addedLabel(req.created_at)}</span>
+          )}
         </div>
       </div>
       <div className="w-12 shrink-0 flex justify-center">
@@ -481,9 +492,9 @@ export default function RequestsClient({ requests, categories, activePeriod, fam
             </select>
           )}
           <select value={sortKey} onChange={(e) => chooseSort(e.target.value as SortKey)} className={selectClass}>
+            <option value="recent">Sort: Recently added</option>
             <option value="priority">Sort: Priority</option>
             <option value="amount">Sort: Amount</option>
-            <option value="recent">Sort: Recent</option>
             <option value="name">Sort: Name</option>
             <option value="status">Sort: Status</option>
           </select>
