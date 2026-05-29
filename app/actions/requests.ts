@@ -116,7 +116,11 @@ export async function updateBudgetRequest(formData: FormData) {
   const householdId = await getUserHouseholdId()
   const id = formData.get('id') as string
 
-  const updates = {
+  // Optional override for the created_at date — lets the user reorder bulk-added
+  // items in "Recently added" sort by nudging dates. Empty string = leave as-is.
+  const createdRaw = (formData.get('created_at') as string ?? '').trim()
+  const createdAtOverride = createdRaw ? new Date(createdRaw).toISOString() : null
+  const updates: Record<string, unknown> = {
     name: formData.get('name') as string,
     amount: parseFloat(formData.get('amount') as string) || 0,
     priority_category: formData.get('priority_category') as string,
@@ -128,6 +132,7 @@ export async function updateBudgetRequest(formData: FormData) {
     url: (formData.get('url') as string)?.trim() || null,
     updated_at: new Date().toISOString(),
   }
+  if (createdAtOverride) updates.created_at = createdAtOverride
 
   const { error } = await supabase
     .from('budget_requests')

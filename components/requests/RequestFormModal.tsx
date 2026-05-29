@@ -145,6 +145,19 @@ export default function RequestFormModal({
             <label className="block text-caption font-semibold text-text-heading mb-1">Notes</label>
             <textarea name="notes" rows={2} defaultValue={editItem?.notes || ''} className={inputClass + ' resize-y'} />
           </div>
+          {editItem && (
+            <div>
+              <label className="block text-caption font-semibold text-text-heading mb-1">
+                Added <span className="font-normal text-text-muted">(nudge to reorder in "Recently added")</span>
+              </label>
+              <input
+                type="datetime-local"
+                name="created_at"
+                defaultValue={editItem.created_at ? new Date(editItem.created_at).toISOString().slice(0, 16) : ''}
+                className={inputClass}
+              />
+            </div>
+          )}
           <div className="flex justify-end gap-3 pt-2">
             <button
               type="button"
