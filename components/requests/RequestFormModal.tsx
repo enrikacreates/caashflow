@@ -1,9 +1,11 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { Search } from 'lucide-react'
 import { createBudgetRequest, updateBudgetRequest, uploadRequestImage } from '@/app/actions/requests'
 import type { BudgetRequest, PriorityCategoryRecord } from '@/lib/types'
 import Combobox from './Combobox'
+import ImageSearchPicker from '@/components/ui/ImageSearchPicker'
 
 const DEFAULT_TAGS = ['Christmas Wishlist', 'B-Day GiftWish', 'One-day', 'Gift Idea', 'Back to School']
 
@@ -15,6 +17,9 @@ export default function RequestFormModal({
   const [uploading, setUploading] = useState(false)
   const [tags, setTags] = useState<string[]>(editItem?.tags ?? [])
   const [newTag, setNewTag] = useState('')
+  // Live name state so the image picker can prefill the search box with the current name
+  const [name, setName] = useState(editItem?.name ?? '')
+  const [pickerOpen, setPickerOpen] = useState(false)
   const inputClass = 'w-full bg-bg-white border border-border rounded-sm px-4 py-2.5 text-caption focus:outline-none focus:border-primary transition-colors'
 
   const allTags = [...new Set([...DEFAULT_TAGS, ...tagOptions, ...tags])]
@@ -62,7 +67,7 @@ export default function RequestFormModal({
           {editItem && <input type="hidden" name="id" value={editItem.id} />}
           <div>
             <label className="block text-caption font-semibold text-text-heading mb-1">Name *</label>
-            <input type="text" name="name" required defaultValue={editItem?.name || ''} className={inputClass} />
+            <input type="text" name="name" required value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
           </div>
           <div>
             <label className="block text-caption font-semibold text-text-heading mb-1">For (who or what)</label>
@@ -81,7 +86,18 @@ export default function RequestFormModal({
             {imageUrl && (
               <img src={imageUrl} alt="" className="w-full max-h-44 object-cover rounded-sm mb-2 border border-border" />
             )}
-            <input type="url" placeholder="Paste an image URL" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} className={inputClass} />
+            <div className="flex gap-2">
+              <input type="url" placeholder="Paste an image URL" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} className={`${inputClass} flex-1`} />
+              <button
+                type="button"
+                onClick={() => setPickerOpen(true)}
+                title="Search the web for an image"
+                className="shrink-0 inline-flex items-center gap-1.5 bg-bg-white text-text-heading border border-border rounded-full px-4 text-caption font-semibold hover:border-primary transition-colors"
+              >
+                <Search size={14} />
+                Search
+              </button>
+            </div>
             <div className="text-caption text-text-muted text-center my-1.5">or</div>
             <div className="flex items-center gap-2">
               <label className="bg-bg-white text-text-heading border border-border rounded-full px-4 py-1.5 text-caption font-semibold hover:border-primary transition-colors cursor-pointer">
@@ -176,6 +192,13 @@ export default function RequestFormModal({
           </div>
         </form>
       </div>
+      {pickerOpen && (
+        <ImageSearchPicker
+          initialQuery={name}
+          onPick={(url) => setImageUrl(url)}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
     </div>
   )
 }
