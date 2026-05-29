@@ -47,7 +47,7 @@ export default function RequestsClient({ requests, categories, activePeriod, fam
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [personFilter, setPersonFilter] = useState<string>('all')
   const [sortKey, setSortKey] = useState<SortKey>('recent')
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [groupByPerson, setGroupByPerson] = useState(false)
   const [view, setView] = useState<'card' | 'list'>('card')
   const [quickName, setQuickName] = useState('')
