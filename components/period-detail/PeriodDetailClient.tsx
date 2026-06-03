@@ -300,7 +300,11 @@ export default function PeriodDetailClient({
   const totalCash = Object.values(cashByAccount).reduce((s, v) => s + v, 0)
   // Adjustments reduce/raise what's left to budget — deductions stay on the full check
   const adjustment = adjustments.reduce((sum, a) => sum + (a.amount || 0), 0)
-  const availableToBudget = deductions.incomeAfterDeductions + adjustment
+  // Events bypass deductions entirely — every contributed dollar is available
+  // to spend on the event. Monthly budgets net out tithe/savings/tax/etc first.
+  const availableToBudget = period.kind === 'event'
+    ? period.income_amount + adjustment
+    : deductions.incomeAfterDeductions + adjustment
   // Still projected = this month's invoices not yet received — income still expected to land
   const periodMonth = period.period_month?.slice(0, 7) ?? ''
   const stillProjectedIncome = periodMonth

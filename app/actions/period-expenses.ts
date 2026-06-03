@@ -95,7 +95,7 @@ async function logDeductionContribution(
 ) {
   const { data: period } = await supabase
     .from('budget_periods')
-    .select('income_amount, deduction_overrides')
+    .select('income_amount, deduction_overrides, kind')
     .eq('id', periodId)
     .eq('household_id', householdId)
     .single()
@@ -105,6 +105,8 @@ async function logDeductionContribution(
     .eq('household_id', householdId)
     .single()
   if (!period || !settings) return
+  // Event budgets don't apply deductions — skip the contribution ledger entirely.
+  if (period.kind === 'event') return
 
   const ded = calculateDeductions(Number(period.income_amount) || 0, settings, period.deduction_overrides)
   const p = ded.percentages
