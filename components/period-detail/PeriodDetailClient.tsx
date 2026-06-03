@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useCallback, useRef, useEffect, useOptimistic } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronsDownUp, ChevronsUpDown, Pencil, Camera } from 'lucide-react'
+import { ChevronsDownUp, ChevronsUpDown, Pencil, Camera, Eye, EyeOff } from 'lucide-react'
 import {
   updateExpenseField,
   updateDeductionOverrides,
@@ -144,6 +144,10 @@ export default function PeriodDetailClient({
   const openMoveFunds = (expense: PeriodExpense) => { setEditFocusMove(true); setEditExpense(expense) }
   // Collapsible sections — open by default; a key set true means collapsed.
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  // Event focus mode: hide the inherited baseline Expenses table by default. Click
+  // the eye to reveal it (useful when an event was converted from a monthly budget
+  // and you still want occasional access to the baseline bills).
+  const [showBaselineExpenses, setShowBaselineExpenses] = useState(period.kind !== 'event')
   const isOpen = (k: string) => !collapsed[k]
   const toggleSection = (k: string) => setCollapsed((c) => ({ ...c, [k]: !c[k] }))
   const allCollapsed = SECTION_KEYS.every((k) => collapsed[k])
@@ -1391,9 +1395,22 @@ export default function PeriodDetailClient({
       )}
 
       {/* ─── Expenses Table ────────────────────────────────── */}
+      {/* In event focus mode the baseline expenses table is hidden by default —
+          click the eye to surface inherited monthly bills if/when you need them. */}
+      {period.kind === 'event' && !showBaselineExpenses ? (
+        <button
+          type="button"
+          onClick={() => setShowBaselineExpenses(true)}
+          className="w-full bg-bg-white rounded-lg shadow-card p-3 text-caption text-text-muted hover:text-primary transition-colors flex items-center justify-center gap-2"
+          title="Show baseline expenses (inherited monthly bills)"
+        >
+          <Eye size={16} />
+          Show baseline expenses ({baselineExpenses.length})
+        </button>
+      ) : (
       <div className="bg-bg-white rounded-lg shadow-card p-6">
         <div className="flex flex-wrap items-end justify-between gap-2 mb-4">
-          <h2 className="text-h3 font-bold text-text-heading">
+          <h2 className="text-h3 font-bold text-text-heading flex items-center gap-2">
             <button
               type="button"
               onClick={() => toggleSection('expenses')}
@@ -1403,9 +1420,19 @@ export default function PeriodDetailClient({
               <span className="text-text-muted text-base leading-none">{isOpen('expenses') ? '▾' : '▸'}</span>
               Expenses
             </button>
-            <span className="text-caption font-medium text-text-muted ml-2">
+            <span className="text-caption font-medium text-text-muted">
               ({baselineExpenses.filter((e) => getBudgetedAmount(e) > 0).length} marked pay now)
             </span>
+            {period.kind === 'event' && (
+              <button
+                type="button"
+                onClick={() => setShowBaselineExpenses(false)}
+                className="text-text-muted hover:text-primary transition-colors"
+                title="Hide baseline expenses"
+              >
+                <EyeOff size={14} />
+              </button>
+            )}
           </h2>
           {/* Payment rollup — funnel: budgeted → funded(Paid) → spent → cleared, plus total */}
           <div className="flex items-center gap-3 text-caption flex-wrap">
@@ -1534,6 +1561,7 @@ export default function PeriodDetailClient({
         </>
         )}
       </div>
+      )}
 
       {/* ─── One-Time Expenses (ad-hoc, this budget only) ──── */}
       <div className="bg-bg-white rounded-lg shadow-card p-6">
