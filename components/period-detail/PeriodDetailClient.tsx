@@ -274,7 +274,14 @@ export default function PeriodDetailClient({
     settings,
     overridesLocal
   )
-  const payNowTotal = calculatePayNowTotal(optExpenses)
+  // For event budgets, the top-level summary cards ignore inherited baseline
+  // bills — they're cluttering noise from the budget's earlier monthly life.
+  // The Expenses section's own table-level totals stay accurate to whatever
+  // is rendered when the user toggles baseline visibility on.
+  const rollupExpenses = period.kind === 'event'
+    ? optExpenses.filter((e) => e.base_item_id === null)
+    : optExpenses
+  const payNowTotal = calculatePayNowTotal(rollupExpenses)
   const deductionAccountAllocations = getDeductionAccountAllocations(deductions, settings)
   const accountTransfers = calculateAccountTransferDetail(optExpenses, deductionAccountAllocations)
   // Cash to withdraw per account — sum of amounts flagged 💵
@@ -303,9 +310,9 @@ export default function PeriodDetailClient({
     : 0
   const expenseOwed = (e: PeriodExpense) =>
     e.is_split ? (e.payments ?? []).reduce((s, p) => s + p.amount, 0) : getOwedAmount(e)
-  const totalExpenses = optExpenses.reduce((sum, e) => sum + expenseOwed(e), 0)
+  const totalExpenses = rollupExpenses.reduce((sum, e) => sum + expenseOwed(e), 0)
   // Already settled (cleared/complete) — funded by income that has come and gone.
-  const clearedExpenseTotal = optExpenses.reduce((sum, e) => (e.is_complete ? sum + expenseOwed(e) : sum), 0)
+  const clearedExpenseTotal = rollupExpenses.reduce((sum, e) => (e.is_complete ? sum + expenseOwed(e) : sum), 0)
   // Amount Left = unspent income capacity. Cleared dollars are locked away (already left the
   // account), so they stay subtracted — checking Clear must NOT release the amount back into
   // the live balance the way unchecking Pay does.
@@ -313,7 +320,12 @@ export default function PeriodDetailClient({
   // Expenses with no income behind them yet — what new income should go toward.
   // Excludes both what's committed this period (pay-now) AND what's already cleared.
   const stillToFund = Math.max(0, totalExpenses - payNowTotal - clearedExpenseTotal)
-  const paymentSummary = calculatePeriodPaymentSummary(optExpenses)
+  const paymentSummary = calculatePeriodPaymentSummary(rollupExpenses)
+  // Section-level summary stays accurate to all rows in the Expenses table (baseline + one-time),
+  // even when the top-level rollup ignores baseline for events.
+  const sectionPaymentSummary = period.kind === 'event'
+    ? calculatePeriodPaymentSummary(optExpenses)
+    : paymentSummary
   // Total deducted off the gross (for the collapsed Deductions hint)
   const totalDeductions = period.income_amount - deductions.incomeAfterDeductions
   const isLocked = period.status === 'complete'
@@ -1436,13 +1448,13 @@ export default function PeriodDetailClient({
           </h2>
           {/* Payment rollup — funnel: budgeted → funded(Paid) → spent → cleared, plus total */}
           <div className="flex items-center gap-3 text-caption flex-wrap">
-            <span className="text-text-muted">Budgeted <span className="font-bold text-text-heading">{formatCurrency(paymentSummary.budgeted)}</span></span>
+            <span className="text-text-muted">Budgeted <span className="font-bold text-text-heading">{formatCurrency(sectionPaymentSummary.budgeted)}</span></span>
             <span className="text-text-muted">·</span>
             <span className="text-text-muted">Paid <span className="font-bold text-text-heading">{formatCurrency(fundedTotal)}</span></span>
             <span className="text-text-muted">·</span>
             <span className="text-text-muted">Cleared <span className="font-bold text-primary-teal">{formatCurrency(clearedTotal)}</span></span>
             <span className="text-text-muted">·</span>
-            <span className="text-text-muted">Total <span className="font-bold text-text-heading">{formatCurrency(totalExpenses)}</span></span>
+            <span className="text-text-muted">Total <span className="font-bold text-text-heading">{formatCurrency(optExpenses.reduce((s, e) => s + expenseOwed(e), 0))}</span></span>
           </div>
         </div>
 
