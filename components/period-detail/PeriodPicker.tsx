@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, Pencil } from 'lucide-react'
+import EditPeriodModal from '@/components/periods/EditPeriodModal'
 import type { BudgetPeriod } from '@/lib/types'
 
 /**
@@ -18,6 +19,7 @@ export default function PeriodPicker({
   periods: BudgetPeriod[]
 }) {
   const [open, setOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
 
   // Click outside / Escape closes the dropdown
@@ -41,7 +43,7 @@ export default function PeriodPicker({
     .sort((a, b) => (a.period_month ?? '').localeCompare(b.period_month ?? ''))
 
   return (
-    <div ref={wrapRef} className="relative inline-block">
+    <div ref={wrapRef} className="relative inline-flex items-baseline gap-3">
       <button
         type="button"
         onClick={() => others.length > 0 && setOpen((v) => !v)}
@@ -54,6 +56,16 @@ export default function PeriodPicker({
           <ChevronDown size={24} strokeWidth={2.5} className={`transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
         )}
       </button>
+      <button
+        type="button"
+        onClick={() => setEditOpen(true)}
+        title="Edit budget (name, type, month)"
+        className="text-text-muted hover:text-primary transition-colors translate-y-[-2px]"
+      >
+        <Pencil size={16} strokeWidth={2} />
+      </button>
+
+      {editOpen && <EditPeriodModal period={current} onClose={() => setEditOpen(false)} />}
 
       {open && others.length > 0 && (
         <div className="absolute left-0 top-full mt-1 z-30 min-w-[14rem] bg-bg-white rounded-lg shadow-lg p-1.5">

@@ -127,24 +127,32 @@ export async function createBudgetPeriod(formData: FormData) {
   revalidatePath('/periods')
 }
 
-/** Edit a budget's name, month, and/or created date. */
+/** Edit a budget's name, month, kind, and/or created date. */
 export async function updateBudgetPeriod(
   id: string,
-  fields: { period_name: string; period_month: string | null; created_at?: string }
+  fields: {
+    period_name: string
+    period_month: string | null
+    kind?: 'monthly' | 'event'
+    created_at?: string
+  }
 ) {
   const supabase = await createClient()
   const householdId = await getUserHouseholdId()
 
-  // "YYYY-MM" (from <input type="month">) → first-of-month date
-  const periodMonth = fields.period_month
-    ? (fields.period_month.length === 7 ? `${fields.period_month}-01` : fields.period_month)
-    : null
+  // Event budgets aren't month-anchored — clear the month if converting to event.
+  const periodMonth = fields.kind === 'event'
+    ? null
+    : (fields.period_month
+        ? (fields.period_month.length === 7 ? `${fields.period_month}-01` : fields.period_month)
+        : null)
 
   const updates: Record<string, unknown> = {
     period_name: fields.period_name,
     period_month: periodMonth,
     updated_at: new Date().toISOString(),
   }
+  if (fields.kind) updates.kind = fields.kind
   if (fields.created_at) updates.created_at = fields.created_at
 
   const { error } = await supabase
