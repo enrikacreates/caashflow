@@ -6,6 +6,7 @@ import { Menu, Settings2, LogOut } from 'lucide-react'
 import Sidebar from '@/components/layout/Sidebar'
 import HeaderAvatar from '@/components/layout/HeaderAvatar'
 import HeaderStats from '@/components/layout/HeaderStats'
+import ToastHost from '@/components/ui/ToastHost'
 import { signOut } from '@/app/actions/auth'
 
 /* -------------------------------------------------------
@@ -165,6 +166,7 @@ export default function DashboardLayout({
           </div>
         </footer>
       </div>
+      <ToastHost />
     </div>
   )
 }

@@ -41,6 +41,7 @@ import {
 } from '@/app/actions/period-expenses'
 import { completePeriod, reopenPeriod } from '@/app/actions/periods'
 import { smallConfetti, bigConfetti } from '@/lib/confetti'
+import { notifyError } from '@/lib/toast'
 import { formatCurrency, formatDate, getOwedAmount, getPriorityPill } from '@/lib/utils'
 import BudgetSummaryBar from '@/components/dashboard/BudgetSummaryBar'
 import { calculateDeductions, calculatePayNowTotal, calculateAccountTransferDetail, getDeductionAccountAllocations, getBudgetedAmount, isFullyPaid, calculatePeriodPaymentSummary, getSpentSoFar } from '@/lib/calculations'
@@ -171,13 +172,58 @@ export default function PeriodDetailClient({
         | { kind: 'field'; id: string; field: string; value: boolean | number | null }
         | { kind: 'payment'; id: string; field: string; value: boolean }
         | { kind: 'remove'; id: string }
+        | { kind: 'add'; expense: PeriodExpense }
+        | { kind: 'addPayment'; expenseId: string; payment: PeriodExpensePayment }
+        | { kind: 'removePayment'; paymentId: string }
+        | { kind: 'addSpend'; expenseId: string; paymentId: string | null; adjustment: PeriodExpenseAdjustment }
+        | { kind: 'removeSpend'; adjustmentId: string }
     ) => {
       if (u.kind === 'remove') return state.filter((e) => e.id !== u.id)
+      if (u.kind === 'add') return [...state, u.expense]
       if (u.kind === 'field') return state.map((e) => (e.id === u.id ? { ...e, [u.field]: u.value } : e))
-      return state.map((e) => ({
-        ...e,
-        payments: (e.payments ?? []).map((p) => (p.id === u.id ? { ...p, [u.field]: u.value } : p)),
-      }))
+      if (u.kind === 'payment') {
+        return state.map((e) => ({
+          ...e,
+          payments: (e.payments ?? []).map((p) => (p.id === u.id ? { ...p, [u.field]: u.value } : p)),
+        }))
+      }
+      if (u.kind === 'addPayment') {
+        return state.map((e) => (e.id === u.expenseId ? { ...e, payments: [...(e.payments ?? []), u.payment] } : e))
+      }
+      if (u.kind === 'removePayment') {
+        return state.map((e) => ({ ...e, payments: (e.payments ?? []).filter((p) => p.id !== u.paymentId) }))
+      }
+      if (u.kind === 'addSpend') {
+        return state.map((e) => {
+          if (e.id !== u.expenseId) return e
+          const nextAdjustments = [...(e.adjustments ?? []), u.adjustment]
+          const nextPayments = u.paymentId
+            ? (e.payments ?? []).map((p) =>
+                p.id === u.paymentId
+                  ? { ...p, adjustments: [...(p.adjustments ?? []), u.adjustment], paid_amount: (p.paid_amount ?? 0) + u.adjustment.amount }
+                  : p
+              )
+            : (e.payments ?? [])
+          return { ...e, adjustments: nextAdjustments, payments: nextPayments, paid_amount: (e.paid_amount ?? 0) + u.adjustment.amount }
+        })
+      }
+      // removeSpend — drop the adjustment from the line and any installment that held it,
+      // and roll back the paid_amount on both.
+      return state.map((e) => {
+        const adj = (e.adjustments ?? []).find((a) => a.id === u.adjustmentId)
+        if (!adj) return e
+        return {
+          ...e,
+          adjustments: (e.adjustments ?? []).filter((a) => a.id !== u.adjustmentId),
+          paid_amount: Math.max(0, (e.paid_amount ?? 0) - adj.amount),
+          payments: (e.payments ?? []).map((p) => {
+            const inP = (p.adjustments ?? []).some((a) => a.id === u.adjustmentId)
+            return inP
+              ? { ...p, adjustments: (p.adjustments ?? []).filter((a) => a.id !== u.adjustmentId), paid_amount: Math.max(0, (p.paid_amount ?? 0) - adj.amount) }
+              : p
+          }),
+        }
+      })
     }
   )
   const [optLinked, applyLinkedOpt] = useOptimistic(
@@ -189,6 +235,25 @@ export default function PeriodDetailClient({
     manualIncome,
     (state: PeriodManualIncome[], u: { id: string } & Partial<PeriodManualIncome>) =>
       state.map((mi) => (mi.id === u.id ? { ...mi, ...u } : mi))
+  )
+  // Optimistic ledger of period-level income adjustments — captured rows
+  // appear instantly; removals drop instantly.
+  const [optAdjustments, applyAdjustmentOpt] = useOptimistic(
+    adjustments,
+    (
+      state: PeriodAdjustment[],
+      u:
+        | { kind: 'add'; row: PeriodAdjustment }
+        | { kind: 'remove'; id: string }
+    ) => {
+      if (u.kind === 'add') return [...state, u.row]
+      return state.filter((a) => a.id !== u.id)
+    }
+  )
+  // Optimistic period status — Mark Complete / Reopen flips instantly.
+  const [optStatus, applyStatusOpt] = useOptimistic(
+    period.status,
+    (_state, next: 'active' | 'complete') => next
   )
   // Optimistic overlay for deduction overrides — %/$ edits recompute the numbers instantly
   const [overridesLocal, setOverridesLocal] = useState<DeductionOverrides>(period.deduction_overrides ?? {})
@@ -299,7 +364,7 @@ export default function PeriodDetailClient({
   }
   const totalCash = Object.values(cashByAccount).reduce((s, v) => s + v, 0)
   // Adjustments reduce/raise what's left to budget — deductions stay on the full check
-  const adjustment = adjustments.reduce((sum, a) => sum + (a.amount || 0), 0)
+  const adjustment = optAdjustments.reduce((sum, a) => sum + (a.amount || 0), 0)
   // Events bypass deductions entirely — every contributed dollar is available
   // to spend on the event. Monthly budgets net out tithe/savings/tax/etc first.
   const availableToBudget = period.kind === 'event'
@@ -332,7 +397,7 @@ export default function PeriodDetailClient({
     : paymentSummary
   // Total deducted off the gross (for the collapsed Deductions hint)
   const totalDeductions = period.income_amount - deductions.incomeAfterDeductions
-  const isLocked = period.status === 'complete'
+  const isLocked = optStatus === 'complete'
 
   // Income split: active drives the math; settled (done) is sealed but still shown
   const settledIncome =
@@ -575,7 +640,21 @@ export default function PeriodDetailClient({
   const handleCaptureAdjustment = () => {
     if (!canCapture || resolvedAdjAmount === null) return
     setJustCaptured(true)
-    startTransition(() => addAdjustment(period.id, resolvedAdjAmount, capNote.trim() || null))
+    const ghost: PeriodAdjustment = {
+      id: `tmp-${Date.now()}`,
+      household_id: period.household_id,
+      period_id: period.id,
+      amount: resolvedAdjAmount,
+      note: capNote.trim() || null,
+      sort_order: optAdjustments.length,
+      created_at: new Date(0).toISOString(),
+      updated_at: new Date(0).toISOString(),
+    }
+    startTransition(async () => {
+      applyAdjustmentOpt({ kind: 'add', row: ghost })
+      try { await addAdjustment(period.id, resolvedAdjAmount, capNote.trim() || null) }
+      catch { notifyError() }
+    })
   }
 
   const handleAdjModeToggle = (mode: 'flat' | 'target') => {
@@ -585,7 +664,12 @@ export default function PeriodDetailClient({
     setJustCaptured(false)
   }
 
-  const handleRemoveAdjustment = (id: string) => startTransition(() => removeAdjustment(id, period.id))
+  const handleRemoveAdjustment = (id: string) =>
+    startTransition(async () => {
+      applyAdjustmentOpt({ kind: 'remove', id })
+      try { await removeAdjustment(id, period.id) }
+      catch { notifyError() }
+    })
 
   // ─── One-time expenses ───────────────────────────────────────
   const handleAddOneTime = (e: React.FormEvent<HTMLFormElement>) => {
@@ -595,15 +679,58 @@ export default function PeriodDetailClient({
     const amount = parseFloat(fd.get('amount') as string)
     if (!name || isNaN(amount)) return
     const dueRaw = fd.get('due') as string
+    const account = (fd.get('account') as string) || null
+    const priority = (fd.get('priority') as string) || null
+    const dueDay = dueRaw ? parseInt(dueRaw, 10) : null
+    // Close the form + drop a ghost row instantly; server reconciles via revalidate.
+    setShowOneTimeForm(false)
+    const now = new Date(0).toISOString()
+    const ghost: PeriodExpense = {
+      id: `tmp-${Date.now()}`,
+      period_id: period.id,
+      household_id: period.household_id,
+      base_item_id: null,
+      name,
+      default_amount: amount,
+      due_day: dueDay,
+      account,
+      priority_category: priority,
+      frequency: 'One-Time',
+      auto_pay: false,
+      pay_url: null,
+      notes: null,
+      tags: [],
+      pay_now: false,
+      transferred: false,
+      paid: false,
+      cleared: false,
+      is_cash: false,
+      is_split: false,
+      is_complete: false,
+      is_overdue: false,
+      track_spending: false,
+      amount_override: null,
+      override_notes: null,
+      paid_amount: 0,
+      debt_id: null,
+      savings_goal_id: null,
+      sort_order: optExpenses.length,
+      created_at: now,
+      updated_at: now,
+      payments: [],
+      adjustments: [],
+    }
     startTransition(async () => {
-      await addOneTimeExpense(period.id, {
-        name,
-        default_amount: amount,
-        account: (fd.get('account') as string) || null,
-        priority_category: (fd.get('priority') as string) || null,
-        due_day: dueRaw ? parseInt(dueRaw, 10) : null,
-      })
-      setShowOneTimeForm(false)
+      applyExpenseOpt({ kind: 'add', expense: ghost })
+      try {
+        await addOneTimeExpense(period.id, {
+          name,
+          default_amount: amount,
+          account,
+          priority_category: priority,
+          due_day: dueDay,
+        })
+      } catch { notifyError() }
     })
   }
 
@@ -616,7 +743,11 @@ export default function PeriodDetailClient({
 
   // ─── Split / sub-payments / complete ─────────────────────────
   const handleToggleSplit = (id: string, value: boolean) =>
-    startTransition(() => toggleExpenseSplit(id, period.id, value))
+    startTransition(async () => {
+      applyExpenseOpt({ kind: 'field', id, field: 'is_split', value })
+      try { await toggleExpenseSplit(id, period.id, value) }
+      catch { notifyError() }
+    })
 
   // "Clear" is the terminal settle: the money has cleared the account → counts as paid in the
   // roundup, tops the line up to its funded amount, drops it from the live balance + seals it.
@@ -656,26 +787,82 @@ export default function PeriodDetailClient({
     })
   }
 
-  const handleAddPayment = (id: string) =>
-    startTransition(() => addExpensePayment(id, period.id))
+  const handleAddPayment = (id: string) => {
+    const now = new Date(0).toISOString()
+    const ghost: PeriodExpensePayment = {
+      id: `tmp-${Date.now()}`,
+      household_id: period.household_id,
+      period_expense_id: id,
+      label: null,
+      amount: 0,
+      due_day: null,
+      pay_now: false,
+      transferred: false,
+      paid: false,
+      cleared: false,
+      paid_amount: 0,
+      sort_order: (optExpenses.find((e) => e.id === id)?.payments?.length ?? 0),
+      created_at: now,
+      updated_at: now,
+      adjustments: [],
+    }
+    startTransition(async () => {
+      applyExpenseOpt({ kind: 'addPayment', expenseId: id, payment: ghost })
+      try { await addExpensePayment(id, period.id) }
+      catch { notifyError() }
+    })
+  }
 
   const handleRemovePayment = (paymentId: string) =>
-    startTransition(() => removeExpensePayment(paymentId, period.id))
+    startTransition(async () => {
+      applyExpenseOpt({ kind: 'removePayment', paymentId })
+      try { await removeExpensePayment(paymentId, period.id) }
+      catch { notifyError() }
+    })
 
   // ─── Spend ledger (per-line draw-down) ───────────────────────
-  const handleAddSpend = (id: string, amount: number, note: string | null, imageUrl: string | null = null, paymentId: string | null = null) =>
-    startTransition(() => addExpenseSpend(id, period.id, amount, note, imageUrl, paymentId))
+  const handleAddSpend = (id: string, amount: number, note: string | null, imageUrl: string | null = null, paymentId: string | null = null) => {
+    const now = new Date(0).toISOString()
+    const ghost: PeriodExpenseAdjustment = {
+      id: `tmp-${Date.now()}`,
+      household_id: period.household_id,
+      period_expense_id: id,
+      period_expense_payment_id: paymentId,
+      amount,
+      note,
+      image_url: imageUrl,
+      spent_at: now,
+      sort_order: 0,
+      created_at: now,
+      updated_at: now,
+    }
+    startTransition(async () => {
+      applyExpenseOpt({ kind: 'addSpend', expenseId: id, paymentId, adjustment: ghost })
+      try { await addExpenseSpend(id, period.id, amount, note, imageUrl, paymentId) }
+      catch { notifyError() }
+    })
+  }
 
   const handleRemoveSpend = (adjustmentId: string) =>
-    startTransition(() => removeExpenseSpend(adjustmentId, period.id))
+    startTransition(async () => {
+      applyExpenseOpt({ kind: 'removeSpend', adjustmentId })
+      try { await removeExpenseSpend(adjustmentId, period.id) }
+      catch { notifyError() }
+    })
 
   // Cover an overage by pulling funded dollars from another line into this one.
   const handleTransferFunds = (fromId: string, toId: string, amount: number) =>
-    startTransition(() => transferFunds(fromId, toId, amount).then(() => {}))
+    startTransition(async () => {
+      try { await transferFunds(fromId, toId, amount) }
+      catch { notifyError() }
+    })
 
   // Attach (or clear) a receipt photo on an existing spend entry.
   const handleAttachSpendImage = (adjustmentId: string, imageUrl: string | null) =>
-    startTransition(() => updateExpenseSpend(adjustmentId, period.id, { image_url: imageUrl }))
+    startTransition(async () => {
+      try { await updateExpenseSpend(adjustmentId, period.id, { image_url: imageUrl }) }
+      catch { notifyError() }
+    })
 
   const debouncedPaymentUpdate = useCallback(
     (paymentId: string, field: string, value: string | number | boolean | null) => {
@@ -712,23 +899,45 @@ export default function PeriodDetailClient({
   // ─── Bulk header actions (scoped to to-pay items) ───────────
   const handleBulkPaid = () => {
     if (!confirm('Mark all to-pay items as paid?')) return
-    startTransition(async () => { await bulkMarkPaid(period.id) })
+    // Flip every pay_now-and-unpaid row to paid immediately; server reconciles.
+    startTransition(async () => {
+      for (const e of optExpenses) {
+        if (e.pay_now && !e.paid) applyExpenseOpt({ kind: 'field', id: e.id, field: 'paid', value: true })
+      }
+      try { await bulkMarkPaid(period.id) }
+      catch { notifyError() }
+    })
   }
   const handleSettleReset = () => {
     if (!confirm('Clear all PAID items and reset for the next check?\n\nSettles & locks every paid item, logs the active income to the ledger, and clears adjustments. Unpaid items stay live. Nothing is deleted — reopen any row individually.')) return
-    startTransition(async () => { await settleAndResetPeriod(period.id) })
+    startTransition(async () => {
+      try { await settleAndResetPeriod(period.id) }
+      catch { notifyError() }
+    })
   }
   const handleClearAllPayNow = () => {
     if (!confirm('Clear all pay-now items?\n\nSettles every line checked to Pay (like clicking Clear on each). Rows not set to Pay are untouched. Nothing is deleted — reopen any row individually.')) return
-    startTransition(async () => { await clearAllPayNow(period.id) })
+    startTransition(async () => {
+      try { await clearAllPayNow(period.id) }
+      catch { notifyError() }
+    })
   }
 
   // ─── Budget complete / reopen ────────────────────────────────
   const handleComplete = () => {
     if (!confirm('Mark this budget complete? It will lock for editing — you can reopen it anytime.')) return
-    startTransition(() => completePeriod(period.id))
+    startTransition(async () => {
+      applyStatusOpt('complete')
+      try { await completePeriod(period.id) }
+      catch { notifyError() }
+    })
   }
-  const handleReopen = () => startTransition(() => reopenPeriod(period.id))
+  const handleReopen = () =>
+    startTransition(async () => {
+      applyStatusOpt('active')
+      try { await reopenPeriod(period.id) }
+      catch { notifyError() }
+    })
 
   const inputClass = 'bg-bg-white border border-border rounded-sm px-2 py-1 text-caption focus:outline-none focus:border-primary transition-colors'
   const thClass = 'text-left text-caption font-bold uppercase text-text-muted px-2 py-3 whitespace-nowrap cursor-pointer hover:text-text-heading select-none'
@@ -805,7 +1014,7 @@ export default function PeriodDetailClient({
         />
         <RecentActivity
           expenses={optExpenses}
-          adjustments={adjustments}
+          adjustments={optAdjustments}
           manualIncome={optManual}
           linkedInvoices={optLinked}
           expenseTransfers={expenseTransfers}
@@ -1305,7 +1514,7 @@ export default function PeriodDetailClient({
         </div>
 
         {/* Adjustments ledger — captured fees / pre-budget spends (shows when there's one) */}
-        {adjustments.length > 0 && (
+        {optAdjustments.length > 0 && (
           <div className="mt-6 pt-4 border-t border-border">
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-caption font-bold uppercase text-text-muted tracking-wide">Adjustments</h3>
@@ -1314,7 +1523,7 @@ export default function PeriodDetailClient({
               </span>
             </div>
             <div className="space-y-1.5">
-              {adjustments.map((a) => (
+              {optAdjustments.map((a) => (
                 <div key={a.id} className="flex items-center justify-between text-caption">
                   <span className="text-text-heading truncate pr-2">
                     {a.note || <span className="text-text-muted italic">no note</span>}
