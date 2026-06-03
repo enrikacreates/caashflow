@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useOptimistic, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { CalendarDays, LayoutGrid, List } from 'lucide-react'
 import { deleteBudgetPeriod, completePeriod, reopenPeriod } from '@/app/actions/periods'
+import { notifyError } from '@/lib/toast'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import type { BudgetPeriod } from '@/lib/types'
+import type { BudgetPeriod, PeriodStatus } from '@/lib/types'
 import CreatePeriodModal from './CreatePeriodModal'
 import EditPeriodModal from './EditPeriodModal'
 
@@ -21,13 +22,31 @@ export default function PeriodsClient({ periods }: { periods: BudgetPeriod[] }) 
   const [editPeriod, setEditPeriod] = useState<BudgetPeriod | null>(null)
   const [view, setView] = useState<'card' | 'list'>('card')
 
+  // Optimistic mirror — deletes drop instantly, status flips instantly.
+  const [optPeriods, applyPeriodsOpt] = useOptimistic(
+    periods,
+    (state: BudgetPeriod[], u: { kind: 'delete'; id: string } | { kind: 'status'; id: string; status: PeriodStatus }) => {
+      if (u.kind === 'delete') return state.filter((p) => p.id !== u.id)
+      return state.map((p) => (p.id === u.id ? { ...p, status: u.status } : p))
+    }
+  )
+
   const handleDelete = (id: string, name: string) => {
     if (!confirm(`Delete budget "${displayName(name)}"? This will remove all expenses in this budget.`)) return
-    startTransition(() => deleteBudgetPeriod(id))
+    startTransition(async () => {
+      applyPeriodsOpt({ kind: 'delete', id })
+      try { await deleteBudgetPeriod(id) }
+      catch { notifyError() }
+    })
   }
 
   const handleToggleComplete = (period: BudgetPeriod) => {
-    startTransition(() => (period.status === 'complete' ? reopenPeriod(period.id) : completePeriod(period.id)))
+    const nextStatus: PeriodStatus = period.status === 'complete' ? 'active' : 'complete'
+    startTransition(async () => {
+      applyPeriodsOpt({ kind: 'status', id: period.id, status: nextStatus })
+      try { await (period.status === 'complete' ? reopenPeriod(period.id) : completePeriod(period.id)) }
+      catch { notifyError() }
+    })
   }
 
   const renderActions = (period: BudgetPeriod) => (
@@ -77,7 +96,7 @@ export default function PeriodsClient({ periods }: { periods: BudgetPeriod[] }) 
         >
           + New Budget
         </button>
-        {periods.length > 0 && (
+        {optPeriods.length > 0 && (
           <div className="flex rounded-full border border-border overflow-hidden">
             <button onClick={() => setView('card')} title="Card view" className={`px-2.5 py-1.5 transition-colors ${view === 'card' ? 'bg-text-heading text-white' : 'bg-bg-white text-text-muted hover:text-text-heading'}`}>
               <LayoutGrid size={15} />
@@ -89,7 +108,7 @@ export default function PeriodsClient({ periods }: { periods: BudgetPeriod[] }) 
         )}
       </div>
 
-      {periods.length === 0 ? (
+      {optPeriods.length === 0 ? (
         <div className="bg-bg-white rounded-lg shadow-card p-12 text-center">
           <CalendarDays size={48} strokeWidth={1.5} className="text-text-muted mx-auto mb-4" />
           <p className="font-bold text-text-heading text-h3 mb-1">No budgets yet</p>
@@ -98,8 +117,8 @@ export default function PeriodsClient({ periods }: { periods: BudgetPeriod[] }) 
       ) : (
         (() => {
           // Split into Monthly + Event sections. Events render together below the monthlies.
-          const monthlies = [...periods].filter((p) => (p.kind ?? 'monthly') !== 'event').reverse()
-          const events = [...periods].filter((p) => p.kind === 'event').reverse()
+          const monthlies = [...optPeriods].filter((p) => (p.kind ?? 'monthly') !== 'event').reverse()
+          const events = [...optPeriods].filter((p) => p.kind === 'event').reverse()
 
           const SectionHeading = ({ label, hint, count }: { label: string; hint: string; count: number }) =>
             count === 0 ? null : (

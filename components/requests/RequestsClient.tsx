@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef, useTransition } from 'react'
+import { useState, useEffect, useMemo, useOptimistic, useRef, useTransition } from 'react'
 import Link from 'next/link'
 import { ShoppingCart, LayoutGrid, List, ImagePlus, SlidersHorizontal, Mic, Trash2, Share2 } from 'lucide-react'
 import { deleteBudgetRequest, setRequestStatus, allocateRequestToPeriod, quickAddRequest } from '@/app/actions/requests'
+import { notifyError } from '@/lib/toast'
 import { formatCurrency, getPillColor, getPriorityColor } from '@/lib/utils'
-import type { BudgetRequest, PriorityCategoryRecord } from '@/lib/types'
+import type { BudgetRequest, PriorityCategoryRecord, RequestStatus } from '@/lib/types'
 import RequestFormModal from './RequestFormModal'
 import ManageNamesModal from './ManageNamesModal'
 
@@ -48,6 +49,15 @@ export default function RequestsClient({ requests, categories, activePeriod, fam
   const [personFilter, setPersonFilter] = useState<string>('all')
   const [sortKey, setSortKey] = useState<SortKey>('recent')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+
+  // Optimistic mirror — deletes drop instantly, status pills flip instantly.
+  const [optRequests, applyRequestsOpt] = useOptimistic(
+    requests,
+    (state: BudgetRequest[], u: { kind: 'delete'; id: string } | { kind: 'status'; id: string; status: RequestStatus }) => {
+      if (u.kind === 'delete') return state.filter((r) => r.id !== u.id)
+      return state.map((r) => (r.id === u.id ? { ...r, status: u.status } : r))
+    }
+  )
   const [groupByPerson, setGroupByPerson] = useState(false)
   const [view, setView] = useState<'card' | 'list'>('card')
   const [quickName, setQuickName] = useState('')
@@ -137,14 +147,14 @@ export default function RequestsClient({ requests, categories, activePeriod, fam
 
   // Distinct people already used + static options — feed the form's For combobox.
   const people = useMemo(
-    () => [...new Set(requests.map((r) => r.requested_for).filter(Boolean) as string[])].sort(),
-    [requests]
+    () => [...new Set(optRequests.map((r) => r.requested_for).filter(Boolean) as string[])].sort(),
+    [optRequests]
   )
   const forWhoOptions = useMemo(() => [...new Set(['Home', 'Family', 'Guests', 'Giving', ...people])], [people])
-  const tagOptions = useMemo(() => [...new Set(requests.flatMap((r) => r.tags ?? []))].sort(), [requests])
+  const tagOptions = useMemo(() => [...new Set(optRequests.flatMap((r) => r.tags ?? []))].sort(), [optRequests])
 
   const filtered = useMemo(() => {
-    let list = [...requests]
+    let list = [...optRequests]
     if (search.trim()) {
       const q = search.toLowerCase()
       list = list.filter(
@@ -165,7 +175,7 @@ export default function RequestsClient({ requests, categories, activePeriod, fam
       return (a.priority_category ?? 'Z').localeCompare(b.priority_category ?? 'Z') * mul
     })
     return list
-  }, [requests, search, statusFilter, personFilter, sortKey, sortDir])
+  }, [optRequests, search, statusFilter, personFilter, sortKey, sortDir])
 
   const grouped = useMemo(() => {
     if (!groupByPerson) return null
@@ -189,18 +199,38 @@ export default function RequestsClient({ requests, categories, activePeriod, fam
 
   const handleDelete = (id: string, name: string) => {
     if (!confirm(`Delete "${name}"?`)) return
-    startTransition(() => deleteBudgetRequest(id))
+    startTransition(async () => {
+      applyRequestsOpt({ kind: 'delete', id })
+      try { await deleteBudgetRequest(id) }
+      catch { notifyError() }
+    })
   }
 
   const cycleStatus = (req: BudgetRequest) => {
     const next = STATUSES[(STATUSES.indexOf(req.status as typeof STATUSES[number]) + 1) % STATUSES.length]
-    startTransition(() => setRequestStatus(req.id, next))
+    startTransition(async () => {
+      applyRequestsOpt({ kind: 'status', id: req.id, status: next })
+      try { await setRequestStatus(req.id, next) }
+      catch { notifyError() }
+    })
   }
+
+  const setStatus = (id: string, status: RequestStatus) =>
+    startTransition(async () => {
+      applyRequestsOpt({ kind: 'status', id, status })
+      try { await setRequestStatus(id, status) }
+      catch { notifyError() }
+    })
 
   const handleAllocate = (req: BudgetRequest) => {
     if (!activePeriod) return
     if (!confirm(`Add "${req.name}" to ${activePeriod.period_name}'s extra expenses?`)) return
-    startTransition(() => allocateRequestToPeriod(req.id, activePeriod.id))
+    startTransition(async () => {
+      // Allocating promotes the request to purchased — flip the pill instantly.
+      applyRequestsOpt({ kind: 'status', id: req.id, status: 'purchased' })
+      try { await allocateRequestToPeriod(req.id, activePeriod.id) }
+      catch { notifyError() }
+    })
   }
 
   const statusLabel = (s: string) => (s === 'obtained' ? 'Got it' : s)
@@ -273,9 +303,9 @@ export default function RequestsClient({ requests, categories, activePeriod, fam
         <div className="flex items-center justify-between gap-2 pt-3 mt-3 border-t border-border">
           <div className="flex items-center gap-3">
             {req.status === 'obtained' ? (
-              <button onClick={(e) => { e.stopPropagation(); startTransition(() => setRequestStatus(req.id, 'requested')) }} disabled={isPending} className="whitespace-nowrap text-caption text-text-muted hover:text-text-heading font-semibold transition-colors">↩ Reopen</button>
+              <button onClick={(e) => { e.stopPropagation(); setStatus(req.id, 'requested') }} disabled={isPending} className="whitespace-nowrap text-caption text-text-muted hover:text-text-heading font-semibold transition-colors">↩ Reopen</button>
             ) : (
-              <button onClick={(e) => { e.stopPropagation(); startTransition(() => setRequestStatus(req.id, 'obtained')) }} disabled={isPending} className="whitespace-nowrap bg-success/10 text-success rounded-full px-3 py-1 text-caption font-bold hover:bg-success/20 disabled:opacity-50 transition-colors">✓ Got it</button>
+              <button onClick={(e) => { e.stopPropagation(); setStatus(req.id, 'obtained') }} disabled={isPending} className="whitespace-nowrap bg-success/10 text-success rounded-full px-3 py-1 text-caption font-bold hover:bg-success/20 disabled:opacity-50 transition-colors">✓ Got it</button>
             )}
             <button onClick={(e) => { e.stopPropagation(); setEditItem(req); setModalOpen(true) }} className="text-caption text-text-muted font-semibold hover:text-text-heading transition-colors">Edit</button>
             <button onClick={(e) => { e.stopPropagation(); handleDelete(req.id, req.name) }} disabled={isPending} aria-label="Delete" title="Delete" className="text-text-muted hover:text-warning transition-colors disabled:opacity-50"><Trash2 size={15} /></button>
@@ -337,9 +367,9 @@ export default function RequestsClient({ requests, categories, activePeriod, fam
           <button onClick={(e) => { e.stopPropagation(); handleAllocate(req) }} disabled={isPending} title={`Add to ${activePeriod.period_name}`} className="bg-primary-teal/10 text-primary rounded-full px-3 py-1 text-caption font-bold hover:bg-primary-teal/20 disabled:opacity-50 transition-colors">+ Add</button>
         )}
         {req.status === 'obtained' ? (
-          <button onClick={(e) => { e.stopPropagation(); startTransition(() => setRequestStatus(req.id, 'requested')) }} disabled={isPending} className="text-caption text-text-muted hover:text-text-heading font-semibold transition-colors">↩ Reopen</button>
+          <button onClick={(e) => { e.stopPropagation(); setStatus(req.id, 'requested') }} disabled={isPending} className="text-caption text-text-muted hover:text-text-heading font-semibold transition-colors">↩ Reopen</button>
         ) : (
-          <button onClick={(e) => { e.stopPropagation(); startTransition(() => setRequestStatus(req.id, 'obtained')) }} disabled={isPending} className="bg-success/10 text-success rounded-full px-3 py-1 text-caption font-bold hover:bg-success/20 disabled:opacity-50 transition-colors">✓ Got it</button>
+          <button onClick={(e) => { e.stopPropagation(); setStatus(req.id, 'obtained') }} disabled={isPending} className="bg-success/10 text-success rounded-full px-3 py-1 text-caption font-bold hover:bg-success/20 disabled:opacity-50 transition-colors">✓ Got it</button>
         )}
         <button onClick={(e) => { e.stopPropagation(); setEditItem(req); setModalOpen(true) }} className="text-caption text-text-muted font-semibold hover:text-text-heading transition-colors">Edit</button>
         <button onClick={(e) => { e.stopPropagation(); handleDelete(req.id, req.name) }} disabled={isPending} className="text-caption text-text-muted hover:text-warning font-semibold transition-colors">Delete</button>

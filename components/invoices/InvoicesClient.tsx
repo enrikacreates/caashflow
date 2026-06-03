@@ -1,9 +1,10 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useMemo, useOptimistic, useState, useTransition } from 'react'
 import { deleteInvoice, addIncomeToBudget, updateInvoiceStatus } from '@/app/actions/invoices'
+import { notifyError } from '@/lib/toast'
 import { formatCurrency, formatDate, getStatusColor } from '@/lib/utils'
-import type { Invoice, BudgetPeriod } from '@/lib/types'
+import type { Invoice, BudgetPeriod, InvoiceStatus } from '@/lib/types'
 import InvoiceFormModal from './InvoiceFormModal'
 
 type SortKey = 'client_name' | 'project_name' | 'amount' | 'status' | 'projected_date' | 'actual_received_date'
@@ -25,9 +26,18 @@ export default function InvoicesClient({
   const [sortKey, setSortKey] = useState<SortKey>('projected_date')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
 
-  const projected = invoices.filter((i) => i.status === 'projected')
-  const sent = invoices.filter((i) => i.status === 'sent')
-  const received = invoices.filter((i) => i.status === 'received')
+  // Optimistic mirror — deletes drop instantly, status flips instantly.
+  const [optInvoices, applyInvoicesOpt] = useOptimistic(
+    invoices,
+    (state: Invoice[], u: { kind: 'delete'; id: string } | { kind: 'status'; id: string; status: InvoiceStatus }) => {
+      if (u.kind === 'delete') return state.filter((i) => i.id !== u.id)
+      return state.map((i) => (i.id === u.id ? { ...i, status: u.status } : i))
+    }
+  )
+
+  const projected = optInvoices.filter((i) => i.status === 'projected')
+  const sent = optInvoices.filter((i) => i.status === 'sent')
+  const received = optInvoices.filter((i) => i.status === 'received')
 
   const byMonthDesc = (a: BudgetPeriod, b: BudgetPeriod) =>
     (b.period_month ?? '').localeCompare(a.period_month ?? '')
@@ -38,16 +48,29 @@ export default function InvoicesClient({
 
   const handleDelete = (id: string, name: string) => {
     if (!confirm(`Delete invoice for "${name}"?`)) return
-    startTransition(() => deleteInvoice(id))
+    startTransition(async () => {
+      applyInvoicesOpt({ kind: 'delete', id })
+      try { await deleteInvoice(id) }
+      catch { notifyError() }
+    })
   }
 
   const handleAddToBudget = (id: string) => {
     if (!targetPeriod) return
-    startTransition(() => addIncomeToBudget(id, targetPeriod.id))
+    // Linking promotes to received — flip the status pill instantly.
+    startTransition(async () => {
+      applyInvoicesOpt({ kind: 'status', id, status: 'received' })
+      try { await addIncomeToBudget(id, targetPeriod.id) }
+      catch { notifyError() }
+    })
   }
 
   const handleStatusChange = (id: string, status: 'projected' | 'sent' | 'received') => {
-    startTransition(() => updateInvoiceStatus(id, status))
+    startTransition(async () => {
+      applyInvoicesOpt({ kind: 'status', id, status })
+      try { await updateInvoiceStatus(id, status) }
+      catch { notifyError() }
+    })
   }
 
   const toggleSort = (key: SortKey) => {
@@ -57,14 +80,14 @@ export default function InvoicesClient({
 
   const sorted = useMemo(() => {
     const mul = sortDir === 'asc' ? 1 : -1
-    return [...invoices].sort((a, b) => {
+    return [...optInvoices].sort((a, b) => {
       if (sortKey === 'amount') return (a.amount - b.amount) * mul
       if (sortKey === 'status') return (STATUS_ORDER[a.status] - STATUS_ORDER[b.status]) * mul
       const av = (a[sortKey] ?? '') as string
       const bv = (b[sortKey] ?? '') as string
       return av.localeCompare(bv) * mul
     })
-  }, [invoices, sortKey, sortDir])
+  }, [optInvoices, sortKey, sortDir])
 
   const thClass = (key: SortKey) =>
     `text-left text-caption font-bold uppercase text-text-muted px-4 py-3 cursor-pointer select-none hover:text-primary transition-colors ${
