@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useTransition, useEffect } from 'react'
+import { useOptimistic, useState, useTransition, useEffect } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { deleteBaseBudgetItem, resetBaseBudgetToDefaults, setBaseItemTrackSpending } from '@/app/actions/base-budget'
+import { notifyError } from '@/lib/toast'
 import { formatCurrency, getPriorityColor } from '@/lib/utils'
 import type { BaseBudgetItem, Frequency, Account, PriorityCategoryRecord } from '@/lib/types'
 import ExpenseFormModal from './ExpenseFormModal'
@@ -32,6 +33,15 @@ export default function BaseBudgetClient({ items, accounts, categories }: Props)
   const searchParams = useSearchParams()
   const router = useRouter()
 
+  // Optimistic mirror — deletes drop instantly, track-spending flips instantly.
+  const [optItems, applyItemsOpt] = useOptimistic(
+    items,
+    (state: BaseBudgetItem[], u: { kind: 'delete'; id: string } | { kind: 'track'; id: string; value: boolean }) => {
+      if (u.kind === 'delete') return state.filter((i) => i.id !== u.id)
+      return state.map((i) => (i.id === u.id ? { ...i, track_spending: u.value } : i))
+    }
+  )
+
   // Deep-link: ?edit=<itemId> auto-opens the edit modal
   useEffect(() => {
     const editId = searchParams.get('edit')
@@ -50,12 +60,12 @@ export default function BaseBudgetClient({ items, accounts, categories }: Props)
   const categoryColorMap = new Map(categories.map(c => [c.name, c.color_key]))
 
   // Distinct tags already in use — offered as toggle chips in the form
-  const tagOptions = [...new Set(items.flatMap((i) => i.tags ?? []))].sort()
+  const tagOptions = [...new Set(optItems.flatMap((i) => i.tags ?? []))].sort()
 
   const grouped = FREQUENCY_ORDER.map((freq) => ({
     frequency: freq,
-    items: items.filter((i) => i.frequency === freq),
-    total: items.filter((i) => i.frequency === freq).reduce((s, i) => s + i.default_amount, 0),
+    items: optItems.filter((i) => i.frequency === freq),
+    total: optItems.filter((i) => i.frequency === freq).reduce((s, i) => s + i.default_amount, 0),
   })).filter((g) => g.items.length > 0)
 
   const sortItems = (list: BaseBudgetItem[]) => {
@@ -84,13 +94,27 @@ export default function BaseBudgetClient({ items, accounts, categories }: Props)
 
   const handleDelete = (id: string, name: string) => {
     if (!confirm(`Delete "${name}"?`)) return
-    startTransition(() => deleteBaseBudgetItem(id))
+    startTransition(async () => {
+      applyItemsOpt({ kind: 'delete', id })
+      try { await deleteBaseBudgetItem(id) }
+      catch { notifyError() }
+    })
   }
 
   const handleReset = () => {
     if (!confirm('Reset all base budget items to defaults? This will delete your current items.')) return
-    startTransition(() => resetBaseBudgetToDefaults())
+    startTransition(async () => {
+      try { await resetBaseBudgetToDefaults() }
+      catch { notifyError() }
+    })
   }
+
+  const handleTrackChange = (id: string, value: boolean) =>
+    startTransition(async () => {
+      applyItemsOpt({ kind: 'track', id, value })
+      try { await setBaseItemTrackSpending(id, value) }
+      catch { notifyError() }
+    })
 
   const thClass = (key: SortKey) =>
     `text-left text-caption font-bold uppercase text-text-muted px-4 py-3 cursor-pointer select-none hover:text-primary transition-colors ${
@@ -162,7 +186,7 @@ export default function BaseBudgetClient({ items, accounts, categories }: Props)
                           checked={item.track_spending}
                           disabled={isPending}
                           onClick={(e) => e.stopPropagation()}
-                          onChange={(e) => startTransition(() => setBaseItemTrackSpending(item.id, e.target.checked))}
+                          onChange={(e) => handleTrackChange(item.id, e.target.checked)}
                           title={item.track_spending ? 'Tracking spending — tap to turn off' : 'Track spending on this line'}
                           className="w-4 h-4 accent-primary-teal cursor-pointer disabled:opacity-50"
                         />
