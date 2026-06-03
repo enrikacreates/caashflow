@@ -69,6 +69,9 @@ export interface BudgetPeriod {
   household_id: string
   period_name: string
   period_month: string | null
+  // 'monthly' = pay-period budget (default). 'event' = situational budget
+  // (graduation party, vacation, trip) — isolated from dashboard/tithe/savings rollups.
+  kind: PeriodKind
   income_amount: number
   deduction_overrides: DeductionOverrides
   // Per-deduction "set aside / paid" checkmarks, keyed by tithe|savings|tax|profit|fun_money
@@ -345,6 +348,7 @@ export interface UserProfile {
 
 export type Frequency = 'Monthly' | 'Weekly' | 'Annually' | 'One-Time'
 export type PeriodStatus = 'active' | 'complete'
+export type PeriodKind = 'monthly' | 'event'
 export type InvoiceStatus = 'projected' | 'sent' | 'received'
 export type RequestStatus = 'requested' | 'approved' | 'purchased' | 'obtained'
 

@@ -95,9 +95,21 @@ export default function PeriodsClient({ periods }: { periods: BudgetPeriod[] }) 
           <p className="font-bold text-text-heading text-h3 mb-1">No budgets yet</p>
           <p className="text-caption text-text-muted">Create your first budget to get started</p>
         </div>
-      ) : view === 'card' ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[...periods].reverse().map((period) => (
+      ) : (
+        (() => {
+          // Split into Monthly + Event sections. Events render together below the monthlies.
+          const monthlies = [...periods].filter((p) => (p.kind ?? 'monthly') !== 'event').reverse()
+          const events = [...periods].filter((p) => p.kind === 'event').reverse()
+
+          const SectionHeading = ({ label, hint, count }: { label: string; hint: string; count: number }) =>
+            count === 0 ? null : (
+              <div className="flex items-baseline gap-3 mb-3">
+                <h2 className="text-h3 font-bold text-text-heading">{label}</h2>
+                <span className="text-caption text-text-muted">{hint}</span>
+              </div>
+            )
+
+          const renderCard = (period: BudgetPeriod) => (
             <div
               key={period.id}
               onClick={() => router.push(`/periods/${period.id}`)}
@@ -106,23 +118,24 @@ export default function PeriodsClient({ periods }: { periods: BudgetPeriod[] }) 
               }`}
             >
               <div className="flex items-center justify-between gap-2 mb-2">
-                <h3 className={`font-bold text-h3 ${period.status === 'complete' ? 'text-text-muted' : 'text-text-heading'}`}>{displayName(period.period_name)}</h3>
+                <h3 className={`font-bold text-h3 flex items-center gap-2 ${period.status === 'complete' ? 'text-text-muted' : 'text-text-heading'}`}>
+                  {period.kind === 'event' && <span aria-hidden>✨</span>}
+                  {displayName(period.period_name)}
+                </h3>
                 {statusPill(period)}
               </div>
               <div className="space-y-1 mb-3">
                 <div className="flex justify-between text-caption">
-                  <span className="text-text-muted">Income</span>
+                  <span className="text-text-muted">{period.kind === 'event' ? 'Contributions' : 'Income'}</span>
                   <span className={`font-bold ${period.status === 'complete' ? 'text-text-muted' : 'text-text-heading'}`}>{formatCurrency(period.income_amount)}</span>
                 </div>
               </div>
               <div className="text-caption text-text-muted">Created {formatDate(period.created_at)}</div>
               <div className="flex flex-wrap gap-3 pt-3 mt-3">{renderActions(period)}</div>
             </div>
-          ))}
-        </div>
-      ) : (
-        <div className="bg-bg-white rounded-lg shadow-card overflow-hidden divide-y divide-[#e9e9e9]">
-          {[...periods].reverse().map((period) => (
+          )
+
+          const renderRow = (period: BudgetPeriod) => (
             <div
               key={period.id}
               onClick={() => router.push(`/periods/${period.id}`)}
@@ -130,29 +143,50 @@ export default function PeriodsClient({ periods }: { periods: BudgetPeriod[] }) 
                 period.status === 'complete' ? 'bg-[#FFFCF9]' : ''
               }`}
             >
-              {/* Title + status stacked */}
               <div className="flex flex-col items-start gap-1.5 flex-1 min-w-[130px]">
-                <h3 className={`font-bold truncate max-w-full ${period.status === 'complete' ? 'text-text-muted' : 'text-text-heading'}`}>{displayName(period.period_name)}</h3>
+                <h3 className={`font-bold truncate max-w-full flex items-center gap-2 ${period.status === 'complete' ? 'text-text-muted' : 'text-text-heading'}`}>
+                  {period.kind === 'event' && <span aria-hidden>✨</span>}
+                  {displayName(period.period_name)}
+                </h3>
                 {statusPill(period)}
               </div>
-
-              {/* Income */}
               <div className="hidden sm:flex flex-1 flex-col">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">Income</span>
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">{period.kind === 'event' ? 'Contributions' : 'Income'}</span>
                 <span className={`text-caption font-bold ${period.status === 'complete' ? 'text-text-muted' : 'text-text-heading'}`}>{formatCurrency(period.income_amount)}</span>
               </div>
-
-              {/* Created */}
               <div className="hidden md:flex flex-1 flex-col">
                 <span className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">Created</span>
                 <span className="text-caption text-text-muted">{formatDate(period.created_at)}</span>
               </div>
-
-              {/* Actions */}
               <div className="flex flex-wrap gap-3 justify-end shrink-0">{renderActions(period)}</div>
             </div>
-          ))}
-        </div>
+          )
+
+          const renderGroup = (label: string, hint: string, list: BudgetPeriod[]) => {
+            if (list.length === 0) return null
+            return (
+              <section className="space-y-3">
+                <SectionHeading label={label} hint={hint} count={list.length} />
+                {view === 'card' ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {list.map(renderCard)}
+                  </div>
+                ) : (
+                  <div className="bg-bg-white rounded-lg shadow-card overflow-hidden divide-y divide-[#e9e9e9]">
+                    {list.map(renderRow)}
+                  </div>
+                )}
+              </section>
+            )
+          }
+
+          return (
+            <div className="space-y-8">
+              {renderGroup('Monthly', 'Pay-period budgets', monthlies)}
+              {renderGroup('Events ✨', 'Parties, trips, situational budgets', events)}
+            </div>
+          )
+        })()
       )}
 
       {modalOpen && <CreatePeriodModal onClose={() => setModalOpen(false)} />}

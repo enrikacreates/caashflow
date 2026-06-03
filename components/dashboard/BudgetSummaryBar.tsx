@@ -4,6 +4,10 @@ import { formatCurrency } from '@/lib/utils'
  * The live-budgeting metrics row, shared by the dashboard and a period's detail page.
  * Amount Left is the "get to zero" target; the Still-to-fund banner shows how much
  * of the period's expenses still has no income behind it.
+ *
+ * Event focus mode (isEvent=true): drops the "To Budget" column (deductions don't
+ * apply to situational budgets), relabels Income → Contributions, and suppresses
+ * monthly-only hints (projected income, days left this month).
  */
 export default function BudgetSummaryBar({
   income,
@@ -16,6 +20,7 @@ export default function BudgetSummaryBar({
   stillProjected,
   daysLeft,
   bare = false,
+  isEvent = false,
 }: {
   income: number
   toBudget: number
@@ -27,20 +32,28 @@ export default function BudgetSummaryBar({
   stillProjected: number
   daysLeft?: number
   bare?: boolean
+  isEvent?: boolean
 }) {
   const leftToPay = Math.max(0, payNow - paid)
+  const gridCols = isEvent ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2 sm:grid-cols-4'
   const content = (
     <>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-4 sm:divide-x sm:divide-border/60">
+      <div className={`grid ${gridCols} gap-x-3 gap-y-4 sm:divide-x sm:divide-border/60`}>
         <div className="@container sm:px-3 first:pl-0">
-          <div className="text-caption font-bold uppercase text-text-muted mb-1">Total Income</div>
+          <div className="text-caption font-bold uppercase text-text-muted mb-1">
+            {isEvent ? 'Contributions' : 'Total Income'}
+          </div>
           <div className="font-bold text-text-heading whitespace-nowrap leading-tight text-[clamp(0.78rem,15cqi,1.5rem)]">{formatCurrency(income)}</div>
-          <div className="text-[10px] text-text-muted mt-0.5 leading-tight">{formatCurrency(stillProjected)} still projected this month</div>
+          {!isEvent && (
+            <div className="text-[10px] text-text-muted mt-0.5 leading-tight">{formatCurrency(stillProjected)} still projected this month</div>
+          )}
         </div>
-        <div className="@container sm:px-3">
-          <div className="text-caption font-bold uppercase text-text-muted mb-1">To Budget</div>
-          <div className="font-bold text-text-heading whitespace-nowrap leading-tight text-[clamp(0.78rem,15cqi,1.5rem)]">{formatCurrency(toBudget)}</div>
-        </div>
+        {!isEvent && (
+          <div className="@container sm:px-3">
+            <div className="text-caption font-bold uppercase text-text-muted mb-1">To Budget</div>
+            <div className="font-bold text-text-heading whitespace-nowrap leading-tight text-[clamp(0.78rem,15cqi,1.5rem)]">{formatCurrency(toBudget)}</div>
+          </div>
+        )}
         <div className="@container sm:px-3">
           <div className="text-caption font-bold uppercase text-text-muted mb-1">Pay Now</div>
           <div className="font-bold text-text-heading whitespace-nowrap leading-tight text-[clamp(0.78rem,15cqi,1.5rem)]">{formatCurrency(payNow)}</div>
@@ -61,7 +74,7 @@ export default function BudgetSummaryBar({
             <span className="text-caption font-bold uppercase tracking-wide text-text-muted">
               {stillToFund > 0 ? 'Still to fund' : 'Fully funded'}
             </span>
-            {daysLeft != null && stillToFund > 0 && (
+            {!isEvent && daysLeft != null && stillToFund > 0 && (
               <span className="block text-[10px] text-text-muted mt-0.5">{daysLeft} {daysLeft === 1 ? 'day' : 'days'} left this month</span>
             )}
           </div>

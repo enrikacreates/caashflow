@@ -21,7 +21,11 @@ export default async function PeriodDetailPage({
     <div className="space-y-8">
       <div>
         <PeriodPicker current={detail.period} periods={allPeriods ?? []} />
-        <p className="text-caption text-text-muted mt-1">Manage income, deductions, and expenses for this period</p>
+        <p className="text-caption text-text-muted mt-1">
+          {detail.period.kind === 'event'
+            ? 'Track contributions and expenses for this event — isolated from your monthly budget rollups.'
+            : 'Manage income, deductions, and expenses for this period'}
+        </p>
       </div>
       <PeriodDetailClient
         period={detail.period}

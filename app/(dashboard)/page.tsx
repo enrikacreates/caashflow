@@ -29,14 +29,19 @@ export default async function DashboardPage({
     getMonthlyManualIncome(),
   ])
 
+  // Dashboard only rolls up monthly pay-period budgets. Event budgets (parties,
+  // trips, etc.) are isolated — they have their own page but never touch dashboard
+  // income/expense/tithe/savings totals.
+  const monthlyPeriods = periods.filter((p: { kind?: string }) => (p.kind ?? 'monthly') !== 'event')
+
   // Periods sorted oldest→newest by month, so we can pick "latest" and "previous"
-  const byMonth = [...periods].sort((a: { period_month: string | null }, b: { period_month: string | null }) =>
+  const byMonth = [...monthlyPeriods].sort((a: { period_month: string | null }, b: { period_month: string | null }) =>
     (a.period_month ?? '').localeCompare(b.period_month ?? '')
   )
   const latestPeriod = byMonth.length > 0 ? byMonth[byMonth.length - 1] : null
 
   const selectedPeriod = periodParam
-    ? (periods.find((p: { id: string }) => p.id === periodParam) ?? latestPeriod)
+    ? (monthlyPeriods.find((p: { id: string }) => p.id === periodParam) ?? latestPeriod)
     : latestPeriod
 
   const selectedIdx = selectedPeriod ? byMonth.findIndex((p) => p.id === selectedPeriod.id) : -1
@@ -106,7 +111,7 @@ export default async function DashboardPage({
       {/* Latest budget — header + live metrics in one card */}
       <div className="bg-bg-white rounded-lg shadow-card p-5 sm:p-6">
         <div className="flex items-start justify-between gap-4 mb-5">
-          <PeriodSwitcherHeader currentPeriod={selectedPeriod} allPeriods={periods} />
+          <PeriodSwitcherHeader currentPeriod={selectedPeriod} allPeriods={monthlyPeriods} />
           <NewBudgetButton />
         </div>
         {selectedPeriod && (
@@ -126,7 +131,7 @@ export default async function DashboardPage({
       </div>
 
       {/* 6-Month Income — primary cash-flow view, kept up top */}
-      <CashFlowChart invoices={invoices} incomeGoal={settings.monthly_income_goal} expenseNeed={monthlyExpenses} periods={periods} manualByMonth={manualByMonth} />
+      <CashFlowChart invoices={invoices} incomeGoal={settings.monthly_income_goal} expenseNeed={monthlyExpenses} periods={monthlyPeriods} manualByMonth={manualByMonth} />
 
       {/* Insight cards */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

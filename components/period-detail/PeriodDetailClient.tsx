@@ -781,6 +781,7 @@ export default function PeriodDetailClient({
           totalExpenses={totalExpenses}
           stillToFund={stillToFund}
           stillProjected={stillProjectedIncome}
+          isEvent={period.kind === 'event'}
         />
         <RecentActivity
           expenses={optExpenses}
@@ -796,8 +797,10 @@ export default function PeriodDetailClient({
         <div className="sticky top-[72px] md:top-[84px] z-40 -mx-6 px-6 -mt-4">
           <div className="bg-[#ebf0f0] rounded-b-lg shadow-card px-4 py-2 flex items-center justify-between gap-4">
             <div className="flex items-center gap-4 text-caption">
-              <span className="text-text-muted">Income <span className="font-bold text-text-heading">{formatCurrency(period.income_amount)}</span></span>
-              <span className="text-text-muted hidden sm:inline">To Budget <span className="font-bold text-text-heading">{formatCurrency(deductions.incomeAfterDeductions)}</span></span>
+              <span className="text-text-muted">{period.kind === 'event' ? 'Contributions' : 'Income'} <span className="font-bold text-text-heading">{formatCurrency(period.income_amount)}</span></span>
+              {period.kind !== 'event' && (
+                <span className="text-text-muted hidden sm:inline">To Budget <span className="font-bold text-text-heading">{formatCurrency(deductions.incomeAfterDeductions)}</span></span>
+              )}
               <span className="text-text-muted">Pay Now <span className="font-bold text-text-heading">{formatCurrency(payNowTotal)}</span></span>
             </div>
             <div className={`text-label font-bold ${amountLeft >= 0 ? 'text-success' : 'text-warning'}`}>
@@ -808,7 +811,8 @@ export default function PeriodDetailClient({
       )}
 
       {/* ─── Account Transfers (overview — stays visible as it draws down) ── */}
-      {Object.keys(accountTransfers).length > 0 && (
+      {/* Hidden in event focus mode — deductions don't apply to event budgets. */}
+      {period.kind !== 'event' && Object.keys(accountTransfers).length > 0 && (
         <div className="bg-bg-white rounded-lg shadow-card p-4 sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
             <h2 className="text-h3 font-bold text-text-heading">
@@ -1097,6 +1101,8 @@ export default function PeriodDetailClient({
       </div>
 
       {/* ─── Deductions Grid ───────────────────────────────── */}
+      {/* Hidden in event focus mode — tithe/savings/tax don't apply to situational budgets. */}
+      {period.kind !== 'event' && (
       <div className="bg-bg-white rounded-lg shadow-card p-6">
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 mb-4">
           <h2 className="text-h3 font-bold text-text-heading">
@@ -1366,9 +1372,11 @@ export default function PeriodDetailClient({
         </div>
         </>)}
       </div>
+      )}
 
       {/* ─── Savings Allocation ────────────────────────────── */}
-      {savingsGoals.length > 0 && (
+      {/* Hidden in event focus mode — event budgets shouldn't fund long-term goals. */}
+      {period.kind !== 'event' && savingsGoals.length > 0 && (
         <SavingsAllocationSection
           periodId={period.id}
           savingsPool={deductions.savings}
@@ -2361,13 +2369,11 @@ function SubPaymentRow({
       </td>
       {/* Amount (+ per-installment draw-down when the parent line is tracked) */}
       <td className="px-3 py-2">
-        <input
-          type="number"
-          step="0.01"
+        <MathInput
           defaultValue={payment.amount > 0 ? payment.amount : ''}
           placeholder="0.00"
           disabled={locked}
-          onChange={(e) => onPaymentField(payment.id, 'amount', e.target.value === '' ? 0 : parseFloat(e.target.value))}
+          onChange={(value) => onPaymentField(payment.id, 'amount', value)}
           className={`w-24 text-right ${inputClass}`}
         />
         {parentTracked && subHasLedger && (

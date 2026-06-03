@@ -49,7 +49,7 @@ export default function PeriodPicker({
         title={others.length > 0 ? 'Jump to another active budget' : 'No other active budgets'}
         className="inline-flex items-baseline gap-2 text-h1 font-bold text-text-heading hover:text-primary transition-colors disabled:hover:text-text-heading disabled:cursor-default text-left"
       >
-        <span>{current.period_name}</span>
+        <span>{current.kind === 'event' && <span aria-hidden className="mr-1.5">✨</span>}{current.period_name}</span>
         {others.length > 0 && (
           <ChevronDown size={24} strokeWidth={2.5} className={`transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
         )}
@@ -66,7 +66,7 @@ export default function PeriodPicker({
                   onClick={() => setOpen(false)}
                   className="block px-3 py-2 rounded-sm text-caption font-semibold text-text-heading hover:bg-surface-beige hover:text-primary transition-colors"
                 >
-                  {p.period_name}
+                  {p.kind === 'event' && <span aria-hidden className="mr-1">✨</span>}{p.period_name}
                 </Link>
               </li>
             ))}

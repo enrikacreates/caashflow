@@ -19,7 +19,8 @@ export function isPlainNumber(input: string): boolean {
  * is empty, malformed, or contains anything outside digits, dot, + - x / and parens.
  */
 export function evalMath(input: string): number | null {
-  const src = (input ?? '').trim()
+  // Normalize human-friendly operators before parsing: x/X/× → *, ÷ → /
+  const src = (input ?? '').trim().replace(/[xX×]/g, '*').replace(/÷/g, '/')
   if (!src) return null
   if (isPlainNumber(src)) {
     const n = parseFloat(src)

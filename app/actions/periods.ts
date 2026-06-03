@@ -51,8 +51,13 @@ export async function createBudgetPeriod(formData: FormData) {
 
   const periodName = formData.get('period_name') as string
   const periodMonthRaw = formData.get('period_month') as string | null
-  // period_month arrives as "YYYY-MM" from <input type="month"> — store as first-of-month date
-  const periodMonth = periodMonthRaw ? `${periodMonthRaw}-01` : null
+  const kindRaw = (formData.get('kind') as string | null) ?? 'monthly'
+  const kind: 'monthly' | 'event' = kindRaw === 'event' ? 'event' : 'monthly'
+  // period_month arrives as "YYYY-MM" from <input type="month"> — store as first-of-month date.
+  // Event budgets aren't month-anchored, so leave null.
+  const periodMonth = kind === 'event'
+    ? null
+    : (periodMonthRaw ? `${periodMonthRaw}-01` : null)
 
   const { data: period, error: periodError } = await supabase
     .from('budget_periods')
@@ -60,6 +65,7 @@ export async function createBudgetPeriod(formData: FormData) {
       household_id: householdId,
       period_name: periodName,
       period_month: periodMonth,
+      kind,
       income_amount: 0,
       deduction_overrides: {},
     })
@@ -67,6 +73,12 @@ export async function createBudgetPeriod(formData: FormData) {
     .single()
 
   if (periodError) throw new Error(`Failed to create budget period: ${periodError.message}`)
+
+  // Event budgets start empty — base items only seed monthly periods.
+  if (kind === 'event') {
+    revalidatePath('/periods')
+    return
+  }
 
   // Copy base budget items into the new period as expenses
   const { data: baseItems, error: baseError } = await supabase

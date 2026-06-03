@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { updatePeriodExpenseDetails, transferFunds, undoTransfer } from '@/app/actions/period-expenses'
 import { formatCurrency } from '@/lib/utils'
 import { getBudgetedAmount, getSpentSoFar } from '@/lib/calculations'
+import MathInput from '@/components/ui/MathInput'
+import { evalMath } from '@/lib/math-input'
 import type { PeriodExpense, PeriodExpenseTransfer, Account, PriorityCategoryRecord } from '@/lib/types'
 
 const round2 = (n: number) => Math.round(n * 100) / 100
@@ -23,6 +25,10 @@ export default function PeriodExpenseEditModal({
   const [isPending, startTransition] = useTransition()
   const [alsoMaster, setAlsoMaster] = useState(false)
   const [trackSpending, setTrackSpending] = useState(expense.track_spending)
+  // Local amount state so the MathInput can hold an unresolved expression mid-typing.
+  // Submit re-evaluates from `amountRaw` to catch un-blurred edits like "5*3".
+  const [amount, setAmount] = useState<number>(expense.default_amount || 0)
+  const [amountRaw, setAmountRaw] = useState<string>(expense.default_amount ? String(expense.default_amount) : '')
   const inputClass = 'w-full bg-bg-white border border-border rounded-sm px-4 py-2.5 text-caption focus:outline-none focus:border-primary transition-colors'
 
   // ─── Move funds — reallocate committed dollars between this line and another (zero-sum) ──
@@ -111,10 +117,13 @@ export default function PeriodExpenseEditModal({
     e.preventDefault()
     const fd = new FormData(e.currentTarget)
     const due = (fd.get('due_day') as string)?.trim()
+    // Resolve any un-blurred expression (e.g. "1.50*10") before save.
+    const resolvedAmount = evalMath(amountRaw)
+    const finalAmount = resolvedAmount != null ? Math.round(resolvedAmount * 100) / 100 : amount
     startTransition(async () => {
       await updatePeriodExpenseDetails(expense.id, {
         name: (fd.get('name') as string).trim(),
-        default_amount: parseFloat(fd.get('default_amount') as string) || 0,
+        default_amount: finalAmount,
         account: ((fd.get('account') as string) || '').trim() || null,
         priority_category: ((fd.get('priority_category') as string) || '').trim() || null,
         due_day: due ? parseInt(due, 10) : null,
@@ -144,7 +153,13 @@ export default function PeriodExpenseEditModal({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-caption font-semibold text-text-heading mb-1">Amount</label>
-              <input type="number" name="default_amount" step="0.01" defaultValue={expense.default_amount || ''} className={inputClass} />
+              <MathInput
+                defaultValue={expense.default_amount || ''}
+                onChange={(n) => { setAmount(n); setAmountRaw(String(n)) }}
+                onRawChange={setAmountRaw}
+                placeholder="0.00"
+                className={inputClass}
+              />
             </div>
             <div>
               <label className="block text-caption font-semibold text-text-heading mb-1">Due Day (1-31)</label>
