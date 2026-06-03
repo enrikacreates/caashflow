@@ -1413,10 +1413,10 @@ export default function PeriodDetailClient({
         <button
           type="button"
           onClick={() => setShowBaselineExpenses(true)}
-          className="w-full bg-bg-white rounded-lg shadow-card p-3 text-caption text-text-muted hover:text-primary transition-colors flex items-center justify-center gap-2"
+          className="w-full py-1.5 text-[11px] text-text-muted/60 hover:text-primary transition-colors flex items-center justify-center gap-1.5"
           title="Show baseline expenses (inherited monthly bills)"
         >
-          <Eye size={16} />
+          <Eye size={12} />
           Show baseline expenses ({baselineExpenses.length})
         </button>
       ) : (
