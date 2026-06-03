@@ -3,9 +3,11 @@
 import { useState, useTransition } from 'react'
 import { logPayment, markPaidOff, deleteDebt } from '@/app/actions/debts'
 import { bigConfetti, smallConfetti } from '@/lib/confetti'
+import { notifyError } from '@/lib/toast'
 import { formatCurrency } from '@/lib/utils'
 import { Hammer, Trophy, PartyPopper } from 'lucide-react'
 import type { Debt } from '@/lib/types'
+import type { DebtOptUpdate } from './DebtsClient'
 
 function calculatePayoffDate(
   currentBalance: number,
@@ -41,9 +43,10 @@ function formatPayoffLabel(date: Date): string {
 interface Props {
   debt: Debt
   onEdit: (debt: Debt) => void
+  onOpt: (u: DebtOptUpdate) => void
 }
 
-export default function DebtCard({ debt, onEdit }: Props) {
+export default function DebtCard({ debt, onEdit, onOpt }: Props) {
   const [isPending, startTransition] = useTransition()
   const [paymentInput, setPaymentInput] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -61,24 +64,28 @@ export default function DebtCard({ debt, onEdit }: Props) {
     const amount = parseFloat(paymentInput)
     if (isNaN(amount) || amount <= 0) return setError('Enter a valid payment amount.')
     setError(null)
+    setPaymentInput('')
     startTransition(async () => {
+      onOpt({ kind: 'balance', id: debt.id, delta: -amount })
       try {
         const { exceedsMinimum } = await logPayment(debt.id, amount)
-        setPaymentInput('')
         if (exceedsMinimum) await smallConfetti()
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to log payment.')
+        notifyError()
       }
     })
   }
 
   const handleMarkPaidOff = () => {
     startTransition(async () => {
+      onOpt({ kind: 'paidOff', id: debt.id })
       try {
         await markPaidOff(debt.id)
         await bigConfetti()
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to mark as paid off.')
+        notifyError()
       }
     })
   }
@@ -86,10 +93,11 @@ export default function DebtCard({ debt, onEdit }: Props) {
   const handleDelete = () => {
     if (!confirm(`Delete "${debt.name}"? This cannot be undone.`)) return
     startTransition(async () => {
-      try {
-        await deleteDebt(debt.id)
-      } catch (e) {
+      onOpt({ kind: 'delete', id: debt.id })
+      try { await deleteDebt(debt.id) }
+      catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to delete.')
+        notifyError()
       }
     })
   }

@@ -1,12 +1,18 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useMemo, useOptimistic, useState, useTransition } from 'react'
 import { Hammer, Trophy, ChevronDown, ChevronRight, SlidersHorizontal, LayoutGrid, List } from 'lucide-react'
 import DebtCard from './DebtCard'
 import DebtModal from './DebtModal'
 import { formatCurrency } from '@/lib/utils'
 import { deleteDebt } from '@/app/actions/debts'
+import { notifyError } from '@/lib/toast'
 import type { Debt, BaseBudgetItem } from '@/lib/types'
+
+export type DebtOptUpdate =
+  | { kind: 'delete'; id: string }
+  | { kind: 'paidOff'; id: string }
+  | { kind: 'balance'; id: string; delta: number }
 
 // ─── Sort keys for the list/card views ──────────────────────────────
 type SortKey = 'balance-desc' | 'balance-asc' | 'interest-desc' | 'min-desc' | 'payoff-soonest' | 'name'
@@ -51,8 +57,17 @@ export default function DebtsClient({
   const [sortKey, setSortKey] = useState<SortKey>('balance-desc')
   const [isPending, startTransition] = useTransition()
 
-  const activeDebts = debts.filter((d) => !d.is_paid_off)
-  const paidOffDebts = debts.filter((d) => d.is_paid_off)
+  const [optDebts, applyDebtsOpt] = useOptimistic(
+    debts,
+    (state: Debt[], u: DebtOptUpdate) => {
+      if (u.kind === 'delete') return state.filter((d) => d.id !== u.id)
+      if (u.kind === 'paidOff') return state.map((d) => (d.id === u.id ? { ...d, is_paid_off: true, current_balance: 0, paid_off_at: new Date(0).toISOString() } : d))
+      return state.map((d) => (d.id === u.id ? { ...d, current_balance: Math.max(0, d.current_balance + u.delta) } : d))
+    }
+  )
+
+  const activeDebts = optDebts.filter((d) => !d.is_paid_off)
+  const paidOffDebts = optDebts.filter((d) => d.is_paid_off)
 
   const totalRemaining = activeDebts.reduce((sum, d) => sum + d.current_balance, 0)
   const totalOriginal = activeDebts.reduce((sum, d) => sum + d.original_balance, 0)
@@ -97,7 +112,11 @@ export default function DebtsClient({
 
   const handleDelete = (id: string, name: string) => {
     if (!confirm(`Delete "${name}"? This cannot be undone.`)) return
-    startTransition(() => deleteDebt(id))
+    startTransition(async () => {
+      applyDebtsOpt({ kind: 'delete', id })
+      try { await deleteDebt(id) }
+      catch { notifyError() }
+    })
   }
 
   const selectClass = 'bg-bg-white border border-border rounded-full px-3 py-1.5 text-caption text-text-heading focus:outline-none focus:border-primary transition-colors'
@@ -249,7 +268,7 @@ export default function DebtsClient({
       {filtered.length > 0 && view === 'card' && (
         <div className="space-y-4">
           {filtered.map((debt) => (
-            <DebtCard key={debt.id} debt={debt} onEdit={handleEdit} />
+            <DebtCard key={debt.id} debt={debt} onEdit={handleEdit} onOpt={applyDebtsOpt} />
           ))}
         </div>
       )}
@@ -292,7 +311,7 @@ export default function DebtsClient({
           {showPaidOff && (
             <div className="space-y-2 mt-3">
               {paidOffDebts.map((debt) => (
-                <DebtCard key={debt.id} debt={debt} onEdit={handleEdit} />
+                <DebtCard key={debt.id} debt={debt} onEdit={handleEdit} onOpt={applyDebtsOpt} />
               ))}
             </div>
           )}

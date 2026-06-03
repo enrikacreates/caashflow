@@ -4,8 +4,10 @@ import { useState, useTransition } from 'react'
 import { Target, Sprout, Trophy, PartyPopper } from 'lucide-react'
 import { addSavingsAdjustment, removeSavingsAdjustment, markAchieved, deleteSavingsGoal } from '@/app/actions/savings'
 import { bigConfetti, smallConfetti } from '@/lib/confetti'
+import { notifyError } from '@/lib/toast'
 import { formatCurrency } from '@/lib/utils'
 import type { SavingsGoal, SavingsGoalAdjustment } from '@/lib/types'
+import type { GoalOptUpdate, AdjustmentOptUpdate } from './SavingsClient'
 
 function daysUntil(dateStr: string): number {
   const target = new Date(dateStr + 'T00:00:00')
@@ -26,9 +28,11 @@ interface Props {
   goal: SavingsGoal
   onEdit: (goal: SavingsGoal) => void
   adjustments: SavingsGoalAdjustment[]
+  onOptGoal: (u: GoalOptUpdate) => void
+  onOptAdjustment: (u: AdjustmentOptUpdate) => void
 }
 
-export default function SavingsGoalCard({ goal, onEdit, adjustments }: Props) {
+export default function SavingsGoalCard({ goal, onEdit, adjustments, onOptGoal, onOptAdjustment }: Props) {
   const [isPending, startTransition] = useTransition()
   const [amountInput, setAmountInput] = useState('')
   const [noteInput, setNoteInput] = useState('')
@@ -47,28 +51,41 @@ export default function SavingsGoalCard({ goal, onEdit, adjustments }: Props) {
     const amount = parseFloat(amountInput)
     if (isNaN(amount) || amount === 0) return setError('Enter a non-zero amount (use − to withdraw).')
     setError(null)
+    const noteCopy = noteInput.trim() || null
+    const ghost: SavingsGoalAdjustment = {
+      id: `tmp-${Date.now()}`,
+      household_id: goal.household_id,
+      savings_goal_id: goal.id,
+      amount,
+      note: noteCopy,
+      created_at: new Date().toISOString(),
+    }
+    // Reset inputs first so the field feels instant.
+    setAmountInput('')
+    setNoteInput('')
     startTransition(async () => {
+      onOptAdjustment({ kind: 'add', row: ghost })
+      onOptGoal({ kind: 'amount', id: goal.id, delta: amount })
       try {
-        const { exceedsMonthly, isNowAchieved } = await addSavingsAdjustment(goal.id, amount, noteInput)
-        setAmountInput('')
-        setNoteInput('')
-        if (isNowAchieved) {
-          await bigConfetti()
-        } else if (exceedsMonthly) {
-          await smallConfetti()
-        }
+        const { exceedsMonthly, isNowAchieved } = await addSavingsAdjustment(goal.id, amount, noteCopy)
+        if (isNowAchieved) await bigConfetti()
+        else if (exceedsMonthly) await smallConfetti()
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to adjust balance.')
+        notifyError()
       }
     })
   }
 
   const handleRemoveAdjustment = (id: string) => {
+    const adj = adjustments.find((a) => a.id === id)
     startTransition(async () => {
-      try {
-        await removeSavingsAdjustment(id)
-      } catch (e) {
+      onOptAdjustment({ kind: 'remove', id })
+      if (adj) onOptGoal({ kind: 'amount', id: goal.id, delta: -adj.amount })
+      try { await removeSavingsAdjustment(id) }
+      catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to remove entry.')
+        notifyError()
       }
     })
   }
@@ -78,11 +95,13 @@ export default function SavingsGoalCard({ goal, onEdit, adjustments }: Props) {
 
   const handleMarkAchieved = () => {
     startTransition(async () => {
+      onOptGoal({ kind: 'achieve', id: goal.id })
       try {
         await markAchieved(goal.id)
         await bigConfetti()
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to mark as achieved.')
+        notifyError()
       }
     })
   }
@@ -90,10 +109,11 @@ export default function SavingsGoalCard({ goal, onEdit, adjustments }: Props) {
   const handleDelete = () => {
     if (!confirm(`Delete "${goal.name}"? This cannot be undone.`)) return
     startTransition(async () => {
-      try {
-        await deleteSavingsGoal(goal.id)
-      } catch (e) {
+      onOptGoal({ kind: 'delete', id: goal.id })
+      try { await deleteSavingsGoal(goal.id) }
+      catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to delete.')
+        notifyError()
       }
     })
   }
