@@ -111,7 +111,7 @@ export default async function DashboardPage({
       {/* Latest budget — header + live metrics in one card */}
       <div className="bg-bg-white rounded-lg shadow-card p-5 sm:p-6">
         <div className="flex items-start justify-between gap-4 mb-5">
-          <PeriodSwitcherHeader currentPeriod={selectedPeriod} allPeriods={monthlyPeriods} />
+          <PeriodSwitcherHeader currentPeriod={selectedPeriod} allPeriods={periods} />
           <NewBudgetButton />
         </div>
         {selectedPeriod && (
