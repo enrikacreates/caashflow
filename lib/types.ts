@@ -72,6 +72,9 @@ export interface BudgetPeriod {
   // 'monthly' = pay-period budget (default). 'event' = situational budget
   // (graduation party, vacation, trip) — isolated from dashboard/tithe/savings rollups.
   kind: PeriodKind
+  // Event budgets only: opt in to tithe/savings/tax/profit/giving deductions and
+  // account transfers (monthly budgets always deduct, so this is ignored for them).
+  apply_deductions: boolean
   income_amount: number
   deduction_overrides: DeductionOverrides
   // Per-deduction "set aside / paid" checkmarks, keyed by tithe|savings|tax|profit|fun_money

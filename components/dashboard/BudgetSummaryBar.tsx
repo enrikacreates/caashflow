@@ -21,6 +21,7 @@ export default function BudgetSummaryBar({
   daysLeft,
   bare = false,
   isEvent = false,
+  showToBudget,
 }: {
   income: number
   toBudget: number
@@ -33,9 +34,13 @@ export default function BudgetSummaryBar({
   daysLeft?: number
   bare?: boolean
   isEvent?: boolean
+  // Whether to show the "To Budget" (after-deductions) column. Defaults to !isEvent,
+  // but an event with deductions opted in passes true to surface it.
+  showToBudget?: boolean
 }) {
   const leftToPay = Math.max(0, payNow - paid)
-  const gridCols = isEvent ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2 sm:grid-cols-4'
+  const showTB = showToBudget ?? !isEvent
+  const gridCols = showTB ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2 sm:grid-cols-3'
   const content = (
     <>
       <div className={`grid ${gridCols} gap-x-3 gap-y-4 sm:divide-x sm:divide-border/60`}>
@@ -48,7 +53,7 @@ export default function BudgetSummaryBar({
             <div className="text-[10px] text-text-muted mt-0.5 leading-tight">{formatCurrency(stillProjected)} still projected this month</div>
           )}
         </div>
-        {!isEvent && (
+        {showTB && (
           <div className="@container sm:px-3">
             <div className="text-caption font-bold uppercase text-text-muted mb-1">To Budget</div>
             <div className="font-bold text-text-heading whitespace-nowrap leading-tight text-[clamp(0.78rem,15cqi,1.5rem)]">{formatCurrency(toBudget)}</div>

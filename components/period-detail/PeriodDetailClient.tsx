@@ -39,7 +39,7 @@ import {
   setDeductionPaid,
   setDeductionCash,
 } from '@/app/actions/period-expenses'
-import { completePeriod, reopenPeriod } from '@/app/actions/periods'
+import { completePeriod, reopenPeriod, setPeriodApplyDeductions } from '@/app/actions/periods'
 import { smallConfetti, bigConfetti } from '@/lib/confetti'
 import { notifyError } from '@/lib/toast'
 import { formatCurrency, formatDate, getOwedAmount, getPriorityPill } from '@/lib/utils'
@@ -72,6 +72,12 @@ import type {
 
 type SortKey = 'name' | 'default_amount' | 'priority_category' | 'account' | 'due_day' | 'frequency' | 'pay_now' | 'is_cash' | 'cleared' | 'auto_pay' | 'paid'
 type SortDir = 'asc' | 'desc'
+
+// Secondary expense columns collapse on phones so Pay / Name / Amount / Paid /
+// Clear / Remove fit without a horizontal scroll. Hidden fields stay editable via
+// the row's edit modal (tap the expense name). The header cell and every matching
+// row/sub-row cell share this class so the grid stays aligned at all widths.
+const HIDE_SM = 'hidden sm:table-cell'
 
 /** Compact priority label — "P1: Essentials" → "P1" (keeps the table narrow). */
 function priorityCode(name: string): string {
@@ -255,6 +261,23 @@ export default function PeriodDetailClient({
     period.status,
     (_state, next: 'active' | 'complete') => next
   )
+  // Event budgets can opt into deductions + account transfers via a toggle. Monthly
+  // budgets always deduct. `showDeductions` gates the Deductions grid, Account
+  // Transfers, the "To Budget" column, and how "available to budget" is computed.
+  const [optApplyDeductions, applyApplyDeductionsOpt] = useOptimistic(
+    period.apply_deductions ?? false,
+    (_state, next: boolean) => next
+  )
+  const showDeductions = period.kind !== 'event' || optApplyDeductions
+  const handleToggleApplyDeductions = (value: boolean) =>
+    startTransition(async () => {
+      applyApplyDeductionsOpt(value)
+      try {
+        await setPeriodApplyDeductions(period.id, value)
+      } catch {
+        notifyError('Could not update the deductions setting. Please try again.')
+      }
+    })
   // Optimistic overlay for deduction overrides — %/$ edits recompute the numbers instantly
   const [overridesLocal, setOverridesLocal] = useState<DeductionOverrides>(period.deduction_overrides ?? {})
 
@@ -365,11 +388,11 @@ export default function PeriodDetailClient({
   const totalCash = Object.values(cashByAccount).reduce((s, v) => s + v, 0)
   // Adjustments reduce/raise what's left to budget — deductions stay on the full check
   const adjustment = optAdjustments.reduce((sum, a) => sum + (a.amount || 0), 0)
-  // Events bypass deductions entirely — every contributed dollar is available
-  // to spend on the event. Monthly budgets net out tithe/savings/tax/etc first.
-  const availableToBudget = period.kind === 'event'
-    ? period.income_amount + adjustment
-    : deductions.incomeAfterDeductions + adjustment
+  // Without deductions (events, unless opted in) every contributed dollar is
+  // available to spend. With deductions on, net out tithe/savings/tax/etc first.
+  const availableToBudget = showDeductions
+    ? deductions.incomeAfterDeductions + adjustment
+    : period.income_amount + adjustment
   // Still projected = this month's invoices not yet received — income still expected to land
   const periodMonth = period.period_month?.slice(0, 7) ?? ''
   const stillProjectedIncome = periodMonth
@@ -1011,6 +1034,7 @@ export default function PeriodDetailClient({
           stillToFund={stillToFund}
           stillProjected={stillProjectedIncome}
           isEvent={period.kind === 'event'}
+          showToBudget={showDeductions}
         />
         <RecentActivity
           expenses={optExpenses}
@@ -1021,13 +1045,44 @@ export default function PeriodDetailClient({
         />
       </div>
 
+      {/* ─── Event: apply-deductions toggle ────────────────── */}
+      {/* Event budgets skip tithe/savings/tax by default. Flip this on to run
+          deductions + account transfers just like a monthly budget. */}
+      {period.kind === 'event' && (
+        <div className="bg-bg-white rounded-lg shadow-card p-4 sm:p-5 flex items-center justify-between gap-4">
+          <div>
+            <div className="text-caption font-bold text-text-heading">Auto-calculate deductions</div>
+            <div className="text-[11px] text-text-muted mt-0.5">
+              Set aside tithe, savings, tax &amp; more from contributions — and show account transfers, just like a monthly budget.
+            </div>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={showDeductions}
+            onClick={() => handleToggleApplyDeductions(!showDeductions)}
+            disabled={isLocked}
+            title={showDeductions ? 'Deductions on — tap to turn off' : 'Deductions off — tap to turn on'}
+            className={`relative shrink-0 inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 ${
+              showDeductions ? 'bg-success' : 'bg-border'
+            }`}
+          >
+            <span
+              className={`inline-block h-5 w-5 transform rounded-full bg-bg-white shadow transition-transform ${
+                showDeductions ? 'translate-x-5' : 'translate-x-0.5'
+              }`}
+            />
+          </button>
+        </div>
+      )}
+
       {/* ─── Sticky Summary Bar (visible when scrolled past cards) ── */}
       {showStickyBar && (
         <div className="sticky top-[72px] md:top-[84px] z-40 -mx-6 px-6 -mt-4">
           <div className="bg-[#ebf0f0] rounded-b-lg shadow-card px-4 py-2 flex items-center justify-between gap-4">
             <div className="flex items-center gap-4 text-caption">
               <span className="text-text-muted">{period.kind === 'event' ? 'Contributions' : 'Income'} <span className="font-bold text-text-heading">{formatCurrency(period.income_amount)}</span></span>
-              {period.kind !== 'event' && (
+              {showDeductions && (
                 <span className="text-text-muted hidden sm:inline">To Budget <span className="font-bold text-text-heading">{formatCurrency(deductions.incomeAfterDeductions)}</span></span>
               )}
               <span className="text-text-muted">Pay Now <span className="font-bold text-text-heading">{formatCurrency(payNowTotal)}</span></span>
@@ -1040,8 +1095,8 @@ export default function PeriodDetailClient({
       )}
 
       {/* ─── Account Transfers (overview — stays visible as it draws down) ── */}
-      {/* Hidden in event focus mode — deductions don't apply to event budgets. */}
-      {period.kind !== 'event' && Object.keys(accountTransfers).length > 0 && (
+      {/* Shown for monthly budgets and for events with deductions opted in. */}
+      {showDeductions && Object.keys(accountTransfers).length > 0 && (
         <div className="bg-bg-white rounded-lg shadow-card p-4 sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
             <h2 className="text-h3 font-bold text-text-heading">
@@ -1330,8 +1385,8 @@ export default function PeriodDetailClient({
       </div>
 
       {/* ─── Deductions Grid ───────────────────────────────── */}
-      {/* Hidden in event focus mode — tithe/savings/tax don't apply to situational budgets. */}
-      {period.kind !== 'event' && (
+      {/* Shown for monthly budgets and for events with deductions opted in. */}
+      {showDeductions && (
       <div className="bg-bg-white rounded-lg shadow-card p-6">
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 mb-4">
           <h2 className="text-h3 font-bold text-text-heading">
@@ -1720,15 +1775,15 @@ export default function PeriodDetailClient({
                   <th className={`${thClass} w-[1%]`} onClick={() => handleSort('account')}>
                     Acct<SortIcon col="account" />
                   </th>
-                  <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted w-[1%] whitespace-nowrap cursor-pointer hover:text-text-heading select-none" onClick={() => handleSort('is_cash')} title="Sort by cash"><span className="inline-block align-middle text-[12px] leading-none">💵</span><SortIcon col="is_cash" /></th>
-                  <th className={`${thClass} w-[1%]`} onClick={() => handleSort('priority_category')}>
+                  <th className={`${HIDE_SM} text-center px-3 py-3 text-caption font-bold uppercase text-text-muted w-[1%] whitespace-nowrap cursor-pointer hover:text-text-heading select-none`} onClick={() => handleSort('is_cash')} title="Sort by cash"><span className="inline-block align-middle text-[12px] leading-none">💵</span><SortIcon col="is_cash" /></th>
+                  <th className={`${thClass} w-[1%] ${HIDE_SM}`} onClick={() => handleSort('priority_category')}>
                     Pri<SortIcon col="priority_category" />
                   </th>
-                  <th className={`${thClass} w-[1%]`} onClick={() => handleSort('due_day')}>
+                  <th className={`${thClass} w-[1%] ${HIDE_SM}`} onClick={() => handleSort('due_day')}>
                     Due<SortIcon col="due_day" />
                   </th>
                   <th
-                    className="text-center px-2 py-3 text-caption font-bold uppercase text-text-muted w-[1%] whitespace-nowrap cursor-pointer hover:text-text-heading select-none"
+                    className={`${HIDE_SM} text-center px-2 py-3 text-caption font-bold uppercase text-text-muted w-[1%] whitespace-nowrap cursor-pointer hover:text-text-heading select-none`}
                     onClick={() => handleSort('auto_pay')}
                     title="Auto-pay — this bill pays itself. Click to sort."
                   >
@@ -1867,9 +1922,10 @@ export default function PeriodDetailClient({
                     <th className="text-left px-3 py-3 text-caption font-bold uppercase text-text-muted">Name</th>
                     <th className="text-left px-3 py-3 text-caption font-bold uppercase text-text-muted">Amount</th>
                     <th className="text-left px-2 py-3 text-caption font-bold uppercase text-text-muted w-[1%]">Acct</th>
-                    <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted w-[1%]" title="Withdraw as cash"><span className="inline-block align-middle text-[12px] leading-none">💵</span></th>
-                    <th className="text-left px-2 py-3 text-caption font-bold uppercase text-text-muted w-[1%]">Pri</th>
-                    <th className="text-left px-2 py-3 text-caption font-bold uppercase text-text-muted w-[1%]">Due</th>
+                    <th className={`${HIDE_SM} text-center px-3 py-3 text-caption font-bold uppercase text-text-muted w-[1%]`} title="Withdraw as cash"><span className="inline-block align-middle text-[12px] leading-none">💵</span></th>
+                    <th className={`${HIDE_SM} text-left px-2 py-3 text-caption font-bold uppercase text-text-muted w-[1%]`}>Pri</th>
+                    <th className={`${HIDE_SM} text-left px-2 py-3 text-caption font-bold uppercase text-text-muted w-[1%]`}>Due</th>
+                    <th className={`${HIDE_SM} text-center px-2 py-3 text-caption font-bold uppercase text-text-muted w-[1%]`} title="Auto-pay">Auto</th>
                     <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted">Paid</th>
                     <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted">Clear</th>
                     <th className="text-center px-3 py-3 text-caption font-bold uppercase text-text-muted">Remove</th>
@@ -2415,7 +2471,7 @@ function ExpenseRow({
         </td>
 
         {/* Cash — withdraw this amount as cash from the account */}
-        <td className="text-center px-3 py-3">
+        <td className={`${HIDE_SM} text-center px-3 py-3`}>
           <button
             type="button"
             onClick={() => onCheckboxChange(expense.id, 'is_cash', !expense.is_cash)}
@@ -2428,7 +2484,7 @@ function ExpenseRow({
         </td>
 
         {/* Priority (just the P# code — full name on hover) */}
-        <td className="px-2 py-3">
+        <td className={`${HIDE_SM} px-2 py-3`}>
           {expense.priority_category && (
             <span title={expense.priority_category} className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${getPriorityPill(expense.priority_category, categoryColorMap)}`}>
               {priorityCode(expense.priority_category)}
@@ -2437,10 +2493,10 @@ function ExpenseRow({
         </td>
 
         {/* Due Day */}
-        <td className="px-3 py-3 text-caption text-text-muted text-center">{expense.due_day || '—'}</td>
+        <td className={`${HIDE_SM} px-3 py-3 text-caption text-text-muted text-center`}>{expense.due_day || '—'}</td>
 
         {/* Auto-pay badge — sortable column; pill appears only when the line is set to auto-pay */}
-        <td className="text-center px-2 py-3">
+        <td className={`${HIDE_SM} text-center px-2 py-3`}>
           {expense.auto_pay && (
             <span className="text-[10px] bg-success/10 text-success px-1.5 py-0.5 rounded-full font-bold">AUTO</span>
           )}
@@ -2495,6 +2551,7 @@ function ExpenseRow({
             parentExpenseId={expense.id}
             parentAccount={expense.account}
             parentTracked={isDrawDown}
+            hasRemove={!!onRemove}
             disabled={rowDisabled}
             isPending={isPending}
             onPaymentField={onPaymentField}
@@ -2554,6 +2611,7 @@ function SubPaymentRow({
   parentExpenseId,
   parentAccount,
   parentTracked,
+  hasRemove,
   disabled,
   isPending,
   onPaymentField,
@@ -2569,6 +2627,8 @@ function SubPaymentRow({
   parentExpenseId: string
   parentAccount: string | null
   parentTracked: boolean
+  // Parent table has a trailing Remove column (extra expenses) — render a spacer to match.
+  hasRemove: boolean
   disabled: boolean
   isPending: boolean
   onPaymentField: (paymentId: string, field: string, value: string | number | boolean | null) => void
@@ -2656,11 +2716,11 @@ function SubPaymentRow({
       {/* Account (inherits parent) */}
       <td className="px-3 py-2 text-[10px] text-text-muted whitespace-nowrap">{parentAccount || '—'}</td>
       {/* Cash (n/a for sub-payments) */}
-      <td />
+      <td className={HIDE_SM} />
       {/* Priority (none) */}
-      <td />
+      <td className={HIDE_SM} />
       {/* Due */}
-      <td className="px-3 py-2 text-center">
+      <td className={`${HIDE_SM} px-3 py-2 text-center`}>
         <input
           type="number"
           defaultValue={payment.due_day ?? ''}
@@ -2670,6 +2730,8 @@ function SubPaymentRow({
           className={`w-12 text-center ${inputClass}`}
         />
       </td>
+      {/* Auto (n/a for sub-payments) — spacer to match parent column layout */}
+      <td className={HIDE_SM} />
       {/* Paid */}
       <td className="text-center px-3 py-2">
         <input type="checkbox" checked={payment.paid} disabled={locked} onChange={(e) => onPaymentToggle(payment.id, 'paid', e.target.checked)} className="rounded" />
@@ -2678,6 +2740,8 @@ function SubPaymentRow({
       <td className="text-center px-3 py-2">
         <input type="checkbox" checked={payment.cleared} disabled={disabled} onChange={(e) => onPaymentCleared(payment.id, e.target.checked)} className="rounded" />
       </td>
+      {/* Remove (spacer — extra-expense tables only) */}
+      {hasRemove && <td />}
     </tr>
     {parentTracked && subSpendOpen && (
       <tr className="bg-[#e3eaea]">

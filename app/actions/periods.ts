@@ -167,6 +167,27 @@ export async function updateBudgetPeriod(
   revalidatePath(`/periods/${id}`)
 }
 
+/**
+ * Toggle whether an event budget applies deductions (tithe/savings/tax/profit/
+ * giving) + account transfers. No-op flag for monthly budgets, which always deduct.
+ */
+export async function setPeriodApplyDeductions(id: string, value: boolean) {
+  const supabase = await createClient()
+  const householdId = await getUserHouseholdId()
+
+  const { error } = await supabase
+    .from('budget_periods')
+    .update({ apply_deductions: value, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .eq('household_id', householdId)
+
+  if (error) throw new Error(`Failed to update deductions setting: ${error.message}`)
+
+  revalidatePath(`/periods/${id}`)
+  revalidatePath('/periods')
+  revalidatePath('/')
+}
+
 export async function completePeriod(id: string) {
   const supabase = await createClient()
   const householdId = await getUserHouseholdId()
