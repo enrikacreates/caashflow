@@ -1,5 +1,5 @@
 import { getSettings, getAccounts, getPriorityCategories } from '@/app/actions/settings'
-import { getHouseholdMembers, getUserHouseholdsWithNames } from '@/app/actions/household'
+import { getTeamMembers, getUserTeamsWithNames } from '@/app/actions/team'
 import { getProfile } from '@/app/actions/profile'
 import { getFamilyShareInfo } from '@/app/actions/requests'
 import { getAuthUser } from '@/lib/supabase/helpers'
@@ -13,14 +13,14 @@ import FamilyShareCard from '@/components/settings/FamilyShareCard'
 import type { Settings } from '@/lib/types'
 
 export default async function SettingsPage() {
-  const [settings, members, user, accounts, categories, profile, households, family] = await Promise.all([
+  const [settings, members, user, accounts, categories, profile, teams, family] = await Promise.all([
     getSettings() as Promise<Settings>,
-    getHouseholdMembers(),
+    getTeamMembers(),
     getAuthUser(),
     getAccounts(),
     getPriorityCategories(),
     getProfile(),
-    getUserHouseholdsWithNames(),
+    getUserTeamsWithNames(),
     getFamilyShareInfo(),
   ])
 
@@ -34,7 +34,7 @@ export default async function SettingsPage() {
       <ProfilePanel
         profile={profile}
         email={user?.email ?? ''}
-        households={households ?? []}
+        teams={teams ?? []}
       />
       <FamilyShareCard name={family?.name ?? ''} slug={family?.slug ?? null} />
       <SettingsForm settings={settings} accounts={accounts ?? []} />

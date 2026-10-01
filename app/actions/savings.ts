@@ -1,17 +1,17 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { getUserHouseholdId } from '@/lib/supabase/helpers'
+import { getUserTeamId } from '@/lib/supabase/helpers'
 import { revalidatePath } from 'next/cache'
 
 export async function getSavingsGoals() {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { data, error } = await supabase
     .from('savings_goals')
     .select('*')
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
     .order('is_achieved', { ascending: true })
     .order('sort_order', { ascending: true })
     .order('created_at', { ascending: true })
@@ -30,11 +30,11 @@ export async function createSavingsGoal(data: {
   notes: string | null
 }) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { data: created, error } = await supabase
     .from('savings_goals')
-    .insert({ ...data, household_id: householdId })
+    .insert({ ...data, team_id: teamId })
     .select('id')
     .single()
 
@@ -56,13 +56,13 @@ export async function updateSavingsGoal(
   }>
 ) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { error } = await supabase
     .from('savings_goals')
     .update({ ...data, updated_at: new Date().toISOString() })
     .eq('id', id)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (error) throw new Error(`Failed to update savings goal: ${error.message}`)
   revalidatePath('/savings')
@@ -71,12 +71,12 @@ export async function updateSavingsGoal(
 /** All adjustment-ledger entries for the household's goals (newest first). */
 export async function getSavingsAdjustments() {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { data, error } = await supabase
     .from('savings_goal_adjustments')
     .select('*')
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
     .order('created_at', { ascending: false })
 
   if (error) throw new Error(`Failed to fetch savings adjustments: ${error.message}`)
@@ -86,13 +86,13 @@ export async function getSavingsAdjustments() {
 /** Adjust a goal's balance by a signed amount with an optional note; logs a ledger entry. */
 export async function addSavingsAdjustment(id: string, amount: number, note: string | null) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { data: goal, error: fetchError } = await supabase
     .from('savings_goals')
     .select('current_amount, target_amount, monthly_contribution')
     .eq('id', id)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
     .single()
 
   if (fetchError || !goal) throw new Error('Savings goal not found')
@@ -104,14 +104,14 @@ export async function addSavingsAdjustment(id: string, amount: number, note: str
 
   const { error: ledgerError } = await supabase
     .from('savings_goal_adjustments')
-    .insert({ household_id: householdId, savings_goal_id: id, amount, note: note?.trim() || null })
+    .insert({ team_id: teamId, savings_goal_id: id, amount, note: note?.trim() || null })
   if (ledgerError) throw new Error(`Failed to log adjustment: ${ledgerError.message}`)
 
   const { error } = await supabase
     .from('savings_goals')
     .update({ current_amount: newAmount, updated_at: new Date().toISOString() })
     .eq('id', id)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (error) throw new Error(`Failed to adjust balance: ${error.message}`)
   revalidatePath('/savings')
@@ -121,13 +121,13 @@ export async function addSavingsAdjustment(id: string, amount: number, note: str
 /** Undo a ledger entry — removes it and reverses its effect on the goal balance. */
 export async function removeSavingsAdjustment(adjustmentId: string) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { data: adj, error: fetchError } = await supabase
     .from('savings_goal_adjustments')
     .select('savings_goal_id, amount')
     .eq('id', adjustmentId)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
     .single()
   if (fetchError || !adj) throw new Error('Adjustment not found')
 
@@ -135,14 +135,14 @@ export async function removeSavingsAdjustment(adjustmentId: string) {
     .from('savings_goals')
     .select('current_amount')
     .eq('id', adj.savings_goal_id)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
     .single()
 
   const { error: delError } = await supabase
     .from('savings_goal_adjustments')
     .delete()
     .eq('id', adjustmentId)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
   if (delError) throw new Error(`Failed to remove adjustment: ${delError.message}`)
 
   if (goal) {
@@ -150,7 +150,7 @@ export async function removeSavingsAdjustment(adjustmentId: string) {
       .from('savings_goals')
       .update({ current_amount: goal.current_amount - adj.amount, updated_at: new Date().toISOString() })
       .eq('id', adj.savings_goal_id)
-      .eq('household_id', householdId)
+      .eq('team_id', teamId)
   }
 
   revalidatePath('/savings')
@@ -158,7 +158,7 @@ export async function removeSavingsAdjustment(adjustmentId: string) {
 
 export async function markAchieved(id: string) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { error } = await supabase
     .from('savings_goals')
@@ -168,7 +168,7 @@ export async function markAchieved(id: string) {
       updated_at: new Date().toISOString(),
     })
     .eq('id', id)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (error) throw new Error(`Failed to mark goal as achieved: ${error.message}`)
   revalidatePath('/savings')
@@ -176,13 +176,13 @@ export async function markAchieved(id: string) {
 
 export async function deleteSavingsGoal(id: string) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { error } = await supabase
     .from('savings_goals')
     .delete()
     .eq('id', id)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (error) throw new Error(`Failed to delete savings goal: ${error.message}`)
   revalidatePath('/savings')
@@ -193,14 +193,14 @@ export async function setSavingsGoalBudgetItemLink(
   budgetItemId: string | null
 ) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   // Clear any existing link for this goal
   const { error: clearError } = await supabase
     .from('base_budget_items')
     .update({ savings_goal_id: null, updated_at: new Date().toISOString() })
     .eq('savings_goal_id', goalId)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (clearError) throw new Error(`Failed to clear existing link: ${clearError.message}`)
 
@@ -209,7 +209,7 @@ export async function setSavingsGoalBudgetItemLink(
       .from('base_budget_items')
       .update({ savings_goal_id: goalId, updated_at: new Date().toISOString() })
       .eq('id', budgetItemId)
-      .eq('household_id', householdId)
+      .eq('team_id', teamId)
 
     if (error) throw new Error(`Failed to link budget item: ${error.message}`)
   }

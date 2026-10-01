@@ -1,18 +1,18 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { getUserHouseholdId } from '@/lib/supabase/helpers'
+import { getUserTeamId } from '@/lib/supabase/helpers'
 import { revalidatePath } from 'next/cache'
 import { DEFAULT_BASE_BUDGET } from '@/lib/constants'
 
 export async function getBaseBudgetItems() {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { data, error } = await supabase
     .from('base_budget_items')
     .select('*')
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
     .order('sort_order', { ascending: true })
 
   if (error) throw new Error(`Failed to fetch base budget items: ${error.message}`)
@@ -21,10 +21,10 @@ export async function getBaseBudgetItems() {
 
 export async function createBaseBudgetItem(formData: FormData) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const item = {
-    household_id: householdId,
+    team_id: teamId,
     name: formData.get('name') as string,
     default_amount: parseFloat(formData.get('default_amount') as string) || 0,
     due_day: formData.get('due_day') ? parseInt(formData.get('due_day') as string, 10) : null,
@@ -49,7 +49,7 @@ export async function createBaseBudgetItem(formData: FormData) {
 
 export async function updateBaseBudgetItem(formData: FormData) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
   const id = formData.get('id') as string
 
   const updates = {
@@ -71,7 +71,7 @@ export async function updateBaseBudgetItem(formData: FormData) {
     .from('base_budget_items')
     .update(updates)
     .eq('id', id)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (error) throw new Error(`Failed to update base budget item: ${error.message}`)
 
@@ -81,13 +81,13 @@ export async function updateBaseBudgetItem(formData: FormData) {
 /** Quick inline toggle of a baseline item's draw-down (track-spending) flag. */
 export async function setBaseItemTrackSpending(id: string, value: boolean) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { error } = await supabase
     .from('base_budget_items')
     .update({ track_spending: value, updated_at: new Date().toISOString() })
     .eq('id', id)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (error) throw new Error(`Failed to update track spending: ${error.message}`)
 
@@ -96,13 +96,13 @@ export async function setBaseItemTrackSpending(id: string, value: boolean) {
 
 export async function deleteBaseBudgetItem(id: string) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { error } = await supabase
     .from('base_budget_items')
     .delete()
     .eq('id', id)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (error) throw new Error(`Failed to delete base budget item: ${error.message}`)
 
@@ -111,19 +111,19 @@ export async function deleteBaseBudgetItem(id: string) {
 
 export async function resetBaseBudgetToDefaults() {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   // Delete all existing items for this household
   const { error: deleteError } = await supabase
     .from('base_budget_items')
     .delete()
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (deleteError) throw new Error(`Failed to clear base budget: ${deleteError.message}`)
 
   // Insert all default items
   const items = DEFAULT_BASE_BUDGET.map((item, index) => ({
-    household_id: householdId,
+    team_id: teamId,
     name: item.name,
     default_amount: item.default_amount,
     due_day: item.due_day ?? null,

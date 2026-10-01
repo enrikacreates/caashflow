@@ -2,12 +2,12 @@
 
 import { useState, useTransition, useRef } from 'react'
 import { updateProfile, uploadAvatar, removeAvatar } from '@/app/actions/profile'
-import { renameHousehold, leaveHousehold } from '@/app/actions/household'
+import { renameTeam, leaveTeam } from '@/app/actions/team'
 import type { UserProfile } from '@/lib/types'
 import { Pencil, LogOut as LogOutIcon, Check, X } from 'lucide-react'
 
-interface HouseholdInfo {
-  household_id: string
+interface TeamInfo {
+  team_id: string
   role: 'owner' | 'member'
   name: string
 }
@@ -15,23 +15,22 @@ interface HouseholdInfo {
 interface ProfilePanelProps {
   profile: UserProfile | null
   email: string
-  households: HouseholdInfo[]
+  teams: TeamInfo[]
 }
 
-export default function ProfilePanel({ profile, email, households: initialHouseholds }: ProfilePanelProps) {
+export default function ProfilePanel({ profile, email, teams: initialTeams }: ProfilePanelProps) {
   const [displayName, setDisplayName] = useState(profile?.display_name ?? '')
   const [avatarUrl, setAvatarUrl] = useState(profile?.avatar_url ?? null)
-  const [households, setHouseholds] = useState(initialHouseholds)
+  const [teams, setTeams] = useState(initialTeams)
   const [saving, startSaving] = useTransition()
   const [uploading, startUploading] = useTransition()
   const [removing, startRemoving] = useTransition()
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Household editing state
-  const [editingHouseholdId, setEditingHouseholdId] = useState<string | null>(null)
+  const [editingTeamId, setEditingTeamId] = useState<string | null>(null)
   const [editingName, setEditingName] = useState('')
-  const [householdAction, startHouseholdAction] = useTransition()
+  const [teamAction, startTeamAction] = useTransition()
 
   const showMessage = (type: 'success' | 'error', text: string) => {
     setMessage({ type, text })
@@ -80,40 +79,40 @@ export default function ProfilePanel({ profile, email, households: initialHouseh
     })
   }
 
-  const handleStartRename = (h: HouseholdInfo) => {
-    setEditingHouseholdId(h.household_id)
+  const handleStartRename = (h: TeamInfo) => {
+    setEditingTeamId(h.team_id)
     setEditingName(h.name)
   }
 
   const handleCancelRename = () => {
-    setEditingHouseholdId(null)
+    setEditingTeamId(null)
     setEditingName('')
   }
 
-  const handleSaveRename = (householdId: string) => {
-    startHouseholdAction(async () => {
+  const handleSaveRename = (teamId: string) => {
+    startTeamAction(async () => {
       try {
-        await renameHousehold(householdId, editingName)
-        setHouseholds(prev =>
+        await renameTeam(teamId, editingName)
+        setTeams(prev =>
           prev.map(h =>
-            h.household_id === householdId ? { ...h, name: editingName.trim() } : h
+            h.team_id === teamId ? { ...h, name: editingName.trim() } : h
           )
         )
-        setEditingHouseholdId(null)
-        showMessage('success', 'Household renamed')
+        setEditingTeamId(null)
+        showMessage('success', 'Team renamed')
       } catch (e) {
         showMessage('error', e instanceof Error ? e.message : 'Failed to rename')
       }
     })
   }
 
-  const handleLeave = (householdId: string, name: string) => {
+  const handleLeave = (teamId: string, name: string) => {
     if (!confirm(`Leave "${name}"? You'll need a new invite to rejoin.`)) return
 
-    startHouseholdAction(async () => {
+    startTeamAction(async () => {
       try {
-        await leaveHousehold(householdId)
-        setHouseholds(prev => prev.filter(h => h.household_id !== householdId))
+        await leaveTeam(teamId)
+        setTeams(prev => prev.filter(h => h.team_id !== teamId))
         showMessage('success', `Left "${name}"`)
       } catch (e) {
         showMessage('error', e instanceof Error ? e.message : 'Failed to leave')
@@ -212,19 +211,19 @@ export default function ProfilePanel({ profile, email, households: initialHouseh
           <p className="text-caption text-text-muted mt-1">Email is managed through your login provider</p>
         </div>
 
-        {/* Households */}
+        {/* Teams */}
         <div>
           <label className="text-caption font-semibold text-text-heading block mb-2">
-            Households
+            Household
           </label>
           <div className="space-y-2">
-            {households.map((h) => {
-              const isEditing = editingHouseholdId === h.household_id
+            {teams.map((h) => {
+              const isEditing = editingTeamId === h.team_id
               const isOwner = h.role === 'owner'
 
               return (
                 <div
-                  key={h.household_id}
+                  key={h.team_id}
                   className="flex items-center gap-2 bg-surface-beige/30 rounded-sm px-4 py-2.5"
                 >
                   {isEditing ? (
@@ -235,15 +234,15 @@ export default function ProfilePanel({ profile, email, households: initialHouseh
                         value={editingName}
                         onChange={(e) => setEditingName(e.target.value)}
                         onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleSaveRename(h.household_id)
+                          if (e.key === 'Enter') handleSaveRename(h.team_id)
                           if (e.key === 'Escape') handleCancelRename()
                         }}
                         autoFocus
                         className="flex-1 border-0 bg-transparent text-body text-text-heading focus:outline-none min-w-0"
                       />
                       <button
-                        onClick={() => handleSaveRename(h.household_id)}
-                        disabled={householdAction}
+                        onClick={() => handleSaveRename(h.team_id)}
+                        disabled={teamAction}
                         className="text-primary-teal hover:opacity-80 transition-opacity p-0.5"
                         aria-label="Save name"
                       >
@@ -280,7 +279,7 @@ export default function ProfilePanel({ profile, email, households: initialHouseh
                         <button
                           onClick={() => handleStartRename(h)}
                           className="text-text-muted hover:text-text-heading transition-colors p-0.5 flex-shrink-0"
-                          aria-label="Rename household"
+                          aria-label="Rename team"
                           title="Rename"
                         >
                           <Pencil size={14} />
@@ -290,10 +289,10 @@ export default function ProfilePanel({ profile, email, households: initialHouseh
                       {/* Non-owner can leave */}
                       {!isOwner && (
                         <button
-                          onClick={() => handleLeave(h.household_id, h.name)}
-                          disabled={householdAction}
+                          onClick={() => handleLeave(h.team_id, h.name)}
+                          disabled={teamAction}
                           className="text-text-muted hover:text-warning transition-colors p-0.5 flex-shrink-0 disabled:opacity-50"
-                          aria-label="Leave household"
+                          aria-label="Leave team"
                           title="Leave"
                         >
                           <LogOutIcon size={14} />
@@ -305,8 +304,8 @@ export default function ProfilePanel({ profile, email, households: initialHouseh
               )
             })}
 
-            {households.length === 0 && (
-              <p className="text-caption text-text-muted py-2">No households. Join one via invite link.</p>
+            {teams.length === 0 && (
+              <p className="text-caption text-text-muted py-2">No teams yet. Join one via invite link.</p>
             )}
           </div>
         </div>

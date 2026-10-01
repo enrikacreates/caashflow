@@ -1,22 +1,22 @@
-export interface Household {
+export interface Team {
   id: string
   name: string
   created_at: string
   updated_at: string
 }
 
-export interface HouseholdMember {
+export interface TeamMember {
   id: string
-  household_id: string
+  team_id: string
   user_id: string
   role: 'owner' | 'member'
   email: string | null
   created_at: string
 }
 
-export interface HouseholdInvite {
+export interface TeamInvite {
   id: string
-  household_id: string
+  team_id: string
   token: string
   invited_by: string
   status: 'pending' | 'accepted' | 'expired'
@@ -26,7 +26,7 @@ export interface HouseholdInvite {
 
 export interface Settings {
   id: string
-  household_id: string
+  team_id: string
   tithe_percentage: number
   savings_percentage: number
   tax_percentage: number
@@ -45,7 +45,7 @@ export interface Settings {
 
 export interface BaseBudgetItem {
   id: string
-  household_id: string
+  team_id: string
   name: string
   default_amount: number
   due_day: number | null
@@ -66,7 +66,7 @@ export interface BaseBudgetItem {
 
 export interface BudgetPeriod {
   id: string
-  household_id: string
+  team_id: string
   period_name: string
   period_month: string | null
   // 'monthly' = pay-period budget (default). 'event' = situational budget
@@ -89,8 +89,9 @@ export interface BudgetPeriod {
 
 export interface PeriodAdjustment {
   id: string
-  household_id: string
+  team_id: string
   period_id: string
+  session_id: string | null
   amount: number
   note: string | null
   sort_order: number
@@ -101,7 +102,7 @@ export interface PeriodAdjustment {
 export interface PeriodExpense {
   id: string
   period_id: string
-  household_id: string
+  team_id: string
   base_item_id: string | null
   name: string
   default_amount: number
@@ -127,6 +128,8 @@ export interface PeriodExpense {
   paid_amount: number
   debt_id: string | null
   savings_goal_id: string | null
+  // Session whose income funded this bill; null = still in the month's unfunded pool
+  session_id: string | null
   sort_order: number
   created_at: string
   updated_at: string
@@ -138,7 +141,7 @@ export interface PeriodExpense {
 
 export interface PeriodExpenseTransfer {
   id: string
-  household_id: string
+  team_id: string
   period_id: string
   from_expense_id: string
   to_expense_id: string
@@ -149,7 +152,7 @@ export interface PeriodExpenseTransfer {
 
 export interface PeriodExpenseAdjustment {
   id: string
-  household_id: string
+  team_id: string
   period_expense_id: string
   // Set when the spend is logged against a specific split installment (else null = whole-line)
   period_expense_payment_id: string | null
@@ -164,8 +167,10 @@ export interface PeriodExpenseAdjustment {
 
 export interface PeriodExpensePayment {
   id: string
-  household_id: string
+  team_id: string
   period_expense_id: string
+  // Session that funded this installment; null = unfunded
+  session_id: string | null
   label: string | null
   amount: number
   due_day: number | null
@@ -184,7 +189,7 @@ export interface PeriodExpensePayment {
 
 export interface Invoice {
   id: string
-  household_id: string
+  team_id: string
   client_name: string
   project_name: string | null
   amount: number
@@ -212,18 +217,22 @@ export interface PeriodLinkedInvoice {
 export interface PeriodManualIncome {
   id: string
   period_id: string
-  household_id: string
+  team_id: string
   description: string
   amount: number
   is_done: boolean
   // When true, kept out of income reports/charts (e.g. gifts, paybacks)
   exclude_from_reports: boolean
+  session_id: string | null
+  income_type: IncomeType
+  // Deductions this income skips (e.g. a birthday gift skips tax)
+  skip_deductions: DeductionKey[]
   created_at: string
 }
 
 export interface PeriodDeductionContribution {
   id: string
-  household_id: string
+  team_id: string
   period_id: string
   source_kind: 'manual' | 'invoice'
   source_id: string
@@ -239,7 +248,7 @@ export interface PeriodDeductionContribution {
 
 export interface BudgetRequest {
   id: string
-  household_id: string
+  team_id: string
   name: string
   amount: number
   priority_category: string
@@ -255,7 +264,7 @@ export interface BudgetRequest {
 
 export interface Account {
   id: string
-  household_id: string
+  team_id: string
   name: string
   sort_order: number
   created_at: string
@@ -264,7 +273,7 @@ export interface Account {
 
 export interface PriorityCategoryRecord {
   id: string
-  household_id: string
+  team_id: string
   name: string
   color_key: string
   sort_order: number
@@ -274,7 +283,7 @@ export interface PriorityCategoryRecord {
 
 export interface Debt {
   id: string
-  household_id: string
+  team_id: string
   name: string
   original_balance: number
   current_balance: number
@@ -291,7 +300,7 @@ export interface Debt {
 
 export interface SavingsGoal {
   id: string
-  household_id: string
+  team_id: string
   name: string
   goal_type: 'purchase' | 'fund'
   target_amount: number
@@ -308,7 +317,7 @@ export interface SavingsGoal {
 
 export interface SavingsGoalAdjustment {
   id: string
-  household_id: string
+  team_id: string
   savings_goal_id: string
   amount: number
   note: string | null
@@ -318,10 +327,34 @@ export interface SavingsGoalAdjustment {
 export interface PeriodSavingsAllocation {
   id: string
   period_id: string
-  household_id: string
+  team_id: string
   savings_goal_id: string
   amount: number
   contributed: number
+  created_at: string
+  updated_at: string
+}
+
+export type DeductionKey = 'tithe' | 'savings' | 'tax' | 'profit' | 'fun_money'
+
+// Preset for an income item: paycheck takes every deduction; gift/refund skip them
+export type IncomeType = 'paycheck' | 'gift' | 'refund'
+
+/**
+ * One budgeting sitting within a month — whatever money landed (one check, two,
+ * a gift). Tabs on the budget page; labelled "Aug 15: S2" or "Aug 15: <name>".
+ * The newest session (highest seq) is where newly funded bills go.
+ */
+export interface BudgetSession {
+  id: string
+  team_id: string
+  period_id: string
+  seq: number
+  name: string | null
+  session_date: string
+  deduction_overrides: DeductionOverrides
+  deduction_paid: Record<string, boolean>
+  deduction_cash: Record<string, boolean>
   created_at: string
   updated_at: string
 }

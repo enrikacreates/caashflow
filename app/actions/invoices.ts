@@ -1,17 +1,17 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { getUserHouseholdId } from '@/lib/supabase/helpers'
+import { getUserTeamId } from '@/lib/supabase/helpers'
 import { revalidatePath } from 'next/cache'
 
 export async function getInvoices() {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { data, error } = await supabase
     .from('invoices')
     .select('*, period_linked_invoices ( period_id, budget_periods ( id, period_name ) )')
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
     .order('created_at', { ascending: false })
 
   if (error) throw new Error(`Failed to fetch invoices: ${error.message}`)
@@ -20,10 +20,10 @@ export async function getInvoices() {
 
 export async function createInvoice(formData: FormData) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const invoice = {
-    household_id: householdId,
+    team_id: teamId,
     client_name: formData.get('client_name') as string,
     project_name: formData.get('project_name') as string || null,
     amount: parseFloat(formData.get('amount') as string) || 0,
@@ -45,7 +45,7 @@ export async function createInvoice(formData: FormData) {
 
 export async function updateInvoice(formData: FormData) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
   const id = formData.get('id') as string
 
   const updates = {
@@ -63,7 +63,7 @@ export async function updateInvoice(formData: FormData) {
     .from('invoices')
     .update(updates)
     .eq('id', id)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (error) throw new Error(`Failed to update invoice: ${error.message}`)
 
@@ -78,13 +78,13 @@ export async function updateInvoice(formData: FormData) {
  */
 export async function addIncomeToBudget(invoiceId: string, periodId: string) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { data: invoice, error: fetchError } = await supabase
     .from('invoices')
     .select('actual_received_date')
     .eq('id', invoiceId)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
     .single()
 
   if (fetchError) throw new Error(`Failed to load income: ${fetchError.message}`)
@@ -99,11 +99,11 @@ export async function addIncomeToBudget(invoiceId: string, periodId: string) {
       updated_at: new Date().toISOString(),
     })
     .eq('id', invoiceId)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (updateError) throw new Error(`Failed to mark income received: ${updateError.message}`)
 
-  // Link to the period unless it's already linked (period_linked_invoices is RLS-scoped, no household_id)
+  // Link to the period unless it's already linked (period_linked_invoices is RLS-scoped, no team_id)
   const { count } = await supabase
     .from('period_linked_invoices')
     .select('*', { count: 'exact', head: true })
@@ -127,7 +127,7 @@ export async function addIncomeToBudget(invoiceId: string, periodId: string) {
 
 export async function updateInvoiceStatus(id: string, status: 'projected' | 'sent' | 'received') {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const updates: Record<string, unknown> = { status, updated_at: new Date().toISOString() }
   // Stamp a received date when moving to received and one isn't set yet.
@@ -136,7 +136,7 @@ export async function updateInvoiceStatus(id: string, status: 'projected' | 'sen
       .from('invoices')
       .select('actual_received_date')
       .eq('id', id)
-      .eq('household_id', householdId)
+      .eq('team_id', teamId)
       .single()
     if (!existing?.actual_received_date) updates.actual_received_date = new Date().toISOString().slice(0, 10)
   }
@@ -145,7 +145,7 @@ export async function updateInvoiceStatus(id: string, status: 'projected' | 'sen
     .from('invoices')
     .update(updates)
     .eq('id', id)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (error) throw new Error(`Failed to update status: ${error.message}`)
 
@@ -155,13 +155,13 @@ export async function updateInvoiceStatus(id: string, status: 'projected' | 'sen
 
 export async function deleteInvoice(id: string) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { error } = await supabase
     .from('invoices')
     .delete()
     .eq('id', id)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (error) throw new Error(`Failed to delete invoice: ${error.message}`)
 

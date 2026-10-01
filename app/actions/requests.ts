@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { getUserHouseholdId } from '@/lib/supabase/helpers'
+import { getUserTeamId } from '@/lib/supabase/helpers'
 import { revalidatePath } from 'next/cache'
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 
@@ -17,12 +17,12 @@ const r2 = new S3Client({
 
 export async function getBudgetRequests() {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { data, error } = await supabase
     .from('budget_requests')
     .select('*')
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
     .order('priority_category', { ascending: true })
 
   if (error) throw new Error(`Failed to fetch budget requests: ${error.message}`)
@@ -32,12 +32,12 @@ export async function getBudgetRequests() {
 /** Rename (or clear, if `to` is empty) a "who/what" value across every request that uses it. */
 export async function renameRequestedFor(from: string, to: string) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
   const t = to.trim()
   const { error } = await supabase
     .from('budget_requests')
     .update({ requested_for: t || null, updated_at: new Date().toISOString() })
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
     .eq('requested_for', from)
   if (error) throw new Error(`Failed to rename: ${error.message}`)
   revalidatePath('/requests')
@@ -46,12 +46,12 @@ export async function renameRequestedFor(from: string, to: string) {
 /** Rename (or remove, if `to` is empty) a tag across every request that has it. */
 export async function renameRequestTag(from: string, to: string) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
   const t = to.trim()
   const { data } = await supabase
     .from('budget_requests')
     .select('id, tags')
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
     .contains('tags', [from])
   for (const r of data ?? []) {
     const cur = (r.tags as string[]) ?? []
@@ -62,7 +62,7 @@ export async function renameRequestTag(from: string, to: string) {
       .from('budget_requests')
       .update({ tags: next, updated_at: new Date().toISOString() })
       .eq('id', r.id)
-      .eq('household_id', householdId)
+      .eq('team_id', teamId)
   }
   revalidatePath('/requests')
 }
@@ -70,11 +70,11 @@ export async function renameRequestTag(from: string, to: string) {
 /** Fast brain-dump: create a request from a parsed quick-add line (defaults P7 / requested). */
 export async function quickAddRequest(name: string, requestedFor: string | null = null, amount = 0) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
   const trimmed = name.trim()
   if (!trimmed) return
   const { error } = await supabase.from('budget_requests').insert({
-    household_id: householdId,
+    team_id: teamId,
     name: trimmed.slice(0, 200),
     amount: amount || 0,
     requested_for: requestedFor?.trim() || null,
@@ -83,14 +83,16 @@ export async function quickAddRequest(name: string, requestedFor: string | null 
   })
   if (error) throw new Error(`Failed to add request: ${error.message}`)
   revalidatePath('/requests')
+  // Budget pages list requests too (Requests panel)
+  revalidatePath('/periods/[periodId]', 'page')
 }
 
 export async function createBudgetRequest(formData: FormData) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const request = {
-    household_id: householdId,
+    team_id: teamId,
     name: formData.get('name') as string,
     amount: parseFloat(formData.get('amount') as string) || 0,
     priority_category: formData.get('priority_category') as string,
@@ -113,7 +115,7 @@ export async function createBudgetRequest(formData: FormData) {
 
 export async function updateBudgetRequest(formData: FormData) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
   const id = formData.get('id') as string
 
   // Optional override for the created_at date — lets the user reorder bulk-added
@@ -138,7 +140,7 @@ export async function updateBudgetRequest(formData: FormData) {
     .from('budget_requests')
     .update(updates)
     .eq('id', id)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (error) throw new Error(`Failed to update budget request: ${error.message}`)
 
@@ -147,13 +149,13 @@ export async function updateBudgetRequest(formData: FormData) {
 
 export async function deleteBudgetRequest(id: string) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { error } = await supabase
     .from('budget_requests')
     .delete()
     .eq('id', id)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (error) throw new Error(`Failed to delete budget request: ${error.message}`)
 
@@ -162,13 +164,13 @@ export async function deleteBudgetRequest(id: string) {
 
 /** Upload a request image (file picker or camera) to Cloudflare R2; returns the public URL. */
 export async function uploadRequestImage(formData: FormData): Promise<string> {
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const file = formData.get('file') as File | null
   if (!file || file.size === 0) throw new Error('No file provided')
 
   const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
-  const key = `${householdId}/${crypto.randomUUID()}.${ext}`
+  const key = `${teamId}/${crypto.randomUUID()}.${ext}`
 
   await r2.send(
     new PutObjectCommand({
@@ -185,23 +187,23 @@ export async function uploadRequestImage(formData: FormData): Promise<string> {
 /** Quick status change from the card. */
 export async function setRequestStatus(id: string, status: string) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
   const { error } = await supabase
     .from('budget_requests')
     .update({ status, updated_at: new Date().toISOString() })
-    .eq('id', id).eq('household_id', householdId)
+    .eq('id', id).eq('team_id', teamId)
   if (error) throw new Error(`Failed to update status: ${error.message}`)
   revalidatePath('/requests')
 }
 
-/** The household's latest active period — used to offer "Allocate to {period}". */
+/** The team's latest active period — used to offer "Allocate to {period}". */
 export async function getActivePeriodForRequests() {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
   const { data } = await supabase
     .from('budget_periods')
     .select('id, period_name')
-    .eq('household_id', householdId).eq('status', 'active')
+    .eq('team_id', teamId).eq('status', 'active')
     .order('period_month', { ascending: false })
     .limit(1)
     .maybeSingle()
@@ -211,17 +213,17 @@ export async function getActivePeriodForRequests() {
 /** Drop a request into the active period's Extra (one-time) expenses, and mark it approved. */
 export async function allocateRequestToPeriod(requestId: string, periodId: string) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { data: req } = await supabase
     .from('budget_requests')
     .select('name, amount, priority_category, url')
-    .eq('id', requestId).eq('household_id', householdId).single()
+    .eq('id', requestId).eq('team_id', teamId).single()
   if (!req) throw new Error('Request not found')
 
   const { error } = await supabase.from('period_expenses').insert({
     period_id: periodId,
-    household_id: householdId,
+    team_id: teamId,
     base_item_id: null,
     name: req.name,
     default_amount: Number(req.amount) || 0,
@@ -235,7 +237,7 @@ export async function allocateRequestToPeriod(requestId: string, periodId: strin
   await supabase
     .from('budget_requests')
     .update({ status: 'approved', updated_at: new Date().toISOString() })
-    .eq('id', requestId).eq('household_id', householdId)
+    .eq('id', requestId).eq('team_id', teamId)
 
   revalidatePath('/requests')
   revalidatePath(`/periods/${periodId}`)
@@ -244,9 +246,9 @@ export async function allocateRequestToPeriod(requestId: string, periodId: strin
 /* ─── Public (no-login) family request submission ───────────────────── */
 
 /** Resolve a family slug → public-safe { id, name } (or null). */
-export async function getPublicHousehold(slug: string) {
+export async function getPublicTeam(slug: string) {
   const supabase = await createClient()
-  const { data } = await supabase.rpc('get_public_household', { p_slug: slug })
+  const { data } = await supabase.rpc('get_public_team', { p_slug: slug })
   const row = Array.isArray(data) ? data[0] : data
   return (row ?? null) as { id: string; name: string } | null
 }
@@ -266,7 +268,7 @@ export async function submitPublicRequest(formData: FormData) {
   if (error) throw new Error(error.message)
 }
 
-/** Anonymous image upload for the public form (no household scoping). */
+/** Anonymous image upload for the public form (no team scoping). */
 export async function uploadPublicRequestImage(formData: FormData): Promise<string> {
   const supabase = await createClient()
   const file = formData.get('file') as File | null
@@ -283,19 +285,19 @@ export async function uploadPublicRequestImage(formData: FormData): Promise<stri
 /** Settings: set the family name + derive a unique shareable slug. */
 export async function setFamilyName(formData: FormData) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
   const name = ((formData.get('name') as string) || '').trim() || 'My Family'
   let slug =
     name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'family'
 
   const { data: clash } = await supabase
-    .from('households').select('id').eq('slug', slug).neq('id', householdId).maybeSingle()
-  if (clash) slug = `${slug}-${householdId.slice(0, 4)}`
+    .schema('public').from('teams').select('id').eq('slug', slug).neq('id', teamId).maybeSingle()
+  if (clash) slug = `${slug}-${teamId.slice(0, 4)}`
 
   const { error } = await supabase
-    .from('households')
+    .schema('public').from('teams')
     .update({ name, slug, updated_at: new Date().toISOString() })
-    .eq('id', householdId)
+    .eq('id', teamId)
   if (error) throw new Error(`Failed to set family name: ${error.message}`)
 
   revalidatePath('/settings')
@@ -305,8 +307,8 @@ export async function setFamilyName(formData: FormData) {
 /** Settings: current family name + share slug. */
 export async function getFamilyShareInfo() {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
   const { data } = await supabase
-    .from('households').select('name, slug').eq('id', householdId).maybeSingle()
+    .schema('public').from('teams').select('name, slug').eq('id', teamId).maybeSingle()
   return (data ?? null) as { name: string; slug: string | null } | null
 }

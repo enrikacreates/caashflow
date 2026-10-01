@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { exportAllData, importData } from '@/app/actions/household'
-import { seedBaseBudgetDefaults, seedBudgetRequestDefaults } from '@/app/actions/household'
+import { exportAllData, importData } from '@/app/actions/team'
+import { seedBaseBudgetDefaults, seedBudgetRequestDefaults } from '@/app/actions/team'
 
 export default function DataManagement() {
   const [isPending, startTransition] = useTransition()

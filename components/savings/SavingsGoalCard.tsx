@@ -33,7 +33,7 @@ interface Props {
 }
 
 export default function SavingsGoalCard({ goal, onEdit, adjustments, onOptGoal, onOptAdjustment }: Props) {
-  const [isPending, startTransition] = useTransition()
+  const [, startTransition] = useTransition()
   const [amountInput, setAmountInput] = useState('')
   const [noteInput, setNoteInput] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -48,13 +48,15 @@ export default function SavingsGoalCard({ goal, onEdit, adjustments, onOptGoal, 
   const days = goal.target_date ? daysUntil(goal.target_date) : null
 
   const handleAdjust = () => {
+    // Empty input means this is a repeat tap after the fields were cleared.
+    if (!amountInput.trim()) return
     const amount = parseFloat(amountInput)
     if (isNaN(amount) || amount === 0) return setError('Enter a non-zero amount (use − to withdraw).')
     setError(null)
     const noteCopy = noteInput.trim() || null
     const ghost: SavingsGoalAdjustment = {
       id: `tmp-${Date.now()}`,
-      household_id: goal.household_id,
+      team_id: goal.team_id,
       savings_goal_id: goal.id,
       amount,
       note: noteCopy,
@@ -70,9 +72,8 @@ export default function SavingsGoalCard({ goal, onEdit, adjustments, onOptGoal, 
         const { exceedsMonthly, isNowAchieved } = await addSavingsAdjustment(goal.id, amount, noteCopy)
         if (isNowAchieved) await bigConfetti()
         else if (exceedsMonthly) await smallConfetti()
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to adjust balance.')
-        notifyError()
+      } catch {
+        notifyError('Could not save that entry. Please try again.')
       }
     })
   }
@@ -83,10 +84,7 @@ export default function SavingsGoalCard({ goal, onEdit, adjustments, onOptGoal, 
       onOptAdjustment({ kind: 'remove', id })
       if (adj) onOptGoal({ kind: 'amount', id: goal.id, delta: -adj.amount })
       try { await removeSavingsAdjustment(id) }
-      catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to remove entry.')
-        notifyError()
-      }
+      catch { notifyError('Could not remove that entry. Please try again.') }
     })
   }
 
@@ -99,9 +97,8 @@ export default function SavingsGoalCard({ goal, onEdit, adjustments, onOptGoal, 
       try {
         await markAchieved(goal.id)
         await bigConfetti()
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to mark as achieved.')
-        notifyError()
+      } catch {
+        notifyError('Could not mark as achieved. Please try again.')
       }
     })
   }
@@ -111,10 +108,7 @@ export default function SavingsGoalCard({ goal, onEdit, adjustments, onOptGoal, 
     startTransition(async () => {
       onOptGoal({ kind: 'delete', id: goal.id })
       try { await deleteSavingsGoal(goal.id) }
-      catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to delete.')
-        notifyError()
-      }
+      catch { notifyError('Could not delete goal. Please try again.') }
     })
   }
 
@@ -140,7 +134,6 @@ export default function SavingsGoalCard({ goal, onEdit, adjustments, onOptGoal, 
           </div>
           <button
             onClick={handleDelete}
-            disabled={isPending}
             className="text-caption text-text-muted hover:text-warning font-semibold transition-colors"
           >
             Remove
@@ -207,7 +200,6 @@ export default function SavingsGoalCard({ goal, onEdit, adjustments, onOptGoal, 
           </button>
           <button
             onClick={handleDelete}
-            disabled={isPending}
             className="text-caption text-text-muted hover:text-warning font-semibold transition-colors"
           >
             Delete
@@ -290,10 +282,10 @@ export default function SavingsGoalCard({ goal, onEdit, adjustments, onOptGoal, 
         />
         <button
           onClick={handleAdjust}
-          disabled={isPending || !amountInput}
+          disabled={!amountInput}
           className="bg-primary-teal text-text-inverse rounded-full px-4 py-2.5 text-caption font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity whitespace-nowrap"
         >
-          {isPending ? '…' : 'Add'}
+          Add
         </button>
       </div>
       <p className="text-[10px] text-text-muted mb-3 ml-1">Use a negative amount to record a withdrawal.</p>
@@ -309,15 +301,19 @@ export default function SavingsGoalCard({ goal, onEdit, adjustments, onOptGoal, 
                 <span className={`text-caption font-bold w-20 shrink-0 ${a.amount < 0 ? 'text-warning' : 'text-success'}`}>
                   {a.amount < 0 ? '−' : '+'}{formatCurrency(Math.abs(a.amount))}
                 </span>
-                <span className="flex-1 min-w-0 text-caption text-text-muted truncate">{a.note || '—'}</span>
-                <button
-                  onClick={() => handleRemoveAdjustment(a.id)}
-                  disabled={isPending}
-                  title="Undo this entry"
-                  className="shrink-0 text-text-muted hover:text-warning text-[10px] font-semibold disabled:opacity-50"
-                >
-                  ✕
-                </button>
+                <span className="flex-1 min-w-0 text-caption text-text-muted truncate">{a.note}</span>
+                {a.id.startsWith('tmp-') ? (
+                  // Not on the server yet, so there's nothing to undo.
+                  <span className="shrink-0 text-[10px] text-text-muted italic">Saving…</span>
+                ) : (
+                  <button
+                    onClick={() => handleRemoveAdjustment(a.id)}
+                    title="Undo this entry"
+                    className="shrink-0 text-text-muted hover:text-warning text-[10px] font-semibold disabled:opacity-50"
+                  >
+                    ✕
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -327,7 +323,6 @@ export default function SavingsGoalCard({ goal, onEdit, adjustments, onOptGoal, 
       {/* Mark as Achieved */}
       <button
         onClick={handleMarkAchieved}
-        disabled={isPending}
         className="w-full bg-pill-pink text-text-heading rounded-full px-5 py-3 text-label font-bold flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-50 transition-opacity"
       >
         <PartyPopper size={18} />

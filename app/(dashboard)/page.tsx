@@ -9,7 +9,8 @@ import { getSettings } from '@/app/actions/settings'
 import { getSavingsGoals } from '@/app/actions/savings'
 import { getDebts } from '@/app/actions/debts'
 import { getOwedAmount, formatCurrency, formatCurrencyShort } from '@/lib/utils'
-import { calculateDeductions, calculatePayNowTotal, calculateMonthlyEquivalent, calculatePeriodPaymentSummary } from '@/lib/calculations'
+import { calculatePayNowTotal, calculateMonthlyEquivalent, calculatePeriodPaymentSummary } from '@/lib/calculations'
+import { summarizeSession } from '@/lib/sessions'
 import { CalendarClock, PiggyBank, Hammer, ArrowUpRight, ArrowDownRight } from 'lucide-react'
 
 export default async function DashboardPage({
@@ -60,9 +61,10 @@ export default async function DashboardPage({
     const detail = await getPeriodDetail(selectedPeriod.id)
     payNowTotal = calculatePayNowTotal(detail.expenses)
     paidTotal = calculatePeriodPaymentSummary(detail.expenses).paid
-    const deductions = calculateDeductions(selectedPeriod.income_amount, settings, selectedPeriod.deduction_overrides)
-    const adjustment = (detail.adjustments ?? []).reduce((sum, a) => sum + (a.amount || 0), 0)
-    incomeAfterDeductions = deductions.incomeAfterDeductions
+    // Month totals = every session's income net of its own per-income deductions
+    const sessionTotals = detail.sessions.map((s) => summarizeSession(s, detail, settings))
+    const adjustment = sessionTotals.reduce((sum, t) => sum + t.adjustment, 0)
+    incomeAfterDeductions = sessionTotals.reduce((sum, t) => sum + t.deductions.incomeAfterDeductions, 0)
     const expenseOwed = (e: typeof detail.expenses[number]) =>
       e.is_split ? (e.payments ?? []).reduce((s: number, p: { amount: number }) => s + p.amount, 0) : getOwedAmount(e)
     totalExpenses = detail.expenses.reduce((sum, e) => sum + expenseOwed(e), 0)
@@ -70,7 +72,7 @@ export default async function DashboardPage({
     const clearedExpenseTotal = detail.expenses.reduce((sum, e) => (e.is_complete ? sum + expenseOwed(e) : sum), 0)
     // Amount Left = unspent income capacity. Cleared dollars are locked (already left the
     // account), so they stay subtracted alongside the committed pay-now total.
-    amountLeft = deductions.incomeAfterDeductions + adjustment - payNowTotal - clearedExpenseTotal
+    amountLeft = incomeAfterDeductions + adjustment - payNowTotal - clearedExpenseTotal
     stillToFund = Math.max(0, totalExpenses - payNowTotal - clearedExpenseTotal)
     // Soonest unpaid bills with a due day
     nextBills = detail.expenses

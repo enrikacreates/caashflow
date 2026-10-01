@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useOptimistic, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { quickAddRequest, allocateRequestToPeriod } from '@/app/actions/requests'
 import { formatCurrency, getPriorityColor } from '@/lib/utils'
+import { notifyError } from '@/lib/toast'
 import RequestFormModal from '@/components/requests/RequestFormModal'
 import type { BudgetRequest, RequestStatus, PriorityCategoryRecord } from '@/lib/types'
 
@@ -30,11 +31,27 @@ const STATUS_PILL: Record<RequestStatus, string> = {
 }
 
 export default function PeriodRequestsPanel({
-  requests, periodId, isLocked, categories,
-}: { requests: BudgetRequest[]; periodId: string; isLocked: boolean; categories: PriorityCategoryRecord[] }) {
+  requests: serverRequests, periodId, isLocked, categories, onAllocated,
+}: {
+  requests: BudgetRequest[]
+  periodId: string
+  isLocked: boolean
+  categories: PriorityCategoryRecord[]
+  // Lets the budget show the new expense row before the server confirms it
+  onAllocated?: (request: BudgetRequest) => void
+}) {
   const router = useRouter()
   const [open, setOpen] = useState(false) // default collapsed
-  const [isPending, startTransition] = useTransition()
+  const [, startTransition] = useTransition()
+  // New requests and "added to budget" status show instantly; the server reconciles
+  const [requests, applyRequestOpt] = useOptimistic(
+    serverRequests,
+    (state: BudgetRequest[], u: { kind: 'add'; row: BudgetRequest } | { kind: 'approve'; id: string }) =>
+      u.kind === 'add' ? [...state, u.row] : state.map((r) => (r.id === u.id ? { ...r, status: 'approved' } : r))
+  )
+  // Requests already pulled into this budget during this visit — a second tap can't add it twice
+  const [allocated, setAllocated] = useState<Set<string>>(new Set())
+  const allocating = useRef(new Set<string>())
   const [name, setName] = useState('')
   const [amount, setAmount] = useState('')
   const [editing, setEditing] = useState<BudgetRequest | null>(null)
@@ -84,19 +101,50 @@ export default function PeriodRequestsPanel({
     const n = name.trim()
     if (!n) return
     const amt = parseFloat(amount) || 0
+    // Clear the inputs first so a double tap has nothing left to add
+    setName('')
+    setAmount('')
     startTransition(async () => {
-      await quickAddRequest(n, null, amt)
-      setName('')
-      setAmount('')
-      router.refresh()
+      applyRequestOpt({
+        kind: 'add',
+        row: {
+          id: `tmp-${Date.now()}`,
+          team_id: '',
+          name: n,
+          amount: amt,
+          requested_for: null,
+          priority_category: 'P7: UpNext',
+          status: 'requested',
+          notes: null,
+          url: null,
+          image_url: null,
+          tags: [],
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      })
+      try { await quickAddRequest(n, null, amt) }
+      catch { notifyError('Could not add that request. Please try again.') }
     })
   }
 
-  const allocate = (id: string) =>
+  const allocate = (r: BudgetRequest) => {
+    if (allocating.current.has(r.id)) return
+    allocating.current.add(r.id)
+    setAllocated((prev) => new Set(prev).add(r.id))
     startTransition(async () => {
-      await allocateRequestToPeriod(id, periodId)
-      router.refresh()
+      applyRequestOpt({ kind: 'approve', id: r.id })
+      onAllocated?.(r)
+      try {
+        await allocateRequestToPeriod(r.id, periodId)
+      } catch {
+        setAllocated((prev) => { const next = new Set(prev); next.delete(r.id); return next })
+        notifyError('Could not add that request to the budget. Please try again.')
+      } finally {
+        allocating.current.delete(r.id)
+      }
     })
+  }
 
   return (
     <div className="bg-bg-white rounded-lg shadow-card p-6">
@@ -141,7 +189,7 @@ export default function PeriodRequestsPanel({
               <button
                 type="button"
                 onClick={add}
-                disabled={isPending || !name.trim()}
+                disabled={!name.trim()}
                 className="bg-primary-teal text-text-inverse rounded-full px-4 py-1.5 text-caption font-bold hover:opacity-90 disabled:opacity-50 transition-opacity"
               >
                 Add
@@ -221,17 +269,20 @@ export default function PeriodRequestsPanel({
                         <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${STATUS_PILL[r.status]}`}>{STATUS_LABEL[r.status]}</span>
                       </div>
                       <div className="w-32 shrink-0 text-right">
-                        {!isLocked && (
+                        {!isLocked && (r.id.startsWith('tmp-') ? (
+                          <span className="text-caption text-text-muted italic">Saving…</span>
+                        ) : allocated.has(r.id) ? (
+                          <span className="text-caption font-semibold text-success">✓ Added</span>
+                        ) : (
                           <button
                             type="button"
-                            onClick={() => allocate(r.id)}
-                            disabled={isPending}
+                            onClick={() => allocate(r)}
                             title="Add to this budget as an extra expense"
-                            className="text-caption font-semibold text-primary hover:underline disabled:opacity-50"
+                            className="text-caption font-semibold text-primary hover:underline"
                           >
                             + Add to budget
                           </button>
-                        )}
+                        ))}
                       </div>
                     </div>
                   ))}

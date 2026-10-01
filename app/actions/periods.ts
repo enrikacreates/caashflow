@@ -1,22 +1,22 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { getUserHouseholdId } from '@/lib/supabase/helpers'
+import { getUserTeamId } from '@/lib/supabase/helpers'
 import { revalidatePath } from 'next/cache'
 
 // ── Period CRUD ─────────────────────────────────────────────────────────────
 // Period-level operations only. For expense/income/invoice actions within a
-// period, see period-expenses.ts. For data export/import, see household.ts.
+// period, see period-expenses.ts. For data export/import, see team.ts.
 
 /** Manual income summed by "YYYY-MM" (a period's month), excluding rows flagged out of reports. Feeds the income chart. */
 export async function getMonthlyManualIncome(): Promise<Record<string, number>> {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { data, error } = await supabase
     .from('period_manual_income')
     .select('amount, budget_periods ( period_month )')
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
     .eq('exclude_from_reports', false)
 
   if (error) throw new Error(`Failed to fetch manual income: ${error.message}`)
@@ -33,12 +33,12 @@ export async function getMonthlyManualIncome(): Promise<Record<string, number>> 
 
 export async function getBudgetPeriods() {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { data, error } = await supabase
     .from('budget_periods')
     .select('*')
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
     .order('created_at', { ascending: true })
 
   if (error) throw new Error(`Failed to fetch budget periods: ${error.message}`)
@@ -47,7 +47,7 @@ export async function getBudgetPeriods() {
 
 export async function createBudgetPeriod(formData: FormData) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const periodName = formData.get('period_name') as string
   const periodMonthRaw = formData.get('period_month') as string | null
@@ -62,7 +62,7 @@ export async function createBudgetPeriod(formData: FormData) {
   const { data: period, error: periodError } = await supabase
     .from('budget_periods')
     .insert({
-      household_id: householdId,
+      team_id: teamId,
       period_name: periodName,
       period_month: periodMonth,
       kind,
@@ -84,7 +84,7 @@ export async function createBudgetPeriod(formData: FormData) {
   const { data: baseItems, error: baseError } = await supabase
     .from('base_budget_items')
     .select('*')
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
     .order('sort_order', { ascending: true })
 
   if (baseError) throw new Error(`Failed to fetch base budget items: ${baseError.message}`)
@@ -92,7 +92,7 @@ export async function createBudgetPeriod(formData: FormData) {
   if (baseItems && baseItems.length > 0) {
     const periodExpenses = baseItems.map((item, index) => ({
       period_id: period.id,
-      household_id: householdId,
+      team_id: teamId,
       base_item_id: item.id,
       name: item.name,
       default_amount: item.default_amount,
@@ -138,7 +138,7 @@ export async function updateBudgetPeriod(
   }
 ) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   // Event budgets aren't month-anchored — clear the month if converting to event.
   const periodMonth = fields.kind === 'event'
@@ -159,7 +159,7 @@ export async function updateBudgetPeriod(
     .from('budget_periods')
     .update(updates)
     .eq('id', id)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
   if (error) throw new Error(`Failed to update budget: ${error.message}`)
 
   revalidatePath('/periods')
@@ -173,13 +173,13 @@ export async function updateBudgetPeriod(
  */
 export async function setPeriodApplyDeductions(id: string, value: boolean) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { error } = await supabase
     .from('budget_periods')
     .update({ apply_deductions: value, updated_at: new Date().toISOString() })
     .eq('id', id)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (error) throw new Error(`Failed to update deductions setting: ${error.message}`)
 
@@ -190,13 +190,13 @@ export async function setPeriodApplyDeductions(id: string, value: boolean) {
 
 export async function completePeriod(id: string) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { error } = await supabase
     .from('budget_periods')
     .update({ status: 'complete', completed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
     .eq('id', id)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (error) throw new Error(`Failed to complete period: ${error.message}`)
 
@@ -207,13 +207,13 @@ export async function completePeriod(id: string) {
 
 export async function reopenPeriod(id: string) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { error } = await supabase
     .from('budget_periods')
     .update({ status: 'active', completed_at: null, updated_at: new Date().toISOString() })
     .eq('id', id)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (error) throw new Error(`Failed to reopen period: ${error.message}`)
 
@@ -224,13 +224,13 @@ export async function reopenPeriod(id: string) {
 
 export async function deleteBudgetPeriod(id: string) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { error } = await supabase
     .from('budget_periods')
     .delete()
     .eq('id', id)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (error) throw new Error(`Failed to delete budget period: ${error.message}`)
 
@@ -239,196 +239,116 @@ export async function deleteBudgetPeriod(id: string) {
 
 export async function getPeriodDetail(periodId: string) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
-  const { data: period, error: periodError } = await supabase
-    .from('budget_periods')
-    .select('*')
-    .eq('id', periodId)
-    .eq('household_id', householdId)
-    .single()
+  // Everything the budget page needs, fetched in parallel (was ~15 sequential round trips)
+  const [
+    periodRes,
+    sessionsRes,
+    expensesRes,
+    linkedRes,
+    manualRes,
+    linkableRes,
+    settingsRes,
+    adjustmentsRes,
+    accountsRes,
+    accountTransfersRes,
+    savingsGoalsRes,
+    savingsAllocationsRes,
+    otherPeriodsRes,
+    expenseTransfersRes,
+  ] = await Promise.all([
+    supabase.from('budget_periods').select('*').eq('id', periodId).eq('team_id', teamId).single(),
+    // Budgeting sessions (tabs), oldest first
+    supabase.from('budget_sessions').select('*').eq('period_id', periodId).eq('team_id', teamId).order('seq', { ascending: true }),
+    supabase.from('period_expenses').select('*').eq('period_id', periodId).eq('team_id', teamId).order('sort_order', { ascending: true }),
+    supabase.from('period_linked_invoices').select('*, invoices(*)').eq('period_id', periodId),
+    supabase.from('period_manual_income').select('*').eq('period_id', periodId).eq('team_id', teamId).order('created_at', { ascending: true }),
+    // Any logged income is linkable — projected/sent rows get promoted to received on link.
+    supabase.from('invoices').select('*').eq('team_id', teamId).order('created_at', { ascending: false }),
+    supabase.from('settings').select('*').eq('team_id', teamId).limit(1).single(),
+    // Income adjustments ledger (fees, pre-budget cash spends, etc.)
+    supabase.from('period_adjustments').select('*').eq('period_id', periodId).eq('team_id', teamId)
+      .order('sort_order', { ascending: true }).order('created_at', { ascending: true }),
+    // Accounts for the one-time expense add form
+    supabase.from('accounts').select('*').eq('team_id', teamId).order('sort_order', { ascending: true }),
+    // Which account transfers / cash withdrawals each session has marked done
+    supabase.from('period_account_transfers').select('session_id, account_name, transferred, cash_done')
+      .eq('period_id', periodId).eq('team_id', teamId),
+    // Active (non-achieved) savings goals
+    supabase.from('savings_goals').select('*').eq('team_id', teamId).eq('is_achieved', false)
+      .order('sort_order', { ascending: true }).order('created_at', { ascending: true }),
+    supabase.from('period_savings_allocations').select('*').eq('period_id', periodId).eq('team_id', teamId),
+    // Most recent other period — its allocations are the ghost values
+    supabase.from('budget_periods').select('id').eq('team_id', teamId).neq('id', periodId)
+      .order('created_at', { ascending: false }).limit(1),
+    // Fund transfers between expense lines (zero-sum reallocations) — for history + undo
+    supabase.from('period_expense_transfers').select('*').eq('period_id', periodId).eq('team_id', teamId)
+      .order('created_at', { ascending: false }),
+  ])
 
-  if (periodError) throw new Error(`Failed to fetch period: ${periodError.message}`)
+  if (periodRes.error) throw new Error(`Failed to fetch period: ${periodRes.error.message}`)
+  if (sessionsRes.error) throw new Error(`Failed to fetch sessions: ${sessionsRes.error.message}`)
+  if (expensesRes.error) throw new Error(`Failed to fetch period expenses: ${expensesRes.error.message}`)
+  if (linkedRes.error) throw new Error(`Failed to fetch linked invoices: ${linkedRes.error.message}`)
+  if (manualRes.error) throw new Error(`Failed to fetch manual income: ${manualRes.error.message}`)
+  if (settingsRes.error) throw new Error(`Failed to fetch settings: ${settingsRes.error.message}`)
 
-  const { data: expenses, error: expensesError } = await supabase
-    .from('period_expenses')
-    .select('*')
-    .eq('period_id', periodId)
-    .eq('household_id', householdId)
-    .order('sort_order', { ascending: true })
+  const expenses = expensesRes.data ?? []
+  const expenseIds = expenses.map((e) => e.id)
+  const lastPeriodId = otherPeriodsRes.data?.[0]?.id as string | undefined
 
-  if (expensesError) throw new Error(`Failed to fetch period expenses: ${expensesError.message}`)
+  // Second wave: rows keyed off the first wave's results
+  const [paymentsRes, spendsRes, lastAllocsRes] = await Promise.all([
+    expenseIds.length
+      ? supabase.from('period_expense_payments').select('*').in('period_expense_id', expenseIds).order('sort_order', { ascending: true })
+      : Promise.resolve({ data: [], error: null }),
+    expenseIds.length
+      ? supabase.from('period_expense_adjustments').select('*').in('period_expense_id', expenseIds).order('sort_order', { ascending: true })
+      : Promise.resolve({ data: [], error: null }),
+    lastPeriodId
+      ? supabase.from('period_savings_allocations').select('*').eq('period_id', lastPeriodId).eq('team_id', teamId)
+      : Promise.resolve({ data: [], error: null }),
+  ])
 
-  // Sub-payments for split expenses — attach to each expense
-  const expenseIds = (expenses ?? []).map((e) => e.id)
+  if (paymentsRes.error) throw new Error(`Failed to fetch expense payments: ${paymentsRes.error.message}`)
+  if (spendsRes.error) throw new Error(`Failed to fetch expense spends: ${spendsRes.error.message}`)
+
+  // Sub-payments for split expenses — attach to each expense; spend-ledger entries attach
+  // whole-line ones to the expense, installment ones to the payment.
   const paymentsByExpense: Record<string, Record<string, unknown>[]> = {}
   const adjustmentsByExpense: Record<string, unknown[]> = {}
   const adjustmentsByPayment: Record<string, unknown[]> = {}
-  if (expenseIds.length > 0) {
-    const { data: payments, error: paymentsError } = await supabase
-      .from('period_expense_payments')
-      .select('*')
-      .in('period_expense_id', expenseIds)
-      .order('sort_order', { ascending: true })
-
-    if (paymentsError) throw new Error(`Failed to fetch expense payments: ${paymentsError.message}`)
-
-    for (const p of payments ?? []) {
-      ;(paymentsByExpense[p.period_expense_id] ??= []).push(p)
-    }
-
-    // Spend-ledger entries — attach whole-line ones to the expense, installment ones to the payment.
-    const { data: adjustments, error: adjustmentsError } = await supabase
-      .from('period_expense_adjustments')
-      .select('*')
-      .in('period_expense_id', expenseIds)
-      .order('sort_order', { ascending: true })
-
-    if (adjustmentsError) throw new Error(`Failed to fetch expense spends: ${adjustmentsError.message}`)
-
-    for (const a of adjustments ?? []) {
-      ;(adjustmentsByExpense[a.period_expense_id] ??= []).push(a)
-      if (a.period_expense_payment_id) (adjustmentsByPayment[a.period_expense_payment_id] ??= []).push(a)
-    }
-    // Attach each installment's spends to it
-    for (const list of Object.values(paymentsByExpense)) {
-      for (const p of list) p.adjustments = adjustmentsByPayment[p.id as string] ?? []
-    }
+  for (const p of paymentsRes.data ?? []) {
+    ;(paymentsByExpense[p.period_expense_id] ??= []).push(p)
   }
-  const expensesWithPayments = (expenses ?? []).map((e) => ({
+  for (const a of spendsRes.data ?? []) {
+    ;(adjustmentsByExpense[a.period_expense_id] ??= []).push(a)
+    if (a.period_expense_payment_id) (adjustmentsByPayment[a.period_expense_payment_id] ??= []).push(a)
+  }
+  for (const list of Object.values(paymentsByExpense)) {
+    for (const p of list) p.adjustments = adjustmentsByPayment[p.id as string] ?? []
+  }
+  const expensesWithPayments = expenses.map((e) => ({
     ...e,
     payments: paymentsByExpense[e.id] ?? [],
     adjustments: adjustmentsByExpense[e.id] ?? [],
   }))
 
-  const { data: linkedInvoices, error: linkedError } = await supabase
-    .from('period_linked_invoices')
-    .select('*, invoices(*)')
-    .eq('period_id', periodId)
-
-  if (linkedError) throw new Error(`Failed to fetch linked invoices: ${linkedError.message}`)
-
-  const { data: manualIncome, error: incomeError } = await supabase
-    .from('period_manual_income')
-    .select('*')
-    .eq('period_id', periodId)
-    .eq('household_id', householdId)
-    .order('created_at', { ascending: true })
-
-  if (incomeError) throw new Error(`Failed to fetch manual income: ${incomeError.message}`)
-
-  // Any logged income is linkable — projected/sent rows get promoted to received on link.
-  const { data: linkableInvoices } = await supabase
-    .from('invoices')
-    .select('*')
-    .eq('household_id', householdId)
-    .order('created_at', { ascending: false })
-
-  const { data: settings, error: settingsError } = await supabase
-    .from('settings')
-    .select('*')
-    .eq('household_id', householdId)
-    .limit(1)
-    .single()
-
-  if (settingsError) throw new Error(`Failed to fetch settings: ${settingsError.message}`)
-
-  // Deduction contributions logged as income was settled (the ledger)
-  const { data: deductionContributions } = await supabase
-    .from('period_deduction_contributions')
-    .select('*')
-    .eq('period_id', periodId)
-    .eq('household_id', householdId)
-    .order('created_at', { ascending: true })
-
-  // Income adjustments ledger (fees, pre-budget cash spends, etc.)
-  const { data: adjustments } = await supabase
-    .from('period_adjustments')
-    .select('*')
-    .eq('period_id', periodId)
-    .eq('household_id', householdId)
-    .order('sort_order', { ascending: true })
-    .order('created_at', { ascending: true })
-
-  // Accounts for the one-time expense add form
-  const { data: accounts } = await supabase
-    .from('accounts')
-    .select('*')
-    .eq('household_id', householdId)
-    .order('sort_order', { ascending: true })
-
-  // Which account transfers / cash withdrawals have been marked done this period
-  const { data: accountTransfers } = await supabase
-    .from('period_account_transfers')
-    .select('account_name, transferred, cash_done')
-    .eq('period_id', periodId)
-    .eq('household_id', householdId)
-  const accountTransfersDone = (accountTransfers ?? [])
-    .filter((t) => t.transferred)
-    .map((t) => t.account_name as string)
-  const accountsCashDone = (accountTransfers ?? [])
-    .filter((t) => t.cash_done)
-    .map((t) => t.account_name as string)
-
-  // Fetch active (non-achieved) savings goals
-  const { data: savingsGoals } = await supabase
-    .from('savings_goals')
-    .select('*')
-    .eq('household_id', householdId)
-    .eq('is_achieved', false)
-    .order('sort_order', { ascending: true })
-    .order('created_at', { ascending: true })
-
-  // Fetch this period's savings allocations
-  const { data: savingsAllocations } = await supabase
-    .from('period_savings_allocations')
-    .select('*')
-    .eq('period_id', periodId)
-    .eq('household_id', householdId)
-
-  // Fetch last period's allocations for ghost values
-  let lastPeriodAllocations: typeof savingsAllocations = []
-  const { data: otherPeriods } = await supabase
-    .from('budget_periods')
-    .select('id')
-    .eq('household_id', householdId)
-    .neq('id', periodId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-
-  if (otherPeriods && otherPeriods.length > 0) {
-    const { data: lastAllocs } = await supabase
-      .from('period_savings_allocations')
-      .select('*')
-      .eq('period_id', otherPeriods[0].id)
-      .eq('household_id', householdId)
-
-    lastPeriodAllocations = lastAllocs || []
-  }
-
-  // Fund transfers between expense lines (zero-sum reallocations) — for history + undo
-  const { data: expenseTransfers } = await supabase
-    .from('period_expense_transfers')
-    .select('*')
-    .eq('period_id', periodId)
-    .eq('household_id', householdId)
-    .order('created_at', { ascending: false })
-
   return {
-    period,
+    period: periodRes.data,
+    sessions: sessionsRes.data ?? [],
     expenses: expensesWithPayments,
-    linkedInvoices: linkedInvoices || [],
-    manualIncome: manualIncome || [],
-    linkableInvoices: linkableInvoices || [],
-    settings,
-    accounts: accounts || [],
-    deductionContributions: deductionContributions || [],
-    adjustments: adjustments || [],
-    expenseTransfers: expenseTransfers || [],
-    savingsGoals: savingsGoals || [],
-    savingsAllocations: savingsAllocations || [],
-    lastPeriodAllocations: lastPeriodAllocations || [],
-    accountTransfersDone,
-    accountsCashDone,
+    linkedInvoices: linkedRes.data ?? [],
+    manualIncome: manualRes.data ?? [],
+    linkableInvoices: linkableRes.data ?? [],
+    settings: settingsRes.data,
+    accounts: accountsRes.data ?? [],
+    adjustments: adjustmentsRes.data ?? [],
+    expenseTransfers: expenseTransfersRes.data ?? [],
+    savingsGoals: savingsGoalsRes.data ?? [],
+    savingsAllocations: savingsAllocationsRes.data ?? [],
+    lastPeriodAllocations: lastAllocsRes.data ?? [],
+    accountTransfers: accountTransfersRes.data ?? [],
   }
 }

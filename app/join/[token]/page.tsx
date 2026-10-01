@@ -1,4 +1,4 @@
-import { getInviteDetails } from '@/app/actions/household'
+import { getInviteDetails } from '@/app/actions/team'
 import Link from 'next/link'
 
 export default async function JoinPage({ params }: { params: Promise<{ token: string }> }) {
@@ -18,7 +18,7 @@ export default async function JoinPage({ params }: { params: Promise<{ token: st
               Invalid Invite
             </h2>
             <p className="text-muted text-sm mb-6">
-              This invite link is invalid, already used, or has expired. Ask the household owner to generate a new one.
+              This invite link is invalid, already used, or has expired. Ask the team owner to generate a new one.
             </p>
             <Link
               href="/login"
@@ -53,10 +53,10 @@ export default async function JoinPage({ params }: { params: Promise<{ token: st
             You&apos;ve been invited to join
           </p>
           <p className="text-lg font-black text-ink mb-6">
-            {invite.householdName}
+            {invite.teamName}
           </p>
           <p className="text-xs text-muted mb-8">
-            Create an account to accept this invite and start managing your household budget together.
+            Create an account to accept this invite and start managing your budget together.
           </p>
 
           <Link

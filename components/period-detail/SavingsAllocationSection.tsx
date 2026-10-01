@@ -74,7 +74,7 @@ export default function SavingsAllocationSection({
     return {
       id: existing?.id ?? '',
       period_id: periodId,
-      household_id: '',
+      team_id: '',
       savings_goal_id: goalId,
       amount,
       contributed: existing?.contributed ?? 0,

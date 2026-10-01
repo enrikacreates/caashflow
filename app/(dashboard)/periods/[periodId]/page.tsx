@@ -1,16 +1,19 @@
 import { getPeriodDetail, getBudgetPeriods } from '@/app/actions/periods'
 import { getPriorityCategories } from '@/app/actions/settings'
 import { getBudgetRequests } from '@/app/actions/requests'
-import PeriodDetailClient from '@/components/period-detail/PeriodDetailClient'
+import PeriodSessions from '@/components/period-detail/PeriodSessions'
 import PeriodPicker from '@/components/period-detail/PeriodPicker'
 import NewBudgetButton from '@/components/dashboard/NewBudgetButton'
 
 export default async function PeriodDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ periodId: string }>
+  searchParams: Promise<{ s?: string }>
 }) {
   const { periodId } = await params
+  const { s: initialTab } = await searchParams
   const [detail, categories, requests, allPeriods] = await Promise.all([
     getPeriodDetail(periodId),
     getPriorityCategories(),
@@ -31,15 +34,15 @@ export default async function PeriodDetailPage({
         </div>
         <NewBudgetButton />
       </div>
-      <PeriodDetailClient
+      <PeriodSessions
         period={detail.period}
+        sessions={detail.sessions}
         expenses={detail.expenses}
         linkedInvoices={detail.linkedInvoices}
         manualIncome={detail.manualIncome}
         linkableInvoices={detail.linkableInvoices}
         settings={detail.settings}
         accounts={detail.accounts}
-        deductionContributions={detail.deductionContributions}
         adjustments={detail.adjustments}
         expenseTransfers={detail.expenseTransfers ?? []}
         categories={categories ?? []}
@@ -47,8 +50,8 @@ export default async function PeriodDetailPage({
         savingsAllocations={detail.savingsAllocations}
         lastPeriodAllocations={detail.lastPeriodAllocations}
         requests={requests ?? []}
-        accountTransfersDone={detail.accountTransfersDone ?? []}
-        accountsCashDone={detail.accountsCashDone ?? []}
+        accountTransfers={detail.accountTransfers}
+        initialTab={initialTab}
       />
     </div>
   )

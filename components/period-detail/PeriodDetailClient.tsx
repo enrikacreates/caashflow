@@ -10,13 +10,13 @@ import {
   unlinkInvoiceFromPeriod,
   addManualIncome,
   removeManualIncome,
-  recalculatePeriodIncome,
+  setIncomeType,
+  setIncomeDeduction,
   toggleExpenseSplit,
   toggleExpenseOverdue,
   setExpenseFunded,
   setExpenseCleared,
   bulkMarkPaid,
-  settleAndResetPeriod,
   clearAllPayNow,
   addExpensePayment,
   updateExpensePayment,
@@ -27,9 +27,6 @@ import {
   transferFunds,
   uploadReceiptImage,
   extractReceiptTotal,
-  toggleManualIncomeDone,
-  setManualIncomeExcluded,
-  toggleLinkedInvoiceDone,
   addAdjustment,
   removeAdjustment,
   addOneTimeExpense,
@@ -39,20 +36,23 @@ import {
   setDeductionPaid,
   setDeductionCash,
 } from '@/app/actions/period-expenses'
-import { completePeriod, reopenPeriod, setPeriodApplyDeductions } from '@/app/actions/periods'
 import { smallConfetti, bigConfetti } from '@/lib/confetti'
 import { notifyError } from '@/lib/toast'
 import { formatCurrency, formatDate, getOwedAmount, getPriorityPill } from '@/lib/utils'
 import BudgetSummaryBar from '@/components/dashboard/BudgetSummaryBar'
-import { calculateDeductions, calculatePayNowTotal, calculateAccountTransferDetail, getDeductionAccountAllocations, getBudgetedAmount, isFullyPaid, calculatePeriodPaymentSummary, getSpentSoFar } from '@/lib/calculations'
+import { calculateDeductions, getDeductionBases, DEDUCTION_KEYS, calculatePayNowTotal, calculateAccountTransferDetail, getDeductionAccountAllocations, getBudgetedAmount, isFullyPaid, calculatePeriodPaymentSummary, getSpentSoFar } from '@/lib/calculations'
 import type { DeductionMode } from '@/lib/calculations'
 import SavingsAllocationSection from '@/components/period-detail/SavingsAllocationSection'
 import PeriodRequestsPanel from '@/components/period-detail/PeriodRequestsPanel'
 import PeriodExpenseEditModal from '@/components/period-detail/PeriodExpenseEditModal'
 import MathInput from '@/components/ui/MathInput'
 import RecentActivity from '@/components/period-detail/RecentActivity'
+import type { LinkedInvoiceRow } from '@/lib/sessions'
 import type {
   BudgetPeriod,
+  BudgetSession,
+  DeductionKey,
+  IncomeType,
   PeriodExpense,
   PeriodExpensePayment,
   PeriodExpenseAdjustment,
@@ -64,7 +64,6 @@ import type {
   PriorityCategoryRecord,
   SavingsGoal,
   PeriodSavingsAllocation,
-  PeriodDeductionContribution,
   PeriodAdjustment,
   Account,
   BudgetRequest,
@@ -88,23 +87,29 @@ function priorityCode(name: string): string {
 // Collapsible period sections, in render order — drives the Expand/Collapse-all toggle
 const SECTION_KEYS = ['transfers', 'income', 'deductions', 'savings', 'expenses', 'extra'] as const
 
-interface LinkedInvoiceRow {
-  id: string
-  period_id: string
-  invoice_id: string
-  is_done: boolean
-  invoices: Invoice
+const DEDUCTION_LABELS: Record<DeductionKey, string> = {
+  tithe: 'Tithe', savings: 'Savings', tax: 'Tax', profit: 'Profit', fun_money: 'Giving',
 }
+const INCOME_TYPES: { value: IncomeType; label: string }[] = [
+  { value: 'paycheck', label: 'Paycheck' },
+  { value: 'gift', label: 'Gift' },
+  { value: 'refund', label: 'Refund' },
+]
 
 interface Props {
   period: BudgetPeriod
+  // The session tab being shown; everything below is already scoped to it
+  session: BudgetSession
+  // Newest session: where newly funded bills go, and the only tab showing the unfunded pool
+  isNewestSession: boolean
+  // Every invoice linked anywhere in this month (an invoice can only be linked once)
+  monthLinkedInvoiceIds: string[]
   expenses: PeriodExpense[]
   linkedInvoices: LinkedInvoiceRow[]
   manualIncome: PeriodManualIncome[]
   linkableInvoices: Invoice[]
   settings: Settings
   accounts: Account[]
-  deductionContributions: PeriodDeductionContribution[]
   adjustments: PeriodAdjustment[]
   expenseTransfers: PeriodExpenseTransfer[]
   categories: PriorityCategoryRecord[]
@@ -118,13 +123,15 @@ interface Props {
 
 export default function PeriodDetailClient({
   period,
+  session,
+  isNewestSession,
+  monthLinkedInvoiceIds,
   expenses,
   linkedInvoices,
   manualIncome,
   linkableInvoices,
   settings,
   accounts,
-  deductionContributions,
   adjustments,
   expenseTransfers,
   categories,
@@ -160,6 +167,8 @@ export default function PeriodDetailClient({
   const allCollapsed = SECTION_KEYS.every((k) => collapsed[k])
   const setAllSections = (value: boolean) => setCollapsed(Object.fromEntries(SECTION_KEYS.map((k) => [k, value])))
   const debounceTimers = useRef<Record<string, NodeJS.Timeout>>({})
+  // Invoices mid-link — guards against a double tap linking twice
+  const pendingLinks = useRef(new Set<string>())
   const summaryCardsRef = useRef<HTMLDivElement>(null)
   const [showStickyBar, setShowStickyBar] = useState(false)
 
@@ -176,6 +185,7 @@ export default function PeriodDetailClient({
       state: PeriodExpense[],
       u:
         | { kind: 'field'; id: string; field: string; value: boolean | number | null }
+        | { kind: 'patch'; id: string; patch: Partial<PeriodExpense> }
         | { kind: 'payment'; id: string; field: string; value: boolean }
         | { kind: 'remove'; id: string }
         | { kind: 'add'; expense: PeriodExpense }
@@ -187,6 +197,7 @@ export default function PeriodDetailClient({
       if (u.kind === 'remove') return state.filter((e) => e.id !== u.id)
       if (u.kind === 'add') return [...state, u.expense]
       if (u.kind === 'field') return state.map((e) => (e.id === u.id ? { ...e, [u.field]: u.value } : e))
+      if (u.kind === 'patch') return state.map((e) => (e.id === u.id ? { ...e, ...u.patch } : e))
       if (u.kind === 'payment') {
         return state.map((e) => ({
           ...e,
@@ -232,16 +243,17 @@ export default function PeriodDetailClient({
       })
     }
   )
-  const [optLinked, applyLinkedOpt] = useOptimistic(
-    linkedInvoices,
-    (state: LinkedInvoiceRow[], u: { id: string; value: boolean }) =>
-      state.map((li) => (li.id === u.id ? { ...li, is_done: u.value } : li))
-  )
-  const [optManual, applyManualOpt] = useOptimistic(
-    manualIncome,
-    (state: PeriodManualIncome[], u: { id: string } & Partial<PeriodManualIncome>) =>
-      state.map((mi) => (mi.id === u.id ? { ...mi, ...u } : mi))
-  )
+  // Income rows: add / remove / patch land instantly; the server reconciles on revalidate.
+  type RowOpt<T> = ({ kind: 'add'; row: T } | { kind: 'remove'; id: string } | ({ kind?: 'patch'; id: string } & Partial<T>))
+  const rowReducer = <T extends { id: string }>(state: T[], u: RowOpt<T>): T[] => {
+    if (u.kind === 'add') return [...state, u.row]
+    if (u.kind === 'remove') return state.filter((r) => r.id !== u.id)
+    const patch: Partial<T> & { kind?: string } = { ...u }
+    delete patch.kind
+    return state.map((r) => (r.id === u.id ? { ...r, ...patch } : r))
+  }
+  const [optLinked, applyLinkedOpt] = useOptimistic(linkedInvoices, rowReducer<LinkedInvoiceRow>)
+  const [optManual, applyManualOpt] = useOptimistic(manualIncome, rowReducer<PeriodManualIncome>)
   // Optimistic ledger of period-level income adjustments — captured rows
   // appear instantly; removals drop instantly.
   const [optAdjustments, applyAdjustmentOpt] = useOptimistic(
@@ -256,30 +268,8 @@ export default function PeriodDetailClient({
       return state.filter((a) => a.id !== u.id)
     }
   )
-  // Optimistic period status — Mark Complete / Reopen flips instantly.
-  const [optStatus, applyStatusOpt] = useOptimistic(
-    period.status,
-    (_state, next: 'active' | 'complete') => next
-  )
-  // Event budgets can opt into deductions + account transfers via a toggle. Monthly
-  // budgets always deduct. `showDeductions` gates the Deductions grid, Account
-  // Transfers, the "To Budget" column, and how "available to budget" is computed.
-  const [optApplyDeductions, applyApplyDeductionsOpt] = useOptimistic(
-    period.apply_deductions ?? false,
-    (_state, next: boolean) => next
-  )
-  const showDeductions = period.kind !== 'event' || optApplyDeductions
-  const handleToggleApplyDeductions = (value: boolean) =>
-    startTransition(async () => {
-      applyApplyDeductionsOpt(value)
-      try {
-        await setPeriodApplyDeductions(period.id, value)
-      } catch {
-        notifyError('Could not update the deductions setting. Please try again.')
-      }
-    })
   // Optimistic overlay for deduction overrides — %/$ edits recompute the numbers instantly
-  const [overridesLocal, setOverridesLocal] = useState<DeductionOverrides>(period.deduction_overrides ?? {})
+  const [overridesLocal, setOverridesLocal] = useState<DeductionOverrides>(session.deduction_overrides ?? {})
 
   // Which account transfers are marked done — flips instantly, server reconciles
   const [doneTransfers, applyTransferOpt] = useOptimistic(
@@ -294,7 +284,7 @@ export default function PeriodDetailClient({
   const handleToggleTransfer = (account: string, done: boolean) =>
     startTransition(async () => {
       applyTransferOpt({ account, done })
-      await setAccountTransferDone(period.id, account, done)
+      await setAccountTransferDone(period.id, session.id, account, done)
     })
 
   // Which accounts have had their cash withdrawn — flips instantly
@@ -310,12 +300,12 @@ export default function PeriodDetailClient({
   const handleToggleCashDone = (account: string, done: boolean) =>
     startTransition(async () => {
       applyCashDoneOpt({ account, done })
-      await setAccountCashDone(period.id, account, done)
+      await setAccountCashDone(period.id, session.id, account, done)
     })
 
   // Per-deduction "set aside / paid" checkmarks — flip instantly, server reconciles
   const [deductionPaid, applyDeductionPaidOpt] = useOptimistic(
-    new Set(Object.entries(period.deduction_paid ?? {}).filter(([, v]) => v).map(([k]) => k)),
+    new Set(Object.entries(session.deduction_paid ?? {}).filter(([, v]) => v).map(([k]) => k)),
     (state: Set<string>, u: { key: string; done: boolean }) => {
       const next = new Set(state)
       if (u.done) next.add(u.key)
@@ -326,12 +316,12 @@ export default function PeriodDetailClient({
   const handleToggleDeductionPaid = (key: string, done: boolean) =>
     startTransition(async () => {
       applyDeductionPaidOpt({ key, done })
-      await setDeductionPaid(period.id, key, done)
+      await setDeductionPaid(period.id, session.id, key, done)
     })
 
   // Which deductions are taken as cash (e.g. Giving) — flips instantly
   const [deductionCash, applyDeductionCashOpt] = useOptimistic(
-    new Set(Object.entries(period.deduction_cash ?? {}).filter(([, v]) => v).map(([k]) => k)),
+    new Set(Object.entries(session.deduction_cash ?? {}).filter(([, v]) => v).map(([k]) => k)),
     (state: Set<string>, u: { key: string; on: boolean }) => {
       const next = new Set(state)
       if (u.on) next.add(u.key)
@@ -342,7 +332,7 @@ export default function PeriodDetailClient({
   const handleToggleDeductionCash = (key: string, on: boolean) =>
     startTransition(async () => {
       applyDeductionCashOpt({ key, on })
-      await setDeductionCash(period.id, key, on)
+      await setDeductionCash(period.id, session.id, key, on)
     })
 
   useEffect(() => {
@@ -357,11 +347,23 @@ export default function PeriodDetailClient({
   }, [])
 
   // ─── Calculations ────────────────────────────────────────────
+  // This session's income items (received) — each deduction only comes out of
+  // the items that take it (a gift can skip tax, etc.)
+  const incomeItems = [
+    ...optManual.map((mi) => ({ amount: mi.amount, skip_deductions: mi.skip_deductions })),
+    ...optLinked
+      .filter((li) => li.invoices.status === 'received')
+      .map((li) => ({ amount: li.invoices.amount, skip_deductions: li.skip_deductions })),
+  ]
+  const sessionIncome = incomeItems.reduce((s, i) => s + i.amount, 0)
   const deductions = calculateDeductions(
-    period.income_amount,
+    sessionIncome,
     settings,
-    overridesLocal
+    overridesLocal,
+    getDeductionBases(incomeItems)
   )
+  // Monthly budgets always show deductions; events only once some income takes them
+  const showDeductions = period.kind !== 'event' || deductions.total > 0
   // For event budgets, the top-level summary cards ignore inherited baseline
   // bills — they're cluttering noise from the budget's earlier monthly life.
   // The Expenses section's own table-level totals stay accurate to whatever
@@ -392,10 +394,10 @@ export default function PeriodDetailClient({
   // available to spend. With deductions on, net out tithe/savings/tax/etc first.
   const availableToBudget = showDeductions
     ? deductions.incomeAfterDeductions + adjustment
-    : period.income_amount + adjustment
+    : sessionIncome + adjustment
   // Still projected = this month's invoices not yet received — income still expected to land
   const periodMonth = period.period_month?.slice(0, 7) ?? ''
-  const stillProjectedIncome = periodMonth
+  const stillProjectedIncome = periodMonth && isNewestSession
     ? linkableInvoices
         .filter((inv) => inv.status !== 'received' && (inv.month === periodMonth || inv.projected_date?.startsWith(periodMonth) || inv.actual_received_date?.startsWith(periodMonth)))
         .reduce((sum, inv) => sum + inv.amount, 0)
@@ -419,34 +421,12 @@ export default function PeriodDetailClient({
     ? calculatePeriodPaymentSummary(optExpenses)
     : paymentSummary
   // Total deducted off the gross (for the collapsed Deductions hint)
-  const totalDeductions = period.income_amount - deductions.incomeAfterDeductions
-  const isLocked = optStatus === 'complete'
-
-  // Income split: active drives the math; settled (done) is sealed but still shown
-  const settledIncome =
-    optLinked
-      .filter((li) => li.is_done && li.invoices.status === 'received')
-      .reduce((s, li) => s + li.invoices.amount, 0) +
-    optManual.filter((mi) => mi.is_done).reduce((s, mi) => s + mi.amount, 0)
-  const activeIncome = period.income_amount
-  const receivedIncome = activeIncome + settledIncome
-
-  // Deductions ledger — cumulative contributions logged as income was settled
-  const ledgerTotals = deductionContributions.reduce(
-    (acc, c) => {
-      acc.tithe += c.tithe
-      acc.savings += c.savings
-      acc.tax += c.tax
-      acc.profit += c.profit
-      acc.fun_money += c.fun_money
-      acc.grand += c.tithe + c.savings + c.tax + c.profit + c.fun_money
-      return acc
-    },
-    { tithe: 0, savings: 0, tax: 0, profit: 0, fun_money: 0, grand: 0 }
-  )
+  const totalDeductions = sessionIncome - deductions.incomeAfterDeductions
+  // Completing the month (Month tab) locks every session
+  const isLocked = period.status === 'complete'
 
   // Linked invoice IDs for filtering the selector
-  const linkedInvoiceIds = new Set(linkedInvoices.map((li) => li.invoice_id))
+  const linkedInvoiceIds = new Set([...monthLinkedInvoiceIds, ...optLinked.map((li) => li.invoice_id)])
 
   // ─── Sort ────────────────────────────────────────────────────
   const handleSort = (key: SortKey) => {
@@ -556,56 +536,96 @@ export default function PeriodDetailClient({
   }
 
   // ─── Income ──────────────────────────────────────────────────
+  // New income starts with the budget's default deductions: all on, or all off for events
+  const defaultSkip: DeductionKey[] = period.kind === 'event' ? [...DEDUCTION_KEYS] : []
+
   const handleLinkInvoice = (invoiceId: string) => {
+    const invoice = linkableInvoices.find((inv) => inv.id === invoiceId)
+    if (!invoice || pendingLinks.current.has(invoiceId)) return
+    pendingLinks.current.add(invoiceId)
     startTransition(async () => {
-      await linkInvoiceToPeriod(period.id, invoiceId)
-      await recalculatePeriodIncome(period.id)
+      applyLinkedOpt({
+        kind: 'add',
+        row: {
+          id: `tmp-${invoiceId}`,
+          period_id: period.id,
+          invoice_id: invoiceId,
+          is_done: false,
+          session_id: session.id,
+          income_type: 'paycheck',
+          skip_deductions: defaultSkip,
+          // Linking marks the income received
+          invoices: { ...invoice, status: 'received' },
+        },
+      })
+      try { await linkInvoiceToPeriod(period.id, invoiceId, session.id) }
+      catch { notifyError('Could not link that income. Please try again.') }
+      finally { pendingLinks.current.delete(invoiceId) }
     })
   }
 
-  const handleUnlinkInvoice = (invoiceId: string) => {
+  const handleUnlinkInvoice = (linkId: string, invoiceId: string) =>
     startTransition(async () => {
-      await unlinkInvoiceFromPeriod(period.id, invoiceId)
-      await recalculatePeriodIncome(period.id)
+      applyLinkedOpt({ kind: 'remove', id: linkId })
+      try { await unlinkInvoiceFromPeriod(period.id, invoiceId) }
+      catch { notifyError('Could not unlink that income. Please try again.') }
     })
-  }
 
   const handleAddManualIncome = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
-    const description = formData.get('description') as string
+    const description = ((formData.get('description') as string) || '').trim()
     const amount = parseFloat(formData.get('amount') as string)
     if (!description || isNaN(amount)) return
+    // Row appears and the form closes immediately, so a second tap can't double-add
+    setShowManualIncomeForm(false)
     startTransition(async () => {
-      await addManualIncome(period.id, description, amount)
-      await recalculatePeriodIncome(period.id)
-      setShowManualIncomeForm(false)
+      applyManualOpt({
+        kind: 'add',
+        row: {
+          id: `tmp-${Date.now()}`,
+          period_id: period.id,
+          team_id: period.team_id,
+          description,
+          amount,
+          is_done: false,
+          exclude_from_reports: false,
+          session_id: session.id,
+          income_type: 'paycheck',
+          skip_deductions: defaultSkip,
+          created_at: new Date().toISOString(),
+        },
+      })
+      try { await addManualIncome(period.id, session.id, description, amount) }
+      catch { notifyError('Could not add that income. Please try again.') }
     })
   }
 
-  const handleRemoveManualIncome = (id: string) => {
+  const handleRemoveManualIncome = (id: string) =>
     startTransition(async () => {
-      await removeManualIncome(id)
-      await recalculatePeriodIncome(period.id)
-    })
-  }
-
-  const handleToggleManualIncomeDone = (id: string, value: boolean) =>
-    startTransition(async () => {
-      applyManualOpt({ id, is_done: value })
-      await toggleManualIncomeDone(id, period.id, value)
+      applyManualOpt({ kind: 'remove', id })
+      try { await removeManualIncome(id) }
+      catch { notifyError('Could not remove that income. Please try again.') }
     })
 
-  const handleToggleManualExcluded = (id: string, value: boolean) =>
+  // Income type preset — paycheck takes every deduction; gift/refund skip them all
+  const handleSetIncomeType = (source: 'manual' | 'invoice', id: string, type: IncomeType) =>
     startTransition(async () => {
-      applyManualOpt({ id, exclude_from_reports: value })
-      await setManualIncomeExcluded(id, period.id, value)
+      const skip_deductions: DeductionKey[] = type === 'paycheck' ? [] : [...DEDUCTION_KEYS]
+      if (source === 'manual') applyManualOpt({ id, income_type: type, skip_deductions, exclude_from_reports: type !== 'paycheck' })
+      else applyLinkedOpt({ id, income_type: type, skip_deductions })
+      try { await setIncomeType(source, id, period.id, type) }
+      catch { notifyError() }
     })
 
-  const handleToggleLinkedInvoiceDone = (linkId: string, value: boolean) =>
+  const handleToggleIncomeDeduction = (source: 'manual' | 'invoice', id: string, current: DeductionKey[], key: DeductionKey) =>
     startTransition(async () => {
-      applyLinkedOpt({ id: linkId, value })
-      await toggleLinkedInvoiceDone(linkId, period.id, value)
+      const on = current.includes(key)
+      const skip_deductions = on ? current.filter((k) => k !== key) : [...current, key]
+      if (source === 'manual') applyManualOpt({ id, skip_deductions })
+      else applyLinkedOpt({ id, skip_deductions })
+      try { await setIncomeDeduction(source, id, period.id, key, on) }
+      catch { notifyError() }
     })
 
   // ─── Deductions ──────────────────────────────────────────────
@@ -620,7 +640,7 @@ export default function PeriodDetailClient({
     const timerKey = `deduction-${key}`
     if (debounceTimers.current[timerKey]) clearTimeout(debounceTimers.current[timerKey])
     debounceTimers.current[timerKey] = setTimeout(() => {
-      startTransition(() => updateDeductionOverrides(period.id, { [key]: parsed }))
+      startTransition(() => updateDeductionOverrides(period.id, session.id, { [key]: parsed }))
     }, 500)
   }
 
@@ -645,7 +665,7 @@ export default function PeriodDetailClient({
       for (const k of Object.keys(merged)) if (merged[k] == null) delete merged[k]
       return merged as DeductionOverrides
     })
-    startTransition(() => updateDeductionOverrides(period.id, updates))
+    startTransition(() => updateDeductionOverrides(period.id, session.id, updates))
   }
 
   // ─── Adjustments ─────────────────────────────────────────────
@@ -665,8 +685,9 @@ export default function PeriodDetailClient({
     setJustCaptured(true)
     const ghost: PeriodAdjustment = {
       id: `tmp-${Date.now()}`,
-      household_id: period.household_id,
+      team_id: period.team_id,
       period_id: period.id,
+      session_id: session.id,
       amount: resolvedAdjAmount,
       note: capNote.trim() || null,
       sort_order: optAdjustments.length,
@@ -675,7 +696,7 @@ export default function PeriodDetailClient({
     }
     startTransition(async () => {
       applyAdjustmentOpt({ kind: 'add', row: ghost })
-      try { await addAdjustment(period.id, resolvedAdjAmount, capNote.trim() || null) }
+      try { await addAdjustment(period.id, session.id, resolvedAdjAmount, capNote.trim() || null) }
       catch { notifyError() }
     })
   }
@@ -695,29 +716,18 @@ export default function PeriodDetailClient({
     })
 
   // ─── One-time expenses ───────────────────────────────────────
-  const handleAddOneTime = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    const fd = new FormData(e.currentTarget)
-    const name = (fd.get('name') as string)?.trim()
-    const amount = parseFloat(fd.get('amount') as string)
-    if (!name || isNaN(amount)) return
-    const dueRaw = fd.get('due') as string
-    const account = (fd.get('account') as string) || null
-    const priority = (fd.get('priority') as string) || null
-    const dueDay = dueRaw ? parseInt(dueRaw, 10) : null
-    // Close the form + drop a ghost row instantly; server reconciles via revalidate.
-    setShowOneTimeForm(false)
+  // Placeholder for a just-added one-time line, shown until the server row arrives
+  const makeGhostExpense = (fields: Pick<PeriodExpense, 'name' | 'default_amount'> & Partial<PeriodExpense>): PeriodExpense => {
     const now = new Date(0).toISOString()
-    const ghost: PeriodExpense = {
+    return {
       id: `tmp-${Date.now()}`,
       period_id: period.id,
-      household_id: period.household_id,
+      team_id: period.team_id,
+      session_id: null,
       base_item_id: null,
-      name,
-      default_amount: amount,
-      due_day: dueDay,
-      account,
-      priority_category: priority,
+      due_day: null,
+      account: null,
+      priority_category: null,
       frequency: 'One-Time',
       auto_pay: false,
       pay_url: null,
@@ -742,7 +752,23 @@ export default function PeriodDetailClient({
       updated_at: now,
       payments: [],
       adjustments: [],
+      ...fields,
     }
+  }
+
+  const handleAddOneTime = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    const fd = new FormData(e.currentTarget)
+    const name = (fd.get('name') as string)?.trim()
+    const amount = parseFloat(fd.get('amount') as string)
+    if (!name || isNaN(amount)) return
+    const dueRaw = fd.get('due') as string
+    const account = (fd.get('account') as string) || null
+    const priority = (fd.get('priority') as string) || null
+    const dueDay = dueRaw ? parseInt(dueRaw, 10) : null
+    // Close the form + drop a ghost row instantly; server reconciles via revalidate.
+    setShowOneTimeForm(false)
+    const ghost = makeGhostExpense({ name, default_amount: amount, due_day: dueDay, account, priority_category: priority })
     startTransition(async () => {
       applyExpenseOpt({ kind: 'add', expense: ghost })
       try {
@@ -814,8 +840,9 @@ export default function PeriodDetailClient({
     const now = new Date(0).toISOString()
     const ghost: PeriodExpensePayment = {
       id: `tmp-${Date.now()}`,
-      household_id: period.household_id,
+      team_id: period.team_id,
       period_expense_id: id,
+      session_id: null,
       label: null,
       amount: 0,
       due_day: null,
@@ -848,7 +875,7 @@ export default function PeriodDetailClient({
     const now = new Date(0).toISOString()
     const ghost: PeriodExpenseAdjustment = {
       id: `tmp-${Date.now()}`,
-      household_id: period.household_id,
+      team_id: period.team_id,
       period_expense_id: id,
       period_expense_payment_id: paymentId,
       amount,
@@ -876,6 +903,11 @@ export default function PeriodDetailClient({
   // Cover an overage by pulling funded dollars from another line into this one.
   const handleTransferFunds = (fromId: string, toId: string, amount: number) =>
     startTransition(async () => {
+      // Shift the funded amounts on both lines right away; the server logs the transfer
+      const from = optExpenses.find((e) => e.id === fromId)
+      const to = optExpenses.find((e) => e.id === toId)
+      if (from) applyExpenseOpt({ kind: 'field', id: fromId, field: 'amount_override', value: Math.round((getOwedAmount(from) - amount) * 100) / 100 })
+      if (to) applyExpenseOpt({ kind: 'field', id: toId, field: 'amount_override', value: Math.round((getOwedAmount(to) + amount) * 100) / 100 })
       try { await transferFunds(fromId, toId, amount) }
       catch { notifyError() }
     })
@@ -927,40 +959,35 @@ export default function PeriodDetailClient({
       for (const e of optExpenses) {
         if (e.pay_now && !e.paid) applyExpenseOpt({ kind: 'field', id: e.id, field: 'paid', value: true })
       }
-      try { await bulkMarkPaid(period.id) }
-      catch { notifyError() }
-    })
-  }
-  const handleSettleReset = () => {
-    if (!confirm('Clear all PAID items and reset for the next check?\n\nSettles & locks every paid item, logs the active income to the ledger, and clears adjustments. Unpaid items stay live. Nothing is deleted — reopen any row individually.')) return
-    startTransition(async () => {
-      try { await settleAndResetPeriod(period.id) }
+      try { await bulkMarkPaid(period.id, session.id) }
       catch { notifyError() }
     })
   }
   const handleClearAllPayNow = () => {
-    if (!confirm('Clear all pay-now items?\n\nSettles every line checked to Pay (like clicking Clear on each). Rows not set to Pay are untouched. Nothing is deleted — reopen any row individually.')) return
+    if (!confirm('Clear all pay-now items?\n\nSettles every line checked to Pay (like clicking Clear on each). Rows not set to Pay are untouched. Nothing is deleted; reopen any row individually.')) return
     startTransition(async () => {
-      try { await clearAllPayNow(period.id) }
+      // Settle every to-pay row on screen now, mirroring a per-row Clear
+      for (const e of optExpenses) {
+        if (e.is_complete) continue
+        if (e.is_split) {
+          for (const p of e.payments ?? []) {
+            if (!p.pay_now) continue
+            applyExpenseOpt({ kind: 'payment', id: p.id, field: 'cleared', value: true })
+            applyExpenseOpt({ kind: 'payment', id: p.id, field: 'pay_now', value: false })
+          }
+        } else if (e.pay_now) {
+          const ledger = (e.adjustments ?? []).reduce((sum, a) => sum + (a.amount || 0), 0)
+          applyExpenseOpt({ kind: 'field', id: e.id, field: 'cleared', value: true })
+          applyExpenseOpt({ kind: 'field', id: e.id, field: 'is_complete', value: true })
+          applyExpenseOpt({ kind: 'field', id: e.id, field: 'paid', value: true })
+          applyExpenseOpt({ kind: 'field', id: e.id, field: 'paid_amount', value: Math.max(getOwedAmount(e), ledger) })
+          applyExpenseOpt({ kind: 'field', id: e.id, field: 'pay_now', value: false })
+        }
+      }
+      try { await clearAllPayNow(period.id, session.id) }
       catch { notifyError() }
     })
   }
-
-  // ─── Budget complete / reopen ────────────────────────────────
-  const handleComplete = () => {
-    if (!confirm('Mark this budget complete? It will lock for editing — you can reopen it anytime.')) return
-    startTransition(async () => {
-      applyStatusOpt('complete')
-      try { await completePeriod(period.id) }
-      catch { notifyError() }
-    })
-  }
-  const handleReopen = () =>
-    startTransition(async () => {
-      applyStatusOpt('active')
-      try { await reopenPeriod(period.id) }
-      catch { notifyError() }
-    })
 
   const inputClass = 'bg-bg-white border border-border rounded-sm px-2 py-1 text-caption focus:outline-none focus:border-primary transition-colors'
   const thClass = 'text-left text-caption font-bold uppercase text-text-muted px-2 py-3 whitespace-nowrap cursor-pointer hover:text-text-heading select-none'
@@ -988,44 +1015,10 @@ export default function PeriodDetailClient({
         </button>
       </div>
 
-      {/* ─── Status bar: complete / reopen ─────────────────── */}
-      <div className={`flex items-center justify-between gap-4 rounded-lg px-5 py-3 ${isLocked ? 'bg-success/10 border border-success/30' : 'bg-bg-white shadow-card'}`}>
-        <div className="flex items-center gap-2">
-          {isLocked ? (
-            <>
-              <span className="text-success font-bold text-caption uppercase tracking-wide">🔒 Complete</span>
-              <span className="text-caption text-text-muted">This budget is sealed{period.completed_at ? ` — ${new Date(period.completed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}.</span>
-            </>
-          ) : (
-            <>
-              <span className="text-primary-teal font-bold text-caption uppercase tracking-wide">● Active</span>
-              <span className="text-caption text-text-muted">Still working bills in this budget.</span>
-            </>
-          )}
-        </div>
-        {isLocked ? (
-          <button
-            onClick={handleReopen}
-            disabled={isPending}
-            className="bg-bg-white text-text-heading border border-border rounded-full px-4 py-1.5 text-caption font-bold hover:border-primary disabled:opacity-50 transition-colors"
-          >
-            Reopen
-          </button>
-        ) : (
-          <button
-            onClick={handleComplete}
-            disabled={isPending}
-            className="bg-primary-teal text-text-inverse rounded-full px-4 py-1.5 text-caption font-bold hover:opacity-90 disabled:opacity-50 transition-opacity"
-          >
-            Mark Complete
-          </button>
-        )}
-      </div>
-
       {/* ─── Summary Cards ─────────────────────────────────── */}
       <div ref={summaryCardsRef}>
         <BudgetSummaryBar
-          income={period.income_amount}
+          income={sessionIncome}
           toBudget={deductions.incomeAfterDeductions}
           payNow={payNowTotal}
           paid={paymentSummary.paid}
@@ -1045,43 +1038,12 @@ export default function PeriodDetailClient({
         />
       </div>
 
-      {/* ─── Event: apply-deductions toggle ────────────────── */}
-      {/* Event budgets skip tithe/savings/tax by default. Flip this on to run
-          deductions + account transfers just like a monthly budget. */}
-      {period.kind === 'event' && (
-        <div className="bg-bg-white rounded-lg shadow-card p-4 sm:p-5 flex items-center justify-between gap-4">
-          <div>
-            <div className="text-caption font-bold text-text-heading">Auto-calculate deductions</div>
-            <div className="text-[11px] text-text-muted mt-0.5">
-              Set aside tithe, savings, tax &amp; more from contributions — and show account transfers, just like a monthly budget.
-            </div>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={showDeductions}
-            onClick={() => handleToggleApplyDeductions(!showDeductions)}
-            disabled={isLocked}
-            title={showDeductions ? 'Deductions on — tap to turn off' : 'Deductions off — tap to turn on'}
-            className={`relative shrink-0 inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 ${
-              showDeductions ? 'bg-success' : 'bg-border'
-            }`}
-          >
-            <span
-              className={`inline-block h-5 w-5 transform rounded-full bg-bg-white shadow transition-transform ${
-                showDeductions ? 'translate-x-5' : 'translate-x-0.5'
-              }`}
-            />
-          </button>
-        </div>
-      )}
-
       {/* ─── Sticky Summary Bar (visible when scrolled past cards) ── */}
       {showStickyBar && (
         <div className="sticky top-[72px] md:top-[84px] z-40 -mx-6 px-6 -mt-4">
           <div className="bg-[#ebf0f0] rounded-b-lg shadow-card px-4 py-2 flex items-center justify-between gap-4">
             <div className="flex items-center gap-4 text-caption">
-              <span className="text-text-muted">{period.kind === 'event' ? 'Contributions' : 'Income'} <span className="font-bold text-text-heading">{formatCurrency(period.income_amount)}</span></span>
+              <span className="text-text-muted">{period.kind === 'event' ? 'Contributions' : 'Income'} <span className="font-bold text-text-heading">{formatCurrency(sessionIncome)}</span></span>
               {showDeductions && (
                 <span className="text-text-muted hidden sm:inline">To Budget <span className="font-bold text-text-heading">{formatCurrency(deductions.incomeAfterDeductions)}</span></span>
               )}
@@ -1204,7 +1166,7 @@ export default function PeriodDetailClient({
           )}
           {!isOpen('income') && (
             <span className="text-caption text-text-muted">
-              {formatCurrency(period.income_amount)} received{stillProjectedIncome > 0 && ` · ${formatCurrency(stillProjectedIncome)} still projected`}
+              {formatCurrency(sessionIncome)} this session{stillProjectedIncome > 0 && ` · ${formatCurrency(stillProjectedIncome)} still projected`}
             </span>
           )}
         </div>
@@ -1216,42 +1178,20 @@ export default function PeriodDetailClient({
             <div className="text-caption font-bold text-text-muted uppercase mb-2">Linked Invoices</div>
             <div className="space-y-2">
               {optLinked.map((li) => (
-                <div key={li.id} className={`flex items-center justify-between bg-[#ebf0f0] rounded-sm px-4 py-2 ${li.is_done ? 'opacity-60' : ''}`}>
-                  <div className="flex items-center gap-2">
-                    <span className="text-caption font-bold text-text-heading">{li.invoices.client_name}</span>
-                    {li.invoices.project_name && (
-                      <span className="text-caption text-text-muted">– {li.invoices.project_name}</span>
-                    )}
-                    {li.is_done && (
-                      <span className="text-[10px] bg-success/10 text-success px-1.5 py-0.5 rounded-full font-bold uppercase">Budgeted</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-caption font-bold text-text-heading">{formatCurrency(li.invoices.amount)}</span>
-                    <span
-                      className="flex items-center gap-1 text-caption text-text-muted cursor-help"
-                      title="Budgeted out: this income's deductions are logged to the period ledger and it's removed from the active income total (so new income calculates its own tithe/savings/tax)."
-                    >
-                      <input
-                        type="checkbox"
-                        checked={li.is_done}
-                        disabled={isLocked || isPending}
-                        onChange={(e) => handleToggleLinkedInvoiceDone(li.id, e.target.checked)}
-                        className="rounded"
-                      />
-                      Budgeted
-                    </span>
-                    {!li.is_done && (
-                      <button
-                        onClick={() => handleUnlinkInvoice(li.invoice_id)}
-                        disabled={isPending || isLocked}
-                        className="text-caption text-warning font-semibold hover:underline disabled:opacity-50"
-                      >
-                        Unlink
-                      </button>
-                    )}
-                  </div>
-                </div>
+                <IncomeRow
+                  key={li.id}
+                  name={li.invoices.client_name}
+                  detail={li.invoices.project_name}
+                  amount={li.invoices.amount}
+                  type={li.income_type}
+                  skip={li.skip_deductions ?? []}
+                  disabled={isLocked}
+                  saving={li.id.startsWith('tmp-')}
+                  onType={(t) => handleSetIncomeType('invoice', li.id, t)}
+                  onToggleDeduction={(k) => handleToggleIncomeDeduction('invoice', li.id, li.skip_deductions ?? [], k)}
+                  removeLabel="Unlink"
+                  onRemove={() => handleUnlinkInvoice(li.id, li.invoice_id)}
+                />
               ))}
             </div>
           </div>
@@ -1263,55 +1203,19 @@ export default function PeriodDetailClient({
             <div className="text-caption font-bold text-text-muted uppercase mb-2">Manual Income</div>
             <div className="space-y-2">
               {optManual.map((mi) => (
-                <div key={mi.id} className={`flex items-center justify-between bg-[#ebf0f0] rounded-sm px-4 py-2 ${mi.is_done ? 'opacity-60' : ''}`}>
-                  <div className="flex items-center gap-2">
-                    <span className="text-caption font-bold text-text-heading">{mi.description}</span>
-                    {mi.is_done && (
-                      <span className="text-[10px] bg-success/10 text-success px-1.5 py-0.5 rounded-full font-bold uppercase">Budgeted</span>
-                    )}
-                    {mi.exclude_from_reports && (
-                      <span className="text-[10px] bg-surface-beige text-text-muted px-1.5 py-0.5 rounded-full font-bold uppercase">Not income</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-caption font-bold text-text-heading">{formatCurrency(mi.amount)}</span>
-                    <span
-                      className="flex items-center gap-1 text-caption text-text-muted cursor-help"
-                      title="Exclude from income reports: keeps this out of the 6-month income chart and trends (e.g. gifts, reimbursements). It still counts in this budget."
-                    >
-                      <input
-                        type="checkbox"
-                        checked={mi.exclude_from_reports}
-                        disabled={isLocked || isPending}
-                        onChange={(e) => handleToggleManualExcluded(mi.id, e.target.checked)}
-                        className="rounded"
-                      />
-                      Not income
-                    </span>
-                    <span
-                      className="flex items-center gap-1 text-caption text-text-muted cursor-help"
-                      title="Budgeted out: this income's deductions are logged to the period ledger and it's removed from the active income total (so new income calculates its own tithe/savings/tax)."
-                    >
-                      <input
-                        type="checkbox"
-                        checked={mi.is_done}
-                        disabled={isLocked || isPending}
-                        onChange={(e) => handleToggleManualIncomeDone(mi.id, e.target.checked)}
-                        className="rounded"
-                      />
-                      Budgeted
-                    </span>
-                    {!mi.is_done && (
-                      <button
-                        onClick={() => handleRemoveManualIncome(mi.id)}
-                        disabled={isPending || isLocked}
-                        className="text-caption text-warning font-semibold hover:underline disabled:opacity-50"
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                </div>
+                <IncomeRow
+                  key={mi.id}
+                  name={mi.description}
+                  amount={mi.amount}
+                  type={mi.income_type}
+                  skip={mi.skip_deductions ?? []}
+                  disabled={isLocked}
+                  saving={mi.id.startsWith('tmp-')}
+                  onType={(t) => handleSetIncomeType('manual', mi.id, t)}
+                  onToggleDeduction={(k) => handleToggleIncomeDeduction('manual', mi.id, mi.skip_deductions ?? [], k)}
+                  removeLabel="Remove"
+                  onRemove={() => handleRemoveManualIncome(mi.id)}
+                />
               ))}
             </div>
           </div>
@@ -1364,8 +1268,7 @@ export default function PeriodDetailClient({
             </div>
             <button
               type="submit"
-              disabled={isPending}
-              className="bg-primary-teal text-text-inverse rounded-full px-4 py-1.5 text-caption font-bold hover:opacity-90 disabled:opacity-50 transition-opacity"
+              className="bg-primary-teal text-text-inverse rounded-full px-4 py-1.5 text-caption font-bold hover:opacity-90 transition-opacity"
             >
               Add
             </button>
@@ -1373,13 +1276,8 @@ export default function PeriodDetailClient({
         )}
 
         <div className="text-right mt-3 pt-3 border-t border-border">
-          <span className="text-caption text-text-muted">{settledIncome > 0 ? 'Active Income: ' : 'Total Income: '}</span>
-          <span className="text-h3 font-bold text-text-heading">{formatCurrency(activeIncome)}</span>
-          {settledIncome > 0 && (
-            <div className="text-caption text-text-muted mt-1">
-              Received {formatCurrency(receivedIncome)} · budgeted {formatCurrency(settledIncome)} (excluded from active math)
-            </div>
-          )}
+          <span className="text-caption text-text-muted">Session income: </span>
+          <span className="text-h3 font-bold text-text-heading">{formatCurrency(sessionIncome)}</span>
         </div>
         </>)}
       </div>
@@ -1586,7 +1484,7 @@ export default function PeriodDetailClient({
                   <div className="flex items-center gap-3 shrink-0">
                     <span className={`font-bold ${a.amount < 0 ? 'text-warning' : 'text-text-heading'}`}>{formatCurrency(a.amount)}</span>
                     {!isLocked && (
-                      <button onClick={() => handleRemoveAdjustment(a.id)} disabled={isPending} className="text-text-muted hover:text-warning text-[10px] disabled:opacity-50">✕</button>
+                      <button onClick={() => handleRemoveAdjustment(a.id)} className="text-text-muted hover:text-warning text-[10px] disabled:opacity-50">✕</button>
                     )}
                   </div>
                 </div>
@@ -1595,72 +1493,13 @@ export default function PeriodDetailClient({
           </div>
         )}
 
-        {/* Ledger — cumulative deductions logged as income was settled */}
-        <div className="mt-6 pt-4 border-t border-border">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-caption font-bold uppercase text-text-muted tracking-wide">Set Aside This Period</h3>
-            {deductionContributions.length > 0 && (
-              <span className="text-caption text-text-muted">Total <span className="font-bold text-text-heading">{formatCurrency(ledgerTotals.grand)}</span></span>
-            )}
-          </div>
-          {deductionContributions.length === 0 ? (
-            <p className="text-caption text-text-muted">
-              Nothing set aside yet. As you mark income <span className="font-semibold">Done</span>, its tithe / savings / tax / profit / giving get logged here and totaled for the period.
-            </p>
-          ) : (
-            <>
-            <div className="overflow-x-auto">
-              <table className="w-full text-caption">
-                <thead>
-                  <tr className="text-text-muted">
-                    <th className="text-left font-bold uppercase py-1 pr-3">Source</th>
-                    <th className="text-right font-bold uppercase py-1 px-2">Tithe</th>
-                    <th className="text-right font-bold uppercase py-1 px-2">Savings</th>
-                    <th className="text-right font-bold uppercase py-1 px-2">Tax</th>
-                    <th className="text-right font-bold uppercase py-1 px-2">Profit</th>
-                    <th className="text-right font-bold uppercase py-1 px-2">Giving</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {deductionContributions.map((c) => (
-                    <tr key={c.id} className="border-t border-border/50">
-                      <td className="py-1.5 pr-3 text-text-heading font-medium">
-                        {c.source_label || (c.source_kind === 'invoice' ? 'Invoice' : 'Manual income')}
-                        <span className="text-text-muted font-normal"> · {formatCurrency(c.income_amount)}</span>
-                      </td>
-                      <td className="text-right py-1.5 px-2">{formatCurrency(c.tithe)}</td>
-                      <td className="text-right py-1.5 px-2">{formatCurrency(c.savings)}</td>
-                      <td className="text-right py-1.5 px-2">{formatCurrency(c.tax)}</td>
-                      <td className="text-right py-1.5 px-2">{formatCurrency(c.profit)}</td>
-                      <td className="text-right py-1.5 px-2">{formatCurrency(c.fun_money)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t-2 border-border font-bold text-text-heading">
-                    <td className="py-1.5 pr-3 uppercase text-text-muted text-[10px]">Period total</td>
-                    <td className="text-right py-1.5 px-2">{formatCurrency(ledgerTotals.tithe)}</td>
-                    <td className="text-right py-1.5 px-2">{formatCurrency(ledgerTotals.savings)}</td>
-                    <td className="text-right py-1.5 px-2">{formatCurrency(ledgerTotals.tax)}</td>
-                    <td className="text-right py-1.5 px-2">{formatCurrency(ledgerTotals.profit)}</td>
-                    <td className="text-right py-1.5 px-2">{formatCurrency(ledgerTotals.fun_money)}</td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-            <p className="text-[10px] text-text-muted mt-2">
-              Logged automatically as income is marked done. The grid above sets rates for active income; this is your cumulative set-aside for the period.
-            </p>
-            </>
-          )}
-        </div>
         </>)}
       </div>
       )}
 
       {/* ─── Savings Allocation ────────────────────────────── */}
       {/* Hidden in event focus mode — event budgets shouldn't fund long-term goals. */}
-      {period.kind !== 'event' && savingsGoals.length > 0 && (
+      {isNewestSession && period.kind !== 'event' && savingsGoals.length > 0 && (
         <SavingsAllocationSection
           periodId={period.id}
           savingsPool={deductions.savings}
@@ -1804,7 +1643,6 @@ export default function PeriodDetailClient({
                   <ExpenseRow
                     key={expense.id}
                     expense={expense}
-                    isPending={isPending}
                     isLocked={isLocked}
                     onCheckboxChange={handleCheckboxChange}
                     onDebouncedUpdate={debouncedUpdate}
@@ -1901,8 +1739,7 @@ export default function PeriodDetailClient({
             </div>
             <button
               type="submit"
-              disabled={isPending}
-              className="bg-primary-teal text-text-inverse rounded-full px-4 py-1.5 text-caption font-bold hover:opacity-90 disabled:opacity-50 transition-opacity"
+              className="bg-primary-teal text-text-inverse rounded-full px-4 py-1.5 text-caption font-bold hover:opacity-90 transition-opacity"
             >
               Add
             </button>
@@ -1936,7 +1773,6 @@ export default function PeriodDetailClient({
                     <ExpenseRow
                       key={expense.id}
                       expense={expense}
-                      isPending={isPending}
                       isLocked={isLocked}
                       onCheckboxChange={handleCheckboxChange}
                       onDebouncedUpdate={debouncedUpdate}
@@ -1976,7 +1812,19 @@ export default function PeriodDetailClient({
       </div>
 
       {/* ─── Requests (wish list → pull into this budget) ──── */}
-      <PeriodRequestsPanel requests={requests} periodId={period.id} isLocked={isLocked} categories={categories} />
+      {isNewestSession && (
+        <PeriodRequestsPanel
+          requests={requests}
+          periodId={period.id}
+          isLocked={isLocked}
+          categories={categories}
+          // The pulled-in request shows up in the expenses table right away
+          onAllocated={(r) => applyExpenseOpt({
+            kind: 'add',
+            expense: makeGhostExpense({ name: r.name, default_amount: r.amount, priority_category: r.priority_category, pay_url: r.url ?? null }),
+          })}
+        />
+      )}
 
       {/* ─── In-place expense editor (stays on this budget) ── */}
       {editExpense && (
@@ -1987,6 +1835,7 @@ export default function PeriodDetailClient({
           accounts={accounts}
           categories={categories}
           focusMove={editFocusMove}
+          onSaved={(patch) => applyExpenseOpt({ kind: 'patch', id: editExpense.id, patch })}
           onClose={() => { setEditExpense(null); setEditFocusMove(false) }}
         />
       )}
@@ -2005,8 +1854,92 @@ export default function PeriodDetailClient({
 }
 
 // ─── Spend Ledger (shared by a whole line and by each split installment) ──────
+/**
+ * One income item in a session: type preset (paycheck / gift / refund) plus a
+ * chip per deduction so a single item can skip, say, tax but still be tithed.
+ */
+function IncomeRow({
+  name,
+  detail,
+  amount,
+  type,
+  skip,
+  disabled,
+  saving,
+  onType,
+  onToggleDeduction,
+  removeLabel,
+  onRemove,
+}: {
+  name: string
+  detail?: string | null
+  amount: number
+  type: IncomeType
+  skip: DeductionKey[]
+  disabled: boolean
+  // Just added and not saved yet: shown right away, editable once it lands
+  saving: boolean
+  onType: (type: IncomeType) => void
+  onToggleDeduction: (key: DeductionKey) => void
+  removeLabel: string
+  onRemove: () => void
+}) {
+  return (
+    <div className="bg-[#ebf0f0] rounded-sm px-4 py-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-caption font-bold text-text-heading truncate">{name}</span>
+          {detail && <span className="text-caption text-text-muted truncate">– {detail}</span>}
+        </div>
+        <div className="flex items-center gap-3 ml-auto">
+          <select
+            value={type}
+            disabled={disabled || saving}
+            onChange={(e) => onType(e.target.value as IncomeType)}
+            title="Income type: sets which deductions this income takes"
+            className="bg-bg-white border border-border rounded-full px-2 py-0.5 text-[11px] font-bold text-text-heading focus:outline-none focus:border-primary disabled:opacity-60"
+          >
+            {INCOME_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+          </select>
+          <span className="text-caption font-bold text-text-heading">{formatCurrency(amount)}</span>
+          {saving ? (
+            <span className="text-caption text-text-muted italic">Saving…</span>
+          ) : !disabled && (
+            <button
+              onClick={onRemove}
+              className="text-caption text-warning font-semibold hover:underline"
+            >
+              {removeLabel}
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-1 mt-1.5">
+        {DEDUCTION_KEYS.map((key) => {
+          const on = !skip.includes(key)
+          return (
+            <button
+              key={key}
+              type="button"
+              disabled={disabled || saving}
+              onClick={() => onToggleDeduction(key)}
+              aria-pressed={on}
+              title={on ? `${DEDUCTION_LABELS[key]} comes out of this income. Tap to skip.` : `Skipping ${DEDUCTION_LABELS[key]} for this income. Tap to include.`}
+              className={`text-[11px] font-semibold rounded-full px-2 py-0.5 transition-colors disabled:opacity-60 ${
+                on ? 'bg-surface-mint text-primary-teal' : 'bg-bg-white text-text-muted line-through'
+              }`}
+            >
+              {DEDUCTION_LABELS[key]}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function SpendLedger({
-  funded, spent, adjustments, onAdd, onRemove, onAttachImage, coverSources, onCover, onOpenMoveFunds, isLocked, isPending, inputClass,
+  funded, spent, adjustments, onAdd, onRemove, onAttachImage, coverSources, onCover, onOpenMoveFunds, isLocked, inputClass,
 }: {
   funded: number
   spent: number
@@ -2018,7 +1951,6 @@ function SpendLedger({
   onCover?: (fromId: string, amount: number) => void
   onOpenMoveFunds?: () => void
   isLocked: boolean
-  isPending: boolean
   inputClass: string
 }) {
   const remaining = funded - spent
@@ -2134,7 +2066,7 @@ function SpendLedger({
             <button
               type="button"
               onClick={handleCover}
-              disabled={isPending || !coverFrom || isNaN(parseFloat(coverAmt)) || parseFloat(coverAmt) <= 0}
+              disabled={!coverFrom || isNaN(parseFloat(coverAmt)) || parseFloat(coverAmt) <= 0}
               className="bg-primary-teal text-text-inverse rounded-full px-3 py-1.5 text-[11px] font-bold hover:opacity-90 disabled:opacity-50 transition-opacity"
             >
               Cover
@@ -2159,7 +2091,7 @@ function SpendLedger({
                 </button>
               ) : null}
               {!isLocked && (
-                <button onClick={() => onRemove(a.id)} disabled={isPending} title="Remove this spend" className="text-text-muted hover:text-warning text-[10px] disabled:opacity-50">✕</button>
+                <button onClick={() => onRemove(a.id)} title="Remove this spend" className="text-text-muted hover:text-warning text-[10px] disabled:opacity-50">✕</button>
               )}
             </li>
           ))}
@@ -2184,7 +2116,7 @@ function SpendLedger({
               <Camera size={15} aria-hidden="true" />
             </button>
           )}
-          <button type="button" onClick={handleLogSpend} disabled={isPending || uploadingReceipt || isNaN(resolvedSpend) || resolvedSpend === 0} className="bg-primary-teal text-text-inverse rounded-full px-3 py-1 text-[10px] font-bold hover:opacity-90 disabled:opacity-50 transition-opacity">Log</button>
+          <button type="button" onClick={handleLogSpend} disabled={uploadingReceipt || isNaN(resolvedSpend) || resolvedSpend === 0} className="bg-primary-teal text-text-inverse rounded-full px-3 py-1 text-[10px] font-bold hover:opacity-90 disabled:opacity-50 transition-opacity">Log</button>
           {uploadingReceipt && <span className="text-[10px] text-text-muted">reading receipt…</span>}
           {spendMode === 'left' && !isNaN(resolvedSpend) && (
             <span className="text-[10px] text-text-muted">→ logs {formatCurrency(resolvedSpend)} spent</span>
@@ -2198,7 +2130,6 @@ function SpendLedger({
 // ─── Expense Row Component ───────────────────────────────────────
 function ExpenseRow({
   expense,
-  isPending,
   isLocked,
   onCheckboxChange,
   onDebouncedUpdate,
@@ -2222,7 +2153,6 @@ function ExpenseRow({
   categoryColorMap,
 }: {
   expense: PeriodExpense
-  isPending: boolean
   isLocked: boolean
   onCheckboxChange: (id: string, field: string, value: boolean) => void
   onDebouncedUpdate: (id: string, field: string, value: boolean | number | string | null) => void
@@ -2374,7 +2304,6 @@ function ExpenseRow({
               {!isLocked && !isLinked && (
                 <button
                   onClick={() => setSpendOpen((o) => !o)}
-                  disabled={isPending}
                   title={spendOpen ? 'Close spend ledger' : hasLedger ? `Edit spends (${adjustments.length})` : 'Log a spend'}
                   aria-label="Log or adjust spend"
                   className={`mt-0.5 inline-flex items-center gap-0.5 text-[11px] font-semibold transition-colors disabled:opacity-50 ${spendOpen ? 'text-primary-teal' : 'text-primary hover:text-primary-teal'}`}
@@ -2442,7 +2371,6 @@ function ExpenseRow({
               {!isLocked && isDrawDown && !expense.is_split && (
                 <button
                   onClick={() => setSpendOpen((o) => !o)}
-                  disabled={isPending}
                   title={spendOpen ? 'Close spend ledger' : hasLedger ? `Edit spends (${adjustments.length})` : 'Log a spend'}
                   aria-label="Log or adjust spend"
                   className={`mt-0.5 inline-flex items-center gap-0.5 text-[11px] font-semibold transition-colors disabled:opacity-50 ${spendOpen ? 'text-primary-teal' : 'text-primary hover:text-primary-teal'}`}
@@ -2455,7 +2383,6 @@ function ExpenseRow({
               {!isLocked && (
                 <button
                   onClick={() => onToggleSplit(expense.id, !expense.is_split)}
-                  disabled={isPending}
                   className="text-[10px] text-primary font-semibold hover:underline mt-0.5 block disabled:opacity-50"
                 >
                   {expense.is_split ? '✕ Unsplit' : '+ Split'}
@@ -2531,7 +2458,6 @@ function ExpenseRow({
             {!rowDisabled && (
               <button
                 onClick={() => onRemove(expense.id)}
-                disabled={isPending}
                 title="Remove this expense from this budget"
                 className="text-caption font-semibold text-text-muted hover:text-warning transition-colors disabled:opacity-50"
               >
@@ -2553,7 +2479,6 @@ function ExpenseRow({
             parentTracked={isDrawDown}
             hasRemove={!!onRemove}
             disabled={rowDisabled}
-            isPending={isPending}
             onPaymentField={onPaymentField}
             onPaymentToggle={onPaymentToggle}
             onPaymentCleared={onPaymentCleared}
@@ -2570,7 +2495,6 @@ function ExpenseRow({
           <td className="px-3 py-2 pl-8" colSpan={onRemove ? 10 : 9}>
             <button
               onClick={() => onAddPayment(expense.id)}
-              disabled={isPending}
               className="text-caption text-primary font-semibold hover:underline disabled:opacity-50"
             >
               + Add payment
@@ -2595,7 +2519,6 @@ function ExpenseRow({
               onCover={(fromId, amount) => onTransferFunds(fromId, expense.id, amount)}
               onOpenMoveFunds={() => onOpenMoveFunds(expense)}
               isLocked={isLocked}
-              isPending={isPending}
               inputClass={inputClass}
             />
           </td>
@@ -2613,7 +2536,6 @@ function SubPaymentRow({
   parentTracked,
   hasRemove,
   disabled,
-  isPending,
   onPaymentField,
   onPaymentToggle,
   onPaymentCleared,
@@ -2630,7 +2552,6 @@ function SubPaymentRow({
   // Parent table has a trailing Remove column (extra expenses) — render a spacer to match.
   hasRemove: boolean
   disabled: boolean
-  isPending: boolean
   onPaymentField: (paymentId: string, field: string, value: string | number | boolean | null) => void
   onPaymentToggle: (paymentId: string, field: string, value: boolean) => void
   onPaymentCleared: (paymentId: string, value: boolean) => void
@@ -2674,7 +2595,7 @@ function SubPaymentRow({
             className={`w-28 text-caption ${inputClass}`}
           />
           {!locked && (
-            <button onClick={() => onRemovePayment(payment.id)} disabled={isPending} title="Remove this payment" className="text-text-muted hover:text-warning text-[10px] disabled:opacity-50">
+            <button onClick={() => onRemovePayment(payment.id)} title="Remove this payment" className="text-text-muted hover:text-warning text-[10px] disabled:opacity-50">
               ✕
             </button>
           )}
@@ -2704,7 +2625,6 @@ function SubPaymentRow({
         {parentTracked && !locked && (
           <button
             onClick={() => setSubSpendOpen((o) => !o)}
-            disabled={isPending}
             title={subSpendOpen ? 'Close spend ledger' : subHasLedger ? `Edit spends (${subAdjustments.length})` : 'Log a spend on this installment'}
             className={`mt-0.5 inline-flex items-center gap-0.5 text-[11px] font-semibold transition-colors disabled:opacity-50 ${subSpendOpen ? 'text-primary-teal' : 'text-primary hover:text-primary-teal'}`}
           >
@@ -2754,7 +2674,6 @@ function SubPaymentRow({
             onRemove={onRemoveSpend}
             onAttachImage={onAttachSpendImage}
             isLocked={locked}
-            isPending={isPending}
             inputClass={inputClass}
           />
         </td>

@@ -1,11 +1,11 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { generateInviteLink, removeHouseholdMember } from '@/app/actions/household'
-import type { HouseholdMember } from '@/lib/types'
+import { generateInviteLink, removeTeamMember } from '@/app/actions/team'
+import type { TeamMember } from '@/lib/types'
 
 interface MembersPanelProps {
-  members: HouseholdMember[]
+  members: TeamMember[]
   currentUserId: string
 }
 
@@ -38,12 +38,12 @@ export default function MembersPanel({ members, currentUserId }: MembersPanelPro
   }
 
   const handleRemove = (memberId: string) => {
-    if (!confirm('Remove this member from the household?')) return
+    if (!confirm('Remove this member from the team?')) return
     setError(null)
     setRemovingId(memberId)
     startRemoving(async () => {
       try {
-        await removeHouseholdMember(memberId)
+        await removeTeamMember(memberId)
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to remove member')
       } finally {
@@ -56,7 +56,7 @@ export default function MembersPanel({ members, currentUserId }: MembersPanelPro
     <div className="bg-bg-white rounded-lg shadow-card p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-h3 font-bold text-text-heading">Household Members</h2>
+          <h2 className="text-h3 font-bold text-text-heading">Team Members</h2>
           <p className="text-caption text-text-muted mt-0.5">{members.length} member{members.length !== 1 ? 's' : ''}</p>
         </div>
         <button

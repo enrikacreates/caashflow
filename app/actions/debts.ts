@@ -1,17 +1,17 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { getUserHouseholdId } from '@/lib/supabase/helpers'
+import { getUserTeamId } from '@/lib/supabase/helpers'
 import { revalidatePath } from 'next/cache'
 
 export async function getDebts() {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { data, error } = await supabase
     .from('debts')
     .select('*')
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
     .order('is_paid_off', { ascending: true })
     .order('sort_order', { ascending: true })
     .order('created_at', { ascending: true })
@@ -30,11 +30,11 @@ export async function createDebt(data: {
   notes: string | null
 }) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { data: created, error } = await supabase
     .from('debts')
-    .insert({ ...data, household_id: householdId })
+    .insert({ ...data, team_id: teamId })
     .select('id')
     .single()
 
@@ -56,13 +56,13 @@ export async function updateDebt(
   }>
 ) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { error } = await supabase
     .from('debts')
     .update({ ...data, updated_at: new Date().toISOString() })
     .eq('id', id)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (error) throw new Error(`Failed to update debt: ${error.message}`)
   revalidatePath('/debts')
@@ -70,13 +70,13 @@ export async function updateDebt(
 
 export async function logPayment(id: string, amount: number) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { data: debt, error: fetchError } = await supabase
     .from('debts')
     .select('current_balance, minimum_payment')
     .eq('id', id)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
     .single()
 
   if (fetchError || !debt) throw new Error('Debt not found')
@@ -89,7 +89,7 @@ export async function logPayment(id: string, amount: number) {
     .from('debts')
     .update({ current_balance: newBalance, updated_at: new Date().toISOString() })
     .eq('id', id)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (error) throw new Error(`Failed to log payment: ${error.message}`)
   revalidatePath('/debts')
@@ -98,7 +98,7 @@ export async function logPayment(id: string, amount: number) {
 
 export async function markPaidOff(id: string) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { error } = await supabase
     .from('debts')
@@ -109,7 +109,7 @@ export async function markPaidOff(id: string) {
       updated_at: new Date().toISOString(),
     })
     .eq('id', id)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (error) throw new Error(`Failed to mark debt as paid off: ${error.message}`)
   revalidatePath('/debts')
@@ -117,13 +117,13 @@ export async function markPaidOff(id: string) {
 
 export async function deleteDebt(id: string) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { error } = await supabase
     .from('debts')
     .delete()
     .eq('id', id)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (error) throw new Error(`Failed to delete debt: ${error.message}`)
   revalidatePath('/debts')
@@ -134,14 +134,14 @@ export async function setDebtBudgetItemLink(
   budgetItemId: string | null
 ) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   // Clear any existing link for this debt
   const { error: clearError } = await supabase
     .from('base_budget_items')
     .update({ debt_id: null, updated_at: new Date().toISOString() })
     .eq('debt_id', debtId)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (clearError) throw new Error(`Failed to clear existing link: ${clearError.message}`)
 
@@ -150,7 +150,7 @@ export async function setDebtBudgetItemLink(
       .from('base_budget_items')
       .update({ debt_id: debtId, updated_at: new Date().toISOString() })
       .eq('id', budgetItemId)
-      .eq('household_id', householdId)
+      .eq('team_id', teamId)
 
     if (error) throw new Error(`Failed to link budget item: ${error.message}`)
   }

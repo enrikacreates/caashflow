@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { getUserHouseholdId } from '@/lib/supabase/helpers'
+import { getUserTeamId } from '@/lib/supabase/helpers'
 import { isFullyPaid } from '@/lib/calculations'
 import { getOwedAmount } from '@/lib/utils'
 import type { PeriodExpense } from '@/lib/types'
@@ -19,7 +19,7 @@ export async function GET() {
   } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
 
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
   const year = new Date().getFullYear()
   const yearStart = `${year}-01-01`
   const yearEnd = `${year}-12-31`
@@ -28,7 +28,7 @@ export async function GET() {
   const { data: invoices } = await supabase
     .from('invoices')
     .select('amount, status, actual_received_date, month')
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
     .eq('status', 'received')
 
   const invoiceEarned = (invoices ?? []).reduce((sum, inv) => {
@@ -41,7 +41,7 @@ export async function GET() {
   const { data: manual } = await supabase
     .from('period_manual_income')
     .select('amount, budget_periods ( period_month )')
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
     .eq('exclude_from_reports', false)
 
   const manualEarned = (manual ?? []).reduce((sum, row) => {
@@ -55,7 +55,7 @@ export async function GET() {
   const { data: periods } = await supabase
     .from('budget_periods')
     .select('id')
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
     .gte('period_month', yearStart)
     .lte('period_month', yearEnd)
 
@@ -65,7 +65,7 @@ export async function GET() {
     const { data: expenses } = await supabase
       .from('period_expenses')
       .select('*')
-      .eq('household_id', householdId)
+      .eq('team_id', teamId)
       .in('period_id', periodIds)
 
     const expenseList = (expenses ?? []) as PeriodExpense[]
@@ -105,14 +105,14 @@ export async function GET() {
   const { data: debts } = await supabase
     .from('debts')
     .select('current_balance')
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
   const owed = (debts ?? []).reduce((sum, d) => sum + (d.current_balance ?? 0), 0)
 
   // --- Saved: current savings total ---
   const { data: goals } = await supabase
     .from('savings_goals')
     .select('current_amount')
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
   const saved = (goals ?? []).reduce((sum, g) => sum + (g.current_amount ?? 0), 0)
 
   return NextResponse.json({ year, earned, paid, owed, saved })

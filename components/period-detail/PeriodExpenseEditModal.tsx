@@ -1,5 +1,6 @@
 'use client'
 
+import { notifyError } from '@/lib/toast'
 import { useState, useTransition, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { updatePeriodExpenseDetails, transferFunds, undoTransfer } from '@/app/actions/period-expenses'
@@ -12,7 +13,8 @@ import type { PeriodExpense, PeriodExpenseTransfer, Account, PriorityCategoryRec
 const round2 = (n: number) => Math.round(n * 100) / 100
 
 export default function PeriodExpenseEditModal({
-  expense, expenses, transfers, accounts, categories, onClose, focusMove = false,
+  expense, expenses, transfers, accounts, categories, onClose,
+  onSaved, focusMove = false,
 }: {
   expense: PeriodExpense
   expenses: PeriodExpense[]
@@ -20,9 +22,11 @@ export default function PeriodExpenseEditModal({
   accounts: Account[]
   categories: PriorityCategoryRecord[]
   onClose: () => void
+  // Applies the saved edits to the budget row immediately (optimistic)
+  onSaved?: (patch: Partial<PeriodExpense>) => void
   focusMove?: boolean
 }) {
-  const [isPending, startTransition] = useTransition()
+  const [, startTransition] = useTransition()
   const [alsoMaster, setAlsoMaster] = useState(false)
   const [trackSpending, setTrackSpending] = useState(expense.track_spending)
   // Local amount state so the MathInput can hold an unresolved expression mid-typing.
@@ -86,15 +90,18 @@ export default function PeriodExpenseEditModal({
     if (amt > moveCap + 0.005) { setMoveError(`Only ${formatCurrency(moveCap)} available to move`); return }
     const fromId = moveDir === 'to' ? expense.id : moveOther
     const toId = moveDir === 'to' ? moveOther : expense.id
+    // Show the move right away; roll it back if the server refuses it
+    applyDelta(fromId, -amt)
+    applyDelta(toId, amt)
+    setMoveAmount('')
+    setMoveOther('')
     startMove(async () => {
       try {
         const row = await transferFunds(fromId, toId, amt)
         if (row) setHistory((h) => [row, ...h])
-        applyDelta(fromId, -amt)
-        applyDelta(toId, amt)
-        setMoveAmount('')
-        setMoveOther('')
       } catch (err) {
+        applyDelta(fromId, amt)
+        applyDelta(toId, -amt)
         setMoveError(err instanceof Error ? err.message : 'Move failed')
       }
     })
@@ -120,18 +127,22 @@ export default function PeriodExpenseEditModal({
     // Resolve any un-blurred expression (e.g. "1.50*10") before save.
     const resolvedAmount = evalMath(amountRaw)
     const finalAmount = resolvedAmount != null ? Math.round(resolvedAmount * 100) / 100 : amount
+    const patch = {
+      name: (fd.get('name') as string).trim(),
+      default_amount: finalAmount,
+      account: ((fd.get('account') as string) || '').trim() || null,
+      priority_category: ((fd.get('priority_category') as string) || '').trim() || null,
+      due_day: due ? parseInt(due, 10) : null,
+      pay_url: ((fd.get('pay_url') as string) || '').trim() || null,
+      notes: ((fd.get('notes') as string) || '').trim() || null,
+      track_spending: trackSpending,
+    }
+    // Close now and show the edits on the row; the server saves in the background
+    onClose()
     startTransition(async () => {
-      await updatePeriodExpenseDetails(expense.id, {
-        name: (fd.get('name') as string).trim(),
-        default_amount: finalAmount,
-        account: ((fd.get('account') as string) || '').trim() || null,
-        priority_category: ((fd.get('priority_category') as string) || '').trim() || null,
-        due_day: due ? parseInt(due, 10) : null,
-        pay_url: ((fd.get('pay_url') as string) || '').trim() || null,
-        notes: ((fd.get('notes') as string) || '').trim() || null,
-        track_spending: trackSpending,
-      }, alsoMaster ? expense.base_item_id : null)
-      onClose()
+      onSaved?.(patch)
+      try { await updatePeriodExpenseDetails(expense.id, patch, alsoMaster ? expense.base_item_id : null) }
+      catch { notifyError('Could not save that expense. Please try again.') }
     })
   }
 
@@ -321,10 +332,9 @@ export default function PeriodExpenseEditModal({
               </button>
               <button
                 type="submit"
-                disabled={isPending}
                 className="bg-primary-teal text-text-inverse rounded-full px-5 py-2.5 text-caption font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity"
               >
-                {isPending ? 'Saving…' : 'Save'}
+                Save
               </button>
             </div>
           </div>

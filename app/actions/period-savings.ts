@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { getUserHouseholdId } from '@/lib/supabase/helpers'
+import { getUserTeamId } from '@/lib/supabase/helpers'
 import { revalidatePath } from 'next/cache'
 
 export async function upsertSavingsAllocation(
@@ -10,14 +10,14 @@ export async function upsertSavingsAllocation(
   amount: number
 ) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { error } = await supabase
     .from('period_savings_allocations')
     .upsert(
       {
         period_id: periodId,
-        household_id: householdId,
+        team_id: teamId,
         savings_goal_id: savingsGoalId,
         amount,
         updated_at: new Date().toISOString(),
@@ -34,14 +34,14 @@ export async function applySavingsAllocations(
   periodId: string
 ): Promise<{ applied: Array<{ goalId: string; delta: number; isNowAchieved: boolean }> }> {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   // Fetch all allocations for this period
   const { data: allocations, error: fetchError } = await supabase
     .from('period_savings_allocations')
     .select('*')
     .eq('period_id', periodId)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (fetchError) throw new Error(`Failed to fetch allocations: ${fetchError.message}`)
   if (!allocations || allocations.length === 0) return { applied: [] }
@@ -57,7 +57,7 @@ export async function applySavingsAllocations(
       .from('savings_goals')
       .select('current_amount, target_amount')
       .eq('id', alloc.savings_goal_id)
-      .eq('household_id', householdId)
+      .eq('team_id', teamId)
       .single()
 
     if (goalError || !goal) continue // goal may have been deleted
@@ -70,7 +70,7 @@ export async function applySavingsAllocations(
       .from('savings_goals')
       .update({ current_amount: newAmount, updated_at: new Date().toISOString() })
       .eq('id', alloc.savings_goal_id)
-      .eq('household_id', householdId)
+      .eq('team_id', teamId)
 
     if (updateGoalError) continue
 
@@ -92,13 +92,13 @@ export async function applySavingsAllocations(
 
 export async function removeSavingsAllocation(allocationId: string, periodId: string) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { error } = await supabase
     .from('period_savings_allocations')
     .delete()
     .eq('id', allocationId)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (error) throw new Error(`Failed to remove savings allocation: ${error.message}`)
 

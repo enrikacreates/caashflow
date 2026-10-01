@@ -1,17 +1,17 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { getUserHouseholdId } from '@/lib/supabase/helpers'
+import { getUserTeamId } from '@/lib/supabase/helpers'
 import { revalidatePath } from 'next/cache'
 
 export async function getSettings() {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { data, error } = await supabase
     .from('settings')
     .select('*')
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
     .limit(1)
     .single()
 
@@ -21,7 +21,7 @@ export async function getSettings() {
 
 export async function updateSettings(formData: FormData) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const expenseGoalRaw = formData.get('monthly_expense_goal') as string
   const incomeGoalRaw = formData.get('monthly_income_goal') as string
@@ -47,7 +47,7 @@ export async function updateSettings(formData: FormData) {
   const { error } = await supabase
     .from('settings')
     .update(updates)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (error) throw new Error(`Failed to update settings: ${error.message}`)
 
@@ -60,12 +60,12 @@ export async function updateSettings(formData: FormData) {
 
 export async function getAccounts() {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { data, error } = await supabase
     .from('accounts')
     .select('*')
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
     .order('sort_order', { ascending: true })
 
   if (error) throw new Error(`Failed to fetch accounts: ${error.message}`)
@@ -74,13 +74,13 @@ export async function getAccounts() {
 
 export async function createAccount(name: string) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   // Get next sort_order
   const { data: existing } = await supabase
     .from('accounts')
     .select('sort_order')
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
     .order('sort_order', { ascending: false })
     .limit(1)
 
@@ -88,7 +88,7 @@ export async function createAccount(name: string) {
 
   const { error } = await supabase
     .from('accounts')
-    .insert({ household_id: householdId, name, sort_order: nextOrder })
+    .insert({ team_id: teamId, name, sort_order: nextOrder })
 
   if (error) throw new Error(`Failed to create account: ${error.message}`)
 
@@ -98,14 +98,14 @@ export async function createAccount(name: string) {
 
 export async function updateAccount(id: string, name: string) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   // Old name → so we can propagate the rename across denormalized text columns.
   const { data: existing } = await supabase
     .from('accounts')
     .select('name')
     .eq('id', id)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
     .single()
   const from = existing?.name ?? null
 
@@ -113,7 +113,7 @@ export async function updateAccount(id: string, name: string) {
     .from('accounts')
     .update({ name, updated_at: new Date().toISOString() })
     .eq('id', id)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (error) throw new Error(`Failed to update account: ${error.message}`)
 
@@ -122,14 +122,14 @@ export async function updateAccount(id: string, name: string) {
     const now = new Date().toISOString()
     await supabase.from('base_budget_items')
       .update({ account: name, updated_at: now })
-      .eq('household_id', householdId).eq('account', from)
+      .eq('team_id', teamId).eq('account', from)
     await supabase.from('period_expenses')
       .update({ account: name, updated_at: now })
-      .eq('household_id', householdId).eq('account', from)
+      .eq('team_id', teamId).eq('account', from)
 
     const { data: s } = await supabase.from('settings')
       .select('tithe_account, savings_account, tax_account, profit_account, fun_money_account')
-      .eq('household_id', householdId).single()
+      .eq('team_id', teamId).single()
     if (s) {
       const patch: Record<string, string> = {}
       for (const k of ['tithe_account', 'savings_account', 'tax_account', 'profit_account', 'fun_money_account'] as const) {
@@ -138,7 +138,7 @@ export async function updateAccount(id: string, name: string) {
       if (Object.keys(patch).length) {
         await supabase.from('settings')
           .update({ ...patch, updated_at: now })
-          .eq('household_id', householdId)
+          .eq('team_id', teamId)
       }
     }
   }
@@ -151,13 +151,13 @@ export async function updateAccount(id: string, name: string) {
 
 export async function deleteAccount(id: string) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { error } = await supabase
     .from('accounts')
     .delete()
     .eq('id', id)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (error) throw new Error(`Failed to delete account: ${error.message}`)
 
@@ -167,14 +167,14 @@ export async function deleteAccount(id: string) {
 
 export async function reorderAccounts(ids: string[]) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   for (let i = 0; i < ids.length; i++) {
     const { error } = await supabase
       .from('accounts')
       .update({ sort_order: i, updated_at: new Date().toISOString() })
       .eq('id', ids[i])
-      .eq('household_id', householdId)
+      .eq('team_id', teamId)
 
     if (error) throw new Error(`Failed to reorder accounts: ${error.message}`)
   }
@@ -186,12 +186,12 @@ export async function reorderAccounts(ids: string[]) {
 
 export async function getPriorityCategories() {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { data, error } = await supabase
     .from('priority_categories')
     .select('*')
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
     .order('sort_order', { ascending: true })
 
   if (error) throw new Error(`Failed to fetch priority categories: ${error.message}`)
@@ -200,12 +200,12 @@ export async function getPriorityCategories() {
 
 export async function createPriorityCategory(name: string, colorKey: string) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { data: existing } = await supabase
     .from('priority_categories')
     .select('sort_order')
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
     .order('sort_order', { ascending: false })
     .limit(1)
 
@@ -213,7 +213,7 @@ export async function createPriorityCategory(name: string, colorKey: string) {
 
   const { error } = await supabase
     .from('priority_categories')
-    .insert({ household_id: householdId, name, color_key: colorKey, sort_order: nextOrder })
+    .insert({ team_id: teamId, name, color_key: colorKey, sort_order: nextOrder })
 
   if (error) throw new Error(`Failed to create priority category: ${error.message}`)
 
@@ -224,14 +224,14 @@ export async function createPriorityCategory(name: string, colorKey: string) {
 
 export async function updatePriorityCategory(id: string, name: string, colorKey: string) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   // Old name → so we can propagate the rename across denormalized text columns.
   const { data: existing } = await supabase
     .from('priority_categories')
     .select('name')
     .eq('id', id)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
     .single()
   const from = existing?.name ?? null
 
@@ -239,7 +239,7 @@ export async function updatePriorityCategory(id: string, name: string, colorKey:
     .from('priority_categories')
     .update({ name, color_key: colorKey, updated_at: new Date().toISOString() })
     .eq('id', id)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (error) throw new Error(`Failed to update priority category: ${error.message}`)
 
@@ -248,13 +248,13 @@ export async function updatePriorityCategory(id: string, name: string, colorKey:
     const now = new Date().toISOString()
     await supabase.from('base_budget_items')
       .update({ priority_category: name, updated_at: now })
-      .eq('household_id', householdId).eq('priority_category', from)
+      .eq('team_id', teamId).eq('priority_category', from)
     await supabase.from('period_expenses')
       .update({ priority_category: name, updated_at: now })
-      .eq('household_id', householdId).eq('priority_category', from)
+      .eq('team_id', teamId).eq('priority_category', from)
     await supabase.from('budget_requests')
       .update({ priority_category: name, updated_at: now })
-      .eq('household_id', householdId).eq('priority_category', from)
+      .eq('team_id', teamId).eq('priority_category', from)
   }
 
   revalidatePath('/settings')
@@ -265,13 +265,13 @@ export async function updatePriorityCategory(id: string, name: string, colorKey:
 
 export async function deletePriorityCategory(id: string) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { error } = await supabase
     .from('priority_categories')
     .delete()
     .eq('id', id)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (error) throw new Error(`Failed to delete priority category: ${error.message}`)
 
@@ -282,14 +282,14 @@ export async function deletePriorityCategory(id: string) {
 
 export async function reorderPriorityCategories(ids: string[]) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   for (let i = 0; i < ids.length; i++) {
     const { error } = await supabase
       .from('priority_categories')
       .update({ sort_order: i, updated_at: new Date().toISOString() })
       .eq('id', ids[i])
-      .eq('household_id', householdId)
+      .eq('team_id', teamId)
 
     if (error) throw new Error(`Failed to reorder priority categories: ${error.message}`)
   }

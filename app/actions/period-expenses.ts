@@ -1,12 +1,12 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { getUserHouseholdId } from '@/lib/supabase/helpers'
-import { calculateDeductions } from '@/lib/calculations'
+import { getUserTeamId } from '@/lib/supabase/helpers'
 import { revalidatePath } from 'next/cache'
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 import Anthropic from '@anthropic-ai/sdk'
-import type { PeriodExpenseTransfer } from '@/lib/types'
+import { DEDUCTION_KEYS } from '@/lib/calculations'
+import type { PeriodExpenseTransfer, DeductionKey, IncomeType } from '@/lib/types'
 
 type SupabaseServer = Awaited<ReturnType<typeof createClient>>
 
@@ -24,12 +24,12 @@ const r2 = new S3Client({
 
 /** Upload a receipt photo for a spend entry; returns its public URL. */
 export async function uploadReceiptImage(formData: FormData): Promise<string> {
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
   const file = formData.get('file') as File | null
   if (!file || file.size === 0) throw new Error('No file provided')
 
   const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
-  const key = `${householdId}/receipts/${crypto.randomUUID()}.${ext}`
+  const key = `${teamId}/receipts/${crypto.randomUUID()}.${ext}`
 
   await r2.send(
     new PutObjectCommand({
@@ -78,86 +78,20 @@ export async function extractReceiptTotal(imageUrl: string): Promise<number | nu
   }
 }
 
-/**
- * Log the deductions for a just-settled income item into the period ledger.
- * Each deduction is the settled amount × that deduction's effective percentage
- * (so % and fixed-$ rates both allocate proportionally). Computed against the
- * period's current income, before recalc excludes the settled item.
- */
-async function logDeductionContribution(
-  supabase: SupabaseServer,
-  householdId: string,
-  periodId: string,
-  sourceKind: 'manual' | 'invoice',
-  sourceId: string,
-  sourceLabel: string | null,
-  incomeAmount: number
-) {
-  const { data: period } = await supabase
-    .from('budget_periods')
-    .select('income_amount, deduction_overrides, kind, apply_deductions')
-    .eq('id', periodId)
-    .eq('household_id', householdId)
-    .single()
-  const { data: settings } = await supabase
-    .from('settings')
-    .select('*')
-    .eq('household_id', householdId)
-    .single()
-  if (!period || !settings) return
-  // Event budgets skip the contribution ledger unless deductions are opted in.
-  if (period.kind === 'event' && !period.apply_deductions) return
-
-  const ded = calculateDeductions(Number(period.income_amount) || 0, settings, period.deduction_overrides)
-  const p = ded.percentages
-  const A = incomeAmount
-
-  await supabase.from('period_deduction_contributions').upsert(
-    {
-      household_id: householdId,
-      period_id: periodId,
-      source_kind: sourceKind,
-      source_id: sourceId,
-      source_label: sourceLabel,
-      income_amount: A,
-      tithe: round2((A * p.titheP) / 100),
-      savings: round2((A * p.savingsP) / 100),
-      tax: round2((A * p.taxP) / 100),
-      profit: round2((A * p.profitP) / 100),
-      fun_money: round2((A * p.funMoneyP) / 100),
-    },
-    { onConflict: 'period_id,source_kind,source_id' }
-  )
-}
-
-async function removeDeductionContribution(
-  supabase: SupabaseServer,
-  householdId: string,
-  sourceKind: 'manual' | 'invoice',
-  sourceId: string
-) {
-  await supabase
-    .from('period_deduction_contributions')
-    .delete()
-    .eq('household_id', householdId)
-    .eq('source_kind', sourceKind)
-    .eq('source_id', sourceId)
-}
-
 export async function markExpensePaid(expenseId: string): Promise<{
   exceedsMinimum: boolean
   savingsExceedsMonthly: boolean
   savingsAchieved: boolean
 }> {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   // Fetch the expense to check for linked debt or savings goal
   const { data: expense, error: fetchError } = await supabase
     .from('period_expenses')
     .select('debt_id, savings_goal_id, amount_override, default_amount, paid_amount, period_id')
     .eq('id', expenseId)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
     .single()
 
   if (fetchError || !expense) throw new Error('Expense not found')
@@ -169,7 +103,7 @@ export async function markExpensePaid(expenseId: string): Promise<{
     .from('period_expenses')
     .update({ paid: true, paid_amount: effectiveAmount, updated_at: new Date().toISOString() })
     .eq('id', expenseId)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (updateError) throw new Error(`Failed to mark expense paid: ${updateError.message}`)
 
@@ -186,7 +120,7 @@ export async function markExpensePaid(expenseId: string): Promise<{
       .from('debts')
       .select('current_balance, minimum_payment')
       .eq('id', expense.debt_id)
-      .eq('household_id', householdId)
+      .eq('team_id', teamId)
       .single()
 
     if (!debtFetchError && debt) {
@@ -198,7 +132,7 @@ export async function markExpensePaid(expenseId: string): Promise<{
         .from('debts')
         .update({ current_balance: newBalance, updated_at: new Date().toISOString() })
         .eq('id', expense.debt_id)
-        .eq('household_id', householdId)
+        .eq('team_id', teamId)
 
       revalidatePath('/debts')
     }
@@ -209,7 +143,7 @@ export async function markExpensePaid(expenseId: string): Promise<{
       .from('savings_goals')
       .select('current_amount, target_amount, monthly_contribution')
       .eq('id', expense.savings_goal_id)
-      .eq('household_id', householdId)
+      .eq('team_id', teamId)
       .single()
 
     if (!goalFetchError && goal) {
@@ -222,7 +156,7 @@ export async function markExpensePaid(expenseId: string): Promise<{
         .from('savings_goals')
         .update({ current_amount: newAmount, updated_at: new Date().toISOString() })
         .eq('id', expense.savings_goal_id)
-        .eq('household_id', householdId)
+        .eq('team_id', teamId)
 
       revalidatePath('/savings')
     }
@@ -239,13 +173,13 @@ export async function updateExpenseField(
   value: boolean | number | string | null
 ) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { data, error } = await supabase
     .from('period_expenses')
     .update({ [field]: value, updated_at: new Date().toISOString() })
     .eq('id', expenseId)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
     .select('period_id')
     .single()
 
@@ -276,13 +210,13 @@ export async function updatePeriodExpenseDetails(
   alsoMasterBaseItemId?: string | null
 ) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { data, error } = await supabase
     .from('period_expenses')
     .update({ ...fields, updated_at: new Date().toISOString() })
     .eq('id', expenseId)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
     .select('period_id')
     .single()
 
@@ -293,7 +227,7 @@ export async function updatePeriodExpenseDetails(
       .from('base_budget_items')
       .update({ ...fields, updated_at: new Date().toISOString() })
       .eq('id', alsoMasterBaseItemId)
-      .eq('household_id', householdId)
+      .eq('team_id', teamId)
     if (masterErr) throw new Error(`Failed to update baseline item: ${masterErr.message}`)
     revalidatePath('/base-budget')
   }
@@ -308,13 +242,13 @@ export async function updateExpenseBulk(
   data: Record<string, unknown>
 ) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { error } = await supabase
     .from('period_expenses')
     .update({ ...data, updated_at: new Date().toISOString() })
     .eq('id', expenseId)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (error) throw new Error(`Failed to bulk update expense: ${error.message}`)
 
@@ -322,15 +256,15 @@ export async function updateExpenseBulk(
 }
 
 /** Mark (or clear) a deduction type (tithe|savings|tax|profit|fun_money) as set aside/paid for this period. */
-export async function setDeductionPaid(periodId: string, key: string, done: boolean) {
+export async function setDeductionPaid(periodId: string, sessionId: string, key: string, done: boolean) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { data: row } = await supabase
-    .from('budget_periods')
+    .from('budget_sessions')
     .select('deduction_paid')
-    .eq('id', periodId)
-    .eq('household_id', householdId)
+    .eq('id', sessionId)
+    .eq('team_id', teamId)
     .single()
 
   const next = { ...((row?.deduction_paid ?? {}) as Record<string, boolean>) }
@@ -338,25 +272,25 @@ export async function setDeductionPaid(periodId: string, key: string, done: bool
   else delete next[key]
 
   const { error } = await supabase
-    .from('budget_periods')
+    .from('budget_sessions')
     .update({ deduction_paid: next, updated_at: new Date().toISOString() })
-    .eq('id', periodId)
-    .eq('household_id', householdId)
+    .eq('id', sessionId)
+    .eq('team_id', teamId)
   if (error) throw new Error(`Failed to update deduction status: ${error.message}`)
 
   revalidatePath(`/periods/${periodId}`)
 }
 
-/** Toggle whether a deduction (e.g. Giving) is taken as cash this period. */
-export async function setDeductionCash(periodId: string, key: string, on: boolean) {
+/** Toggle whether a deduction (e.g. Giving) is taken as cash this session. */
+export async function setDeductionCash(periodId: string, sessionId: string, key: string, on: boolean) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { data: row } = await supabase
-    .from('budget_periods')
+    .from('budget_sessions')
     .select('deduction_cash')
-    .eq('id', periodId)
-    .eq('household_id', householdId)
+    .eq('id', sessionId)
+    .eq('team_id', teamId)
     .single()
 
   const next = { ...((row?.deduction_cash ?? {}) as Record<string, boolean>) }
@@ -364,26 +298,26 @@ export async function setDeductionCash(periodId: string, key: string, on: boolea
   else delete next[key]
 
   const { error } = await supabase
-    .from('budget_periods')
+    .from('budget_sessions')
     .update({ deduction_cash: next, updated_at: new Date().toISOString() })
-    .eq('id', periodId)
-    .eq('household_id', householdId)
+    .eq('id', sessionId)
+    .eq('team_id', teamId)
   if (error) throw new Error(`Failed to update deduction cash flag: ${error.message}`)
 
   revalidatePath(`/periods/${periodId}`)
 }
 
 /** Mark (or clear) an account's transfer as completed for this period. */
-export async function setAccountTransferDone(periodId: string, accountName: string, done: boolean) {
+export async function setAccountTransferDone(periodId: string, sessionId: string, accountName: string, done: boolean) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   // Upsert (don't delete) so the row's cash_done flag is preserved.
   const { error } = await supabase
     .from('period_account_transfers')
     .upsert(
-      { period_id: periodId, household_id: householdId, account_name: accountName, transferred: done, updated_at: new Date().toISOString() },
-      { onConflict: 'period_id,account_name' }
+      { period_id: periodId, session_id: sessionId, team_id: teamId, account_name: accountName, transferred: done, updated_at: new Date().toISOString() },
+      { onConflict: 'session_id,account_name' }
     )
   if (error) throw new Error(`Failed to update transfer: ${error.message}`)
 
@@ -391,15 +325,15 @@ export async function setAccountTransferDone(periodId: string, accountName: stri
 }
 
 /** Mark (or clear) that an account's cash has been withdrawn for this period. */
-export async function setAccountCashDone(periodId: string, accountName: string, done: boolean) {
+export async function setAccountCashDone(periodId: string, sessionId: string, accountName: string, done: boolean) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { error } = await supabase
     .from('period_account_transfers')
     .upsert(
-      { period_id: periodId, household_id: householdId, account_name: accountName, cash_done: done, updated_at: new Date().toISOString() },
-      { onConflict: 'period_id,account_name' }
+      { period_id: periodId, session_id: sessionId, team_id: teamId, account_name: accountName, cash_done: done, updated_at: new Date().toISOString() },
+      { onConflict: 'session_id,account_name' }
     )
   if (error) throw new Error(`Failed to update cash status: ${error.message}`)
 
@@ -408,20 +342,21 @@ export async function setAccountCashDone(periodId: string, accountName: string, 
 
 export async function updateDeductionOverrides(
   periodId: string,
+  sessionId: string,
   overrides: Record<string, number | null>
 ) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   // Fetch current overrides so we merge instead of replace
   const { data: period, error: fetchError } = await supabase
-    .from('budget_periods')
+    .from('budget_sessions')
     .select('deduction_overrides')
-    .eq('id', periodId)
-    .eq('household_id', householdId)
+    .eq('id', sessionId)
+    .eq('team_id', teamId)
     .single()
 
-  if (fetchError) throw new Error(`Failed to fetch period overrides: ${fetchError.message}`)
+  if (fetchError) throw new Error(`Failed to fetch session overrides: ${fetchError.message}`)
 
   const current = (period?.deduction_overrides as Record<string, number | null>) || {}
   const merged = { ...current, ...overrides }
@@ -434,13 +369,13 @@ export async function updateDeductionOverrides(
   }
 
   const { error } = await supabase
-    .from('budget_periods')
+    .from('budget_sessions')
     .update({
       deduction_overrides: merged,
       updated_at: new Date().toISOString(),
     })
-    .eq('id', periodId)
-    .eq('household_id', householdId)
+    .eq('id', sessionId)
+    .eq('team_id', teamId)
 
   if (error) throw new Error(`Failed to update deduction overrides: ${error.message}`)
 
@@ -449,23 +384,24 @@ export async function updateDeductionOverrides(
 }
 
 /** Capture an adjustment line (amount + optional note) into the period ledger. */
-export async function addAdjustment(periodId: string, amount: number, note: string | null) {
+export async function addAdjustment(periodId: string, sessionId: string, amount: number, note: string | null) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { data: existing } = await supabase
     .from('period_adjustments')
     .select('sort_order')
     .eq('period_id', periodId)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
     .order('sort_order', { ascending: false })
     .limit(1)
 
   const nextOrder = existing && existing.length > 0 ? existing[0].sort_order + 1 : 0
 
   const { error } = await supabase.from('period_adjustments').insert({
-    household_id: householdId,
+    team_id: teamId,
     period_id: periodId,
+    session_id: sessionId,
     amount,
     note,
     sort_order: nextOrder,
@@ -483,13 +419,13 @@ export async function updateAdjustment(
   data: Partial<{ amount: number; note: string | null }>
 ) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { error } = await supabase
     .from('period_adjustments')
     .update({ ...data, updated_at: new Date().toISOString() })
     .eq('id', id)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (error) throw new Error(`Failed to update adjustment: ${error.message}`)
   revalidatePath(`/periods/${periodId}`)
@@ -499,13 +435,13 @@ export async function updateAdjustment(
 /** Remove an adjustment line. */
 export async function removeAdjustment(id: string, periodId: string) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { error } = await supabase
     .from('period_adjustments')
     .delete()
     .eq('id', id)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (error) throw new Error(`Failed to remove adjustment: ${error.message}`)
   revalidatePath(`/periods/${periodId}`)
@@ -524,13 +460,13 @@ export async function addOneTimeExpense(
   }
 ) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { data: existing } = await supabase
     .from('period_expenses')
     .select('sort_order')
     .eq('period_id', periodId)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
     .order('sort_order', { ascending: false })
     .limit(1)
 
@@ -538,7 +474,7 @@ export async function addOneTimeExpense(
 
   const { error } = await supabase.from('period_expenses').insert({
     period_id: periodId,
-    household_id: householdId,
+    team_id: teamId,
     base_item_id: null,
     name: data.name,
     default_amount: data.default_amount,
@@ -570,13 +506,13 @@ export async function addOneTimeExpense(
 /** Delete a period expense (used for ad-hoc one-time items; sub-payments cascade). */
 export async function removePeriodExpense(id: string, periodId: string) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { error } = await supabase
     .from('period_expenses')
     .delete()
     .eq('id', id)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (error) throw new Error(`Failed to remove expense: ${error.message}`)
   revalidatePath(`/periods/${periodId}`)
@@ -588,13 +524,13 @@ export async function removePeriodExpense(id: string, periodId: string) {
 /** Toggle whether an expense is split into sub-payments. Seeds one row when enabling. */
 export async function toggleExpenseSplit(expenseId: string, periodId: string, isSplit: boolean) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { error } = await supabase
     .from('period_expenses')
     .update({ is_split: isSplit, updated_at: new Date().toISOString() })
     .eq('id', expenseId)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (error) throw new Error(`Failed to toggle split: ${error.message}`)
 
@@ -603,12 +539,12 @@ export async function toggleExpenseSplit(expenseId: string, periodId: string, is
       .from('period_expense_payments')
       .select('id')
       .eq('period_expense_id', expenseId)
-      .eq('household_id', householdId)
+      .eq('team_id', teamId)
       .limit(1)
 
     if (!existing || existing.length === 0) {
       await supabase.from('period_expense_payments').insert({
-        household_id: householdId,
+        team_id: teamId,
         period_expense_id: expenseId,
         label: 'Payment 1',
         amount: 0,
@@ -623,20 +559,20 @@ export async function toggleExpenseSplit(expenseId: string, periodId: string, is
 /** Add a new sub-payment row to a split expense. */
 export async function addExpensePayment(expenseId: string, periodId: string) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { data: existing } = await supabase
     .from('period_expense_payments')
     .select('sort_order')
     .eq('period_expense_id', expenseId)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
     .order('sort_order', { ascending: false })
     .limit(1)
 
   const nextOrder = existing && existing.length > 0 ? existing[0].sort_order + 1 : 0
 
   const { error } = await supabase.from('period_expense_payments').insert({
-    household_id: householdId,
+    team_id: teamId,
     period_expense_id: expenseId,
     label: `Payment ${nextOrder + 1}`,
     amount: 0,
@@ -662,7 +598,7 @@ export async function updateExpensePayment(
   }>
 ): Promise<{ savingsAchieved: boolean; exceedsMinimum: boolean; savingsExceedsMonthly: boolean }> {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   let savingsAchieved = false
   let exceedsMinimum = false
@@ -673,7 +609,7 @@ export async function updateExpensePayment(
       .from('period_expense_payments')
       .select('amount, paid, period_expense_id')
       .eq('id', paymentId)
-      .eq('household_id', householdId)
+      .eq('team_id', teamId)
       .single()
 
     if (payment && payment.paid !== data.paid) {
@@ -681,7 +617,7 @@ export async function updateExpensePayment(
         .from('period_expenses')
         .select('debt_id, savings_goal_id')
         .eq('id', payment.period_expense_id)
-        .eq('household_id', householdId)
+        .eq('team_id', teamId)
         .single()
 
       const amt = data.amount !== undefined ? data.amount : payment.amount
@@ -692,7 +628,7 @@ export async function updateExpensePayment(
           .from('debts')
           .select('current_balance, minimum_payment')
           .eq('id', parent.debt_id)
-          .eq('household_id', householdId)
+          .eq('team_id', teamId)
           .single()
         if (debt) {
           exceedsMinimum = debt.minimum_payment !== null && delta > debt.minimum_payment
@@ -700,7 +636,7 @@ export async function updateExpensePayment(
             .from('debts')
             .update({ current_balance: Math.max(0, debt.current_balance - delta), updated_at: new Date().toISOString() })
             .eq('id', parent.debt_id)
-            .eq('household_id', householdId)
+            .eq('team_id', teamId)
           revalidatePath('/debts')
         }
       }
@@ -710,7 +646,7 @@ export async function updateExpensePayment(
           .from('savings_goals')
           .select('current_amount, target_amount, monthly_contribution')
           .eq('id', parent.savings_goal_id)
-          .eq('household_id', householdId)
+          .eq('team_id', teamId)
           .single()
         if (goal) {
           const newAmount = Math.max(0, goal.current_amount + delta)
@@ -720,7 +656,7 @@ export async function updateExpensePayment(
             .from('savings_goals')
             .update({ current_amount: newAmount, updated_at: new Date().toISOString() })
             .eq('id', parent.savings_goal_id)
-            .eq('household_id', householdId)
+            .eq('team_id', teamId)
           revalidatePath('/savings')
         }
       }
@@ -731,7 +667,7 @@ export async function updateExpensePayment(
     .from('period_expense_payments')
     .update({ ...data, updated_at: new Date().toISOString() })
     .eq('id', paymentId)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (error) throw new Error(`Failed to update payment: ${error.message}`)
 
@@ -742,13 +678,13 @@ export async function updateExpensePayment(
 /** Remove a sub-payment row. */
 export async function removeExpensePayment(paymentId: string, periodId: string) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { error } = await supabase
     .from('period_expense_payments')
     .delete()
     .eq('id', paymentId)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (error) throw new Error(`Failed to remove payment: ${error.message}`)
   revalidatePath(`/periods/${periodId}`)
@@ -762,7 +698,7 @@ const NO_RIPPLE: RippleFlags = { exceedsMinimum: false, savingsExceedsMonthly: f
 /** Apply a spend delta to a line's linked debt / savings goal; returns milestone flags for confetti. */
 async function applyLedgerDelta(
   supabase: SupabaseServer,
-  householdId: string,
+  teamId: string,
   expense: { debt_id: string | null; savings_goal_id: string | null },
   delta: number
 ): Promise<RippleFlags> {
@@ -773,7 +709,7 @@ async function applyLedgerDelta(
       .from('debts')
       .select('current_balance, minimum_payment')
       .eq('id', expense.debt_id)
-      .eq('household_id', householdId)
+      .eq('team_id', teamId)
       .single()
     if (debt) {
       if (delta > 0 && debt.minimum_payment !== null) flags.exceedsMinimum = delta > Number(debt.minimum_payment)
@@ -781,7 +717,7 @@ async function applyLedgerDelta(
         .from('debts')
         .update({ current_balance: Math.max(0, Number(debt.current_balance) - delta), updated_at: new Date().toISOString() })
         .eq('id', expense.debt_id)
-        .eq('household_id', householdId)
+        .eq('team_id', teamId)
       revalidatePath('/debts')
     }
   }
@@ -790,7 +726,7 @@ async function applyLedgerDelta(
       .from('savings_goals')
       .select('current_amount, target_amount, monthly_contribution')
       .eq('id', expense.savings_goal_id)
-      .eq('household_id', householdId)
+      .eq('team_id', teamId)
       .single()
     if (goal) {
       const newAmount = Math.max(0, Number(goal.current_amount) + delta)
@@ -802,7 +738,7 @@ async function applyLedgerDelta(
         .from('savings_goals')
         .update({ current_amount: newAmount, updated_at: new Date().toISOString() })
         .eq('id', expense.savings_goal_id)
-        .eq('household_id', householdId)
+        .eq('team_id', teamId)
       revalidatePath('/savings')
     }
   }
@@ -824,7 +760,7 @@ async function applyLedgerDelta(
  */
 async function reconcileExpenseSpend(
   supabase: SupabaseServer,
-  householdId: string,
+  teamId: string,
   expenseId: string,
   opts: { forceClosed?: boolean } = {}
 ): Promise<RippleFlags> {
@@ -832,7 +768,7 @@ async function reconcileExpenseSpend(
     .from('period_expenses')
     .select('default_amount, amount_override, paid_amount, paid, is_complete, track_spending, debt_id, savings_goal_id')
     .eq('id', expenseId)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
     .single()
   if (!exp) return { ...NO_RIPPLE }
 
@@ -840,7 +776,7 @@ async function reconcileExpenseSpend(
     .from('period_expense_adjustments')
     .select('amount')
     .eq('period_expense_id', expenseId)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
     .is('period_expense_payment_id', null) // whole-line spends only; installment spends reconcile per sub-payment
 
   const ledgerSum = round2((rows ?? []).reduce((s, r) => s + (Number(r.amount) || 0), 0))
@@ -857,7 +793,7 @@ async function reconcileExpenseSpend(
   const prevBooked = Number(exp.paid_amount) || 0
   const delta = round2(newSpent - prevBooked)
 
-  const flags = await applyLedgerDelta(supabase, householdId, exp, delta)
+  const flags = await applyLedgerDelta(supabase, teamId, exp, delta)
 
   const update: Record<string, unknown> = {
     paid_amount: newSpent,
@@ -872,7 +808,7 @@ async function reconcileExpenseSpend(
     .from('period_expenses')
     .update(update)
     .eq('id', expenseId)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   return flags
 }
@@ -883,12 +819,12 @@ async function reconcileExpenseSpend(
  * fully spent. Ripples the delta to the parent line's linked debt/savings, and seals the parent
  * once every installment is cleared.
  */
-async function reconcilePaymentSpend(supabase: SupabaseServer, householdId: string, paymentId: string): Promise<RippleFlags> {
+async function reconcilePaymentSpend(supabase: SupabaseServer, teamId: string, paymentId: string): Promise<RippleFlags> {
   const { data: pay } = await supabase
     .from('period_expense_payments')
     .select('amount, paid_amount, period_expense_id')
     .eq('id', paymentId)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
     .single()
   if (!pay) return { ...NO_RIPPLE }
 
@@ -896,7 +832,7 @@ async function reconcilePaymentSpend(supabase: SupabaseServer, householdId: stri
     .from('period_expense_adjustments')
     .select('amount')
     .eq('period_expense_payment_id', paymentId)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   const ledgerSum = round2((rows ?? []).reduce((s, r) => s + (Number(r.amount) || 0), 0))
   const funded = Number(pay.amount) || 0
@@ -909,9 +845,9 @@ async function reconcilePaymentSpend(supabase: SupabaseServer, householdId: stri
     .from('period_expenses')
     .select('debt_id, savings_goal_id')
     .eq('id', pay.period_expense_id)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
     .single()
-  const flags = parent ? await applyLedgerDelta(supabase, householdId, parent, delta) : { ...NO_RIPPLE }
+  const flags = parent ? await applyLedgerDelta(supabase, teamId, parent, delta) : { ...NO_RIPPLE }
 
   const update: Record<string, unknown> = { paid_amount: newSpent, paid: closed, updated_at: new Date().toISOString() }
   if (closed) { update.cleared = true; update.pay_now = false }
@@ -919,20 +855,20 @@ async function reconcilePaymentSpend(supabase: SupabaseServer, householdId: stri
     .from('period_expense_payments')
     .update(update)
     .eq('id', paymentId)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   // Seal the parent split once every installment is cleared.
   const { data: subs } = await supabase
     .from('period_expense_payments')
     .select('cleared')
     .eq('period_expense_id', pay.period_expense_id)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
   const allCleared = (subs ?? []).length > 0 && (subs ?? []).every((s) => s.cleared)
   await supabase
     .from('period_expenses')
     .update({ is_complete: allCleared, updated_at: new Date().toISOString() })
     .eq('id', pay.period_expense_id)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   return flags
 }
@@ -947,19 +883,19 @@ export async function addExpenseSpend(
   paymentId: string | null = null
 ) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { data: existing } = await supabase
     .from('period_expense_adjustments')
     .select('sort_order')
     .eq('period_expense_id', expenseId)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
     .order('sort_order', { ascending: false })
     .limit(1)
   const nextOrder = existing && existing.length > 0 ? existing[0].sort_order + 1 : 0
 
   const { error } = await supabase.from('period_expense_adjustments').insert({
-    household_id: householdId,
+    team_id: teamId,
     period_expense_id: expenseId,
     period_expense_payment_id: paymentId,
     amount,
@@ -969,8 +905,8 @@ export async function addExpenseSpend(
   })
   if (error) throw new Error(`Failed to log spend: ${error.message}`)
 
-  if (paymentId) await reconcilePaymentSpend(supabase, householdId, paymentId)
-  else await reconcileExpenseSpend(supabase, householdId, expenseId)
+  if (paymentId) await reconcilePaymentSpend(supabase, teamId, paymentId)
+  else await reconcileExpenseSpend(supabase, teamId, expenseId)
 
   revalidatePath(`/periods/${periodId}`)
   revalidatePath('/periods')
@@ -984,13 +920,13 @@ export async function updateExpenseSpend(
   data: Partial<{ amount: number; note: string | null; image_url: string | null }>
 ) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { data: row } = await supabase
     .from('period_expense_adjustments')
     .select('period_expense_id, period_expense_payment_id')
     .eq('id', adjustmentId)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
     .single()
   if (!row) throw new Error('Spend entry not found')
 
@@ -998,11 +934,11 @@ export async function updateExpenseSpend(
     .from('period_expense_adjustments')
     .update({ ...data, updated_at: new Date().toISOString() })
     .eq('id', adjustmentId)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
   if (error) throw new Error(`Failed to update spend: ${error.message}`)
 
-  if (row.period_expense_payment_id) await reconcilePaymentSpend(supabase, householdId, row.period_expense_payment_id)
-  else await reconcileExpenseSpend(supabase, householdId, row.period_expense_id)
+  if (row.period_expense_payment_id) await reconcilePaymentSpend(supabase, teamId, row.period_expense_payment_id)
+  else await reconcileExpenseSpend(supabase, teamId, row.period_expense_id)
   revalidatePath(`/periods/${periodId}`)
   revalidatePath('/periods')
   revalidatePath('/')
@@ -1011,13 +947,13 @@ export async function updateExpenseSpend(
 /** Remove a spend entry. Reverses its amount on linked debt/savings. */
 export async function removeExpenseSpend(adjustmentId: string, periodId: string) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { data: row } = await supabase
     .from('period_expense_adjustments')
     .select('period_expense_id, period_expense_payment_id')
     .eq('id', adjustmentId)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
     .single()
   if (!row) throw new Error('Spend entry not found')
 
@@ -1025,11 +961,11 @@ export async function removeExpenseSpend(adjustmentId: string, periodId: string)
     .from('period_expense_adjustments')
     .delete()
     .eq('id', adjustmentId)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
   if (error) throw new Error(`Failed to remove spend: ${error.message}`)
 
-  if (row.period_expense_payment_id) await reconcilePaymentSpend(supabase, householdId, row.period_expense_payment_id)
-  else await reconcileExpenseSpend(supabase, householdId, row.period_expense_id)
+  if (row.period_expense_payment_id) await reconcilePaymentSpend(supabase, teamId, row.period_expense_payment_id)
+  else await reconcileExpenseSpend(supabase, teamId, row.period_expense_id)
   revalidatePath(`/periods/${periodId}`)
   revalidatePath('/periods')
   revalidatePath('/')
@@ -1050,7 +986,7 @@ function availableToTransfer(e: { amount_override: number | null; default_amount
  */
 export async function transferFunds(fromExpenseId: string, toExpenseId: string, amount: number, note: string | null = null) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
   const amt = round2(amount)
   if (fromExpenseId === toExpenseId) throw new Error('Pick a different destination')
   if (!(amt > 0)) throw new Error('Enter an amount greater than 0')
@@ -1058,11 +994,11 @@ export async function transferFunds(fromExpenseId: string, toExpenseId: string, 
   const { data: from } = await supabase
     .from('period_expenses')
     .select('default_amount, amount_override, paid_amount, period_id')
-    .eq('id', fromExpenseId).eq('household_id', householdId).single()
+    .eq('id', fromExpenseId).eq('team_id', teamId).single()
   const { data: to } = await supabase
     .from('period_expenses')
     .select('default_amount, amount_override, period_id')
-    .eq('id', toExpenseId).eq('household_id', householdId).single()
+    .eq('id', toExpenseId).eq('team_id', teamId).single()
   if (!from || !to) throw new Error('Expense not found')
 
   const available = availableToTransfer(from)
@@ -1075,13 +1011,13 @@ export async function transferFunds(fromExpenseId: string, toExpenseId: string, 
 
   await supabase.from('period_expenses')
     .update({ amount_override: newFrom === from.default_amount ? null : newFrom, updated_at: new Date().toISOString() })
-    .eq('id', fromExpenseId).eq('household_id', householdId)
+    .eq('id', fromExpenseId).eq('team_id', teamId)
   await supabase.from('period_expenses')
     .update({ amount_override: newTo === to.default_amount ? null : newTo, updated_at: new Date().toISOString() })
-    .eq('id', toExpenseId).eq('household_id', householdId)
+    .eq('id', toExpenseId).eq('team_id', teamId)
 
   const { data: row, error } = await supabase.from('period_expense_transfers').insert({
-    household_id: householdId,
+    team_id: teamId,
     period_id: from.period_id,
     from_expense_id: fromExpenseId,
     to_expense_id: toExpenseId,
@@ -1099,27 +1035,27 @@ export async function transferFunds(fromExpenseId: string, toExpenseId: string, 
 /** Reverse a logged transfer — give the amount back to the source, take it from the destination. */
 export async function undoTransfer(transferId: string) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { data: t } = await supabase
     .from('period_expense_transfers')
     .select('from_expense_id, to_expense_id, amount, period_id')
-    .eq('id', transferId).eq('household_id', householdId).single()
+    .eq('id', transferId).eq('team_id', teamId).single()
   if (!t) throw new Error('Transfer not found')
 
-  const { data: from } = await supabase.from('period_expenses').select('default_amount, amount_override').eq('id', t.from_expense_id).eq('household_id', householdId).single()
-  const { data: to } = await supabase.from('period_expenses').select('default_amount, amount_override').eq('id', t.to_expense_id).eq('household_id', householdId).single()
+  const { data: from } = await supabase.from('period_expenses').select('default_amount, amount_override').eq('id', t.from_expense_id).eq('team_id', teamId).single()
+  const { data: to } = await supabase.from('period_expenses').select('default_amount, amount_override').eq('id', t.to_expense_id).eq('team_id', teamId).single()
 
   if (from) {
     const back = round2((from.amount_override ?? from.default_amount ?? 0) + Number(t.amount))
-    await supabase.from('period_expenses').update({ amount_override: back === from.default_amount ? null : back, updated_at: new Date().toISOString() }).eq('id', t.from_expense_id).eq('household_id', householdId)
+    await supabase.from('period_expenses').update({ amount_override: back === from.default_amount ? null : back, updated_at: new Date().toISOString() }).eq('id', t.from_expense_id).eq('team_id', teamId)
   }
   if (to) {
     const back = round2(Math.max(0, (to.amount_override ?? to.default_amount ?? 0) - Number(t.amount)))
-    await supabase.from('period_expenses').update({ amount_override: back === to.default_amount ? null : back, updated_at: new Date().toISOString() }).eq('id', t.to_expense_id).eq('household_id', householdId)
+    await supabase.from('period_expenses').update({ amount_override: back === to.default_amount ? null : back, updated_at: new Date().toISOString() }).eq('id', t.to_expense_id).eq('team_id', teamId)
   }
 
-  await supabase.from('period_expense_transfers').delete().eq('id', transferId).eq('household_id', householdId)
+  await supabase.from('period_expense_transfers').delete().eq('id', transferId).eq('team_id', teamId)
 
   revalidatePath(`/periods/${t.period_id}`)
   revalidatePath('/periods')
@@ -1138,15 +1074,15 @@ export async function undoTransfer(transferId: string) {
  */
 export async function setExpenseFunded(expenseId: string, periodId: string, value: boolean): Promise<RippleFlags> {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   await supabase
     .from('period_expenses')
     .update({ paid: value, updated_at: new Date().toISOString() })
     .eq('id', expenseId)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
-  const flags = await reconcileExpenseSpend(supabase, householdId, expenseId)
+  const flags = await reconcileExpenseSpend(supabase, teamId, expenseId)
 
   revalidatePath(`/periods/${periodId}`)
   revalidatePath('/periods')
@@ -1156,11 +1092,11 @@ export async function setExpenseFunded(expenseId: string, periodId: string, valu
 
 export async function setExpenseCleared(expenseId: string, periodId: string, value: boolean): Promise<RippleFlags> {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   // Clearing books the line to its funded amount (counts as paid in the roundup) and seals it;
   // unchecking reverses the top-up back to the logged total. reconcile ripples the delta.
-  const flags = await reconcileExpenseSpend(supabase, householdId, expenseId, { forceClosed: value })
+  const flags = await reconcileExpenseSpend(supabase, teamId, expenseId, { forceClosed: value })
 
   revalidatePath(`/periods/${periodId}`)
   revalidatePath('/')
@@ -1172,28 +1108,28 @@ export async function setExpenseCleared(expenseId: string, periodId: string, val
  * leaving pay-now=false rows untouched. Single lines book to funded + seal; split lines clear
  * their pay-now installments and seal once none remain.
  */
-export async function clearAllPayNow(periodId: string) {
+export async function clearAllPayNow(periodId: string, sessionId: string) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { data: singles } = await supabase
     .from('period_expenses')
     .select('id')
-    .eq('period_id', periodId).eq('household_id', householdId)
-    .eq('pay_now', true).eq('is_split', false).eq('is_complete', false)
+    .eq('period_id', periodId).eq('team_id', teamId)
+    .eq('pay_now', true).eq('is_split', false).eq('session_id', sessionId).eq('is_complete', false)
   for (const e of singles ?? []) {
-    await reconcileExpenseSpend(supabase, householdId, e.id, { forceClosed: true })
+    await reconcileExpenseSpend(supabase, teamId, e.id, { forceClosed: true })
   }
 
   const { data: splits } = await supabase
     .from('period_expenses').select('id')
-    .eq('period_id', periodId).eq('household_id', householdId)
+    .eq('period_id', periodId).eq('team_id', teamId)
     .eq('is_split', true).eq('is_complete', false)
   const splitIds = (splits ?? []).map((s) => s.id)
   if (splitIds.length) {
     const { data: subs } = await supabase
       .from('period_expense_payments').select('id, period_expense_id')
-      .eq('household_id', householdId).eq('pay_now', true).in('period_expense_id', splitIds)
+      .eq('team_id', teamId).eq('pay_now', true).eq('session_id', sessionId).in('period_expense_id', splitIds)
     if (subs && subs.length) {
       await supabase.from('period_expense_payments')
         .update({ cleared: true, pay_now: false, updated_at: new Date().toISOString() })
@@ -1201,13 +1137,13 @@ export async function clearAllPayNow(periodId: string) {
       const affected = [...new Set(subs.map((s) => s.period_expense_id))]
       const { data: remaining } = await supabase
         .from('period_expense_payments').select('period_expense_id')
-        .eq('household_id', householdId).eq('pay_now', true).in('period_expense_id', affected)
+        .eq('team_id', teamId).eq('pay_now', true).in('period_expense_id', affected)
       const stillActive = new Set((remaining ?? []).map((r) => r.period_expense_id))
       const sealed = affected.filter((id) => !stillActive.has(id))
       if (sealed.length) {
         await supabase.from('period_expenses')
           .update({ is_complete: true, updated_at: new Date().toISOString() })
-          .eq('household_id', householdId).in('id', sealed)
+          .eq('team_id', teamId).in('id', sealed)
       }
     }
   }
@@ -1224,7 +1160,7 @@ export async function clearAllPayNow(periodId: string) {
  */
 export async function toggleExpenseOverdue(expenseId: string, periodId: string, value: boolean) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const update: Record<string, unknown> = { is_overdue: value, updated_at: new Date().toISOString() }
 
@@ -1233,7 +1169,7 @@ export async function toggleExpenseOverdue(expenseId: string, periodId: string, 
       .from('period_expenses')
       .select('default_amount, is_split')
       .eq('id', expenseId)
-      .eq('household_id', householdId)
+      .eq('team_id', teamId)
       .single()
     if (exp && !exp.is_split) {
       update.amount_override = exp.default_amount * 2
@@ -1249,21 +1185,24 @@ export async function toggleExpenseOverdue(expenseId: string, periodId: string, 
     .from('period_expenses')
     .update(update)
     .eq('id', expenseId)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (error) throw new Error(`Failed to toggle overdue: ${error.message}`)
   revalidatePath(`/periods/${periodId}`)
   revalidatePath('/')
 }
 
-export async function linkInvoiceToPeriod(periodId: string, invoiceId: string) {
+/** Link income to a budget session — the newest session when none is given (e.g. from the Invoices page). */
+export async function linkInvoiceToPeriod(periodId: string, invoiceId: string, sessionId?: string) {
   const supabase = await createClient()
 
   const { error } = await supabase
     .from('period_linked_invoices')
     .insert({
       period_id: periodId,
+      session_id: sessionId ?? (await newestSessionId(supabase, periodId)),
       invoice_id: invoiceId,
+      skip_deductions: await defaultSkipDeductions(supabase, periodId),
     })
 
   if (error) throw new Error(`Failed to link invoice to period: ${error.message}`)
@@ -1286,8 +1225,7 @@ export async function linkInvoiceToPeriod(periodId: string, invoiceId: string) {
     })
     .eq('id', invoiceId)
 
-  revalidatePath(`/periods/${periodId}`)
-  revalidatePath('/periods')
+  await recalculatePeriodIncome(periodId)
   revalidatePath('/invoices')
 }
 
@@ -1315,32 +1253,33 @@ export async function unlinkInvoiceFromPeriod(periodId: string, invoiceId: strin
       .eq('id', invoiceId)
   }
 
-  revalidatePath(`/periods/${periodId}`)
-  revalidatePath('/periods')
+  await recalculatePeriodIncome(periodId)
   revalidatePath('/invoices')
 }
 
 export async function addManualIncome(
   periodId: string,
+  sessionId: string,
   description: string,
   amount: number
 ) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { error } = await supabase
     .from('period_manual_income')
     .insert({
       period_id: periodId,
-      household_id: householdId,
+      session_id: sessionId,
+      team_id: teamId,
       description,
       amount,
+      skip_deductions: await defaultSkipDeductions(supabase, periodId),
     })
 
   if (error) throw new Error(`Failed to add manual income: ${error.message}`)
 
-  revalidatePath(`/periods/${periodId}`)
-  revalidatePath('/periods')
+  await recalculatePeriodIncome(periodId)
 }
 
 export async function removeManualIncome(id: string) {
@@ -1362,24 +1301,74 @@ export async function removeManualIncome(id: string) {
 
   if (error) throw new Error(`Failed to remove manual income: ${error.message}`)
 
-  revalidatePath(`/periods/${record.period_id}`)
-  revalidatePath('/periods')
+  await recalculatePeriodIncome(record.period_id)
+}
+
+async function newestSessionId(supabase: SupabaseServer, periodId: string): Promise<string | null> {
+  const { data } = await supabase
+    .from('budget_sessions').select('id').eq('period_id', periodId)
+    .order('seq', { ascending: false }).limit(1).maybeSingle()
+  return data?.id ?? null
+}
+
+/** Event budgets default new income to skip deductions; monthly budgets take them all. */
+async function defaultSkipDeductions(supabase: SupabaseServer, periodId: string): Promise<string[]> {
+  const { data } = await supabase.from('budget_periods').select('kind').eq('id', periodId).single()
+  return data?.kind === 'event' ? [...DEDUCTION_KEYS] : []
+}
+
+type IncomeSource = 'manual' | 'invoice'
+const incomeTable = (source: IncomeSource) =>
+  source === 'manual' ? 'period_manual_income' : 'period_linked_invoices'
+
+/**
+ * Set an income item's type. The type is a preset: paycheck takes every deduction
+ * and counts in reports; gift/refund skip every deduction and (manual income) stay
+ * out of reports. Individual deductions can still be toggled afterwards.
+ */
+export async function setIncomeType(source: IncomeSource, id: string, periodId: string, type: IncomeType) {
+  const supabase = await createClient()
+  const skip = type === 'paycheck' ? [] : [...DEDUCTION_KEYS]
+  const update: Record<string, unknown> = { income_type: type, skip_deductions: skip }
+  if (source === 'manual') update.exclude_from_reports = type !== 'paycheck'
+
+  const { error } = await supabase.from(incomeTable(source)).update(update).eq('id', id)
+  if (error) throw new Error(`Failed to set income type: ${error.message}`)
+  revalidatePath(`/periods/${periodId}`)
+  revalidatePath('/')
+}
+
+/** Turn one deduction on/off for a single income item. */
+export async function setIncomeDeduction(source: IncomeSource, id: string, periodId: string, key: DeductionKey, on: boolean) {
+  const supabase = await createClient()
+  const { data: row, error: fetchError } = await supabase
+    .from(incomeTable(source)).select('skip_deductions').eq('id', id).single()
+  if (fetchError) throw new Error(`Failed to load income: ${fetchError.message}`)
+
+  const current = new Set<string>((row?.skip_deductions as string[] | null) ?? [])
+  if (on) current.delete(key)
+  else current.add(key)
+
+  const { error } = await supabase
+    .from(incomeTable(source)).update({ skip_deductions: [...current] }).eq('id', id)
+  if (error) throw new Error(`Failed to update income deductions: ${error.message}`)
+  revalidatePath(`/periods/${periodId}`)
+  revalidatePath('/')
 }
 
 export async function recalculatePeriodIncome(periodId: string) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
-  // Sum linked invoice amounts where status is 'received' — skip ones marked done
+  // Month total across every session: received linked invoices + manual income
   const { data: linkedInvoices, error: linkedError } = await supabase
     .from('period_linked_invoices')
-    .select('invoice_id, is_done, invoices(amount, status)')
+    .select('invoice_id, invoices(amount, status)')
     .eq('period_id', periodId)
 
   if (linkedError) throw new Error(`Failed to fetch linked invoices: ${linkedError.message}`)
 
   const invoiceTotal = (linkedInvoices || []).reduce((sum, link) => {
-    if (link.is_done) return sum
     const invoice = link.invoices as unknown as { amount: number | string; status: string }
     if (invoice && invoice.status === 'received') {
       return sum + (Number(invoice.amount) || 0)
@@ -1387,17 +1376,16 @@ export async function recalculatePeriodIncome(periodId: string) {
     return sum
   }, 0)
 
-  // Sum manual income amounts — skip ones marked done
   const { data: manualIncomeRows, error: manualError } = await supabase
     .from('period_manual_income')
-    .select('amount, is_done')
+    .select('amount')
     .eq('period_id', periodId)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (manualError) throw new Error(`Failed to fetch manual income: ${manualError.message}`)
 
   const manualTotal = (manualIncomeRows || []).reduce(
-    (sum, row) => (row.is_done ? sum : sum + (Number(row.amount) || 0)),
+    (sum, row) => sum + (Number(row.amount) || 0),
     0
   )
 
@@ -1409,7 +1397,7 @@ export async function recalculatePeriodIncome(periodId: string) {
       updated_at: new Date().toISOString(),
     })
     .eq('id', periodId)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (updateError) throw new Error(`Failed to update period income: ${updateError.message}`)
 
@@ -1418,46 +1406,16 @@ export async function recalculatePeriodIncome(periodId: string) {
   revalidatePath('/')
 }
 
-/** Mark a manual income entry done (or active) — recalcs the period income. */
-export async function toggleManualIncomeDone(id: string, periodId: string, value: boolean) {
-  const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
-
-  const { error } = await supabase
-    .from('period_manual_income')
-    .update({ is_done: value })
-    .eq('id', id)
-    .eq('household_id', householdId)
-
-  if (error) throw new Error(`Failed to update manual income: ${error.message}`)
-
-  if (value) {
-    const { data: mi } = await supabase
-      .from('period_manual_income')
-      .select('amount, description')
-      .eq('id', id)
-      .eq('household_id', householdId)
-      .single()
-    if (mi) {
-      await logDeductionContribution(supabase, householdId, periodId, 'manual', id, mi.description, Number(mi.amount) || 0)
-    }
-  } else {
-    await removeDeductionContribution(supabase, householdId, 'manual', id)
-  }
-
-  await recalculatePeriodIncome(periodId)
-}
-
 /** Flag a manual income row to be excluded from income reports/charts (gifts, paybacks, etc.). */
 export async function setManualIncomeExcluded(id: string, periodId: string, value: boolean) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { error } = await supabase
     .from('period_manual_income')
     .update({ exclude_from_reports: value })
     .eq('id', id)
-    .eq('household_id', householdId)
+    .eq('team_id', teamId)
 
   if (error) throw new Error(`Failed to update manual income: ${error.message}`)
 
@@ -1467,182 +1425,60 @@ export async function setManualIncomeExcluded(id: string, periodId: string, valu
   revalidatePath('/invoices')
 }
 
-/** Mark a linked invoice done (or active) for this period — recalcs the period income. */
-export async function toggleLinkedInvoiceDone(linkId: string, periodId: string, value: boolean) {
-  const supabase = await createClient()
-
-  // period_linked_invoices is household-scoped via RLS (no household_id column)
-  const { error } = await supabase
-    .from('period_linked_invoices')
-    .update({ is_done: value })
-    .eq('id', linkId)
-
-  if (error) throw new Error(`Failed to update linked invoice: ${error.message}`)
-
-  if (value) {
-    const householdId = await getUserHouseholdId()
-    const { data: link } = await supabase
-      .from('period_linked_invoices')
-      .select('invoices(amount, client_name, status)')
-      .eq('id', linkId)
-      .single()
-    const inv = link?.invoices as unknown as { amount: number | string; client_name: string; status: string } | null
-    if (inv && inv.status === 'received') {
-      await logDeductionContribution(supabase, householdId, periodId, 'invoice', linkId, inv.client_name, Number(inv.amount) || 0)
-    }
-  } else {
-    const householdId = await getUserHouseholdId()
-    await removeDeductionContribution(supabase, householdId, 'invoice', linkId)
-  }
-
-  await recalculatePeriodIncome(periodId)
-}
-
 /** Bulk-set "transferred" on every to-pay item (single expenses + pay-checked installments). */
-export async function bulkSetTransferred(periodId: string, value: boolean) {
+export async function bulkSetTransferred(periodId: string, sessionId: string, value: boolean) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   await supabase
     .from('period_expenses')
     .update({ transferred: value, updated_at: new Date().toISOString() })
-    .eq('period_id', periodId).eq('household_id', householdId)
-    .eq('pay_now', true).eq('is_split', false).eq('is_complete', false)
+    .eq('period_id', periodId).eq('team_id', teamId)
+    .eq('pay_now', true).eq('is_split', false).eq('session_id', sessionId).eq('is_complete', false)
 
   const { data: splits } = await supabase
     .from('period_expenses')
-    .select('id').eq('period_id', periodId).eq('household_id', householdId)
+    .select('id').eq('period_id', periodId).eq('team_id', teamId)
     .eq('is_split', true).eq('is_complete', false)
   const splitIds = (splits ?? []).map((e) => e.id)
   if (splitIds.length) {
     await supabase
       .from('period_expense_payments')
       .update({ transferred: value, updated_at: new Date().toISOString() })
-      .eq('household_id', householdId).eq('pay_now', true).in('period_expense_id', splitIds)
+      .eq('team_id', teamId).eq('pay_now', true).eq('session_id', sessionId).in('period_expense_id', splitIds)
   }
 
   revalidatePath(`/periods/${periodId}`)
 }
 
 /** Bulk-mark "paid" on every unpaid to-pay item — applies debt/savings ripples per item. */
-export async function bulkMarkPaid(periodId: string) {
+export async function bulkMarkPaid(periodId: string, sessionId: string) {
   const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
+  const teamId = await getUserTeamId()
 
   const { data: exps } = await supabase
     .from('period_expenses')
-    .select('id').eq('period_id', periodId).eq('household_id', householdId)
-    .eq('pay_now', true).eq('is_split', false).eq('paid', false).eq('is_complete', false)
+    .select('id').eq('period_id', periodId).eq('team_id', teamId)
+    .eq('pay_now', true).eq('is_split', false).eq('session_id', sessionId).eq('paid', false).eq('is_complete', false)
   for (const e of exps ?? []) {
     await markExpensePaid(e.id)
   }
 
   const { data: splits } = await supabase
     .from('period_expenses')
-    .select('id').eq('period_id', periodId).eq('household_id', householdId)
+    .select('id').eq('period_id', periodId).eq('team_id', teamId)
     .eq('is_split', true).eq('is_complete', false)
   const splitIds = (splits ?? []).map((e) => e.id)
   if (splitIds.length) {
     const { data: pays } = await supabase
       .from('period_expense_payments')
-      .select('id').eq('household_id', householdId)
-      .eq('pay_now', true).eq('paid', false).in('period_expense_id', splitIds)
+      .select('id').eq('team_id', teamId)
+      .eq('pay_now', true).eq('paid', false).eq('session_id', sessionId).in('period_expense_id', splitIds)
     for (const p of pays ?? []) {
       await updateExpensePayment(p.id, periodId, { paid: true })
     }
   }
 
-  revalidatePath(`/periods/${periodId}`)
-  revalidatePath('/')
-}
-
-/**
- * "Settle & reset" — the balanced-budget moment within a period.
- * Clears every to-pay item (drops it from the live balance + locks it) and marks all
- * active income as Budgeted (logging its deductions to the ledger). Nothing is deleted;
- * rows can be reopened individually. Result: Pay Now → $0 and active income → $0, ready
- * for the next check.
- */
-export async function settleAndResetPeriod(periodId: string) {
-  const supabase = await createClient()
-  const householdId = await getUserHouseholdId()
-
-  // 1. Settle to-pay single expenses that have been PAID (unpaid ones stay live)
-  await supabase
-    .from('period_expenses')
-    .update({ cleared: true, is_complete: true, pay_now: false, updated_at: new Date().toISOString() })
-    .eq('period_id', periodId).eq('household_id', householdId)
-    .eq('pay_now', true).eq('paid', true).eq('is_split', false)
-
-  // 2. Settle PAID to-pay installments; seal a split only once it has no to-pay left
-  const { data: splits } = await supabase
-    .from('period_expenses')
-    .select('id').eq('period_id', periodId).eq('household_id', householdId).eq('is_split', true)
-  const splitIds = (splits ?? []).map((e) => e.id)
-  if (splitIds.length) {
-    const { data: paidSubs } = await supabase
-      .from('period_expense_payments')
-      .select('id, period_expense_id')
-      .eq('household_id', householdId).eq('pay_now', true).eq('paid', true).in('period_expense_id', splitIds)
-    if (paidSubs && paidSubs.length) {
-      await supabase
-        .from('period_expense_payments')
-        .update({ cleared: true, pay_now: false, updated_at: new Date().toISOString() })
-        .in('id', paidSubs.map((p) => p.id))
-      // Seal only the split parents that now have no remaining to-pay installments.
-      const affected = [...new Set(paidSubs.map((p) => p.period_expense_id))]
-      const { data: remaining } = await supabase
-        .from('period_expense_payments')
-        .select('period_expense_id')
-        .eq('household_id', householdId).eq('pay_now', true).in('period_expense_id', affected)
-      const stillActive = new Set((remaining ?? []).map((r) => r.period_expense_id))
-      const fullySettled = affected.filter((id) => !stillActive.has(id))
-      if (fullySettled.length) {
-        await supabase
-          .from('period_expenses')
-          .update({ is_complete: true, updated_at: new Date().toISOString() })
-          .eq('household_id', householdId).in('id', fullySettled)
-      }
-    }
-  }
-
-  // 3. Budget out active income — log each contribution (at the current full income) then mark done
-  const { data: activeManual } = await supabase
-    .from('period_manual_income')
-    .select('id, amount, description').eq('period_id', periodId).eq('household_id', householdId).eq('is_done', false)
-  for (const mi of activeManual ?? []) {
-    await logDeductionContribution(supabase, householdId, periodId, 'manual', mi.id, mi.description, Number(mi.amount) || 0)
-  }
-  if (activeManual && activeManual.length) {
-    await supabase.from('period_manual_income').update({ is_done: true })
-      .eq('period_id', periodId).eq('household_id', householdId).eq('is_done', false)
-  }
-
-  const { data: activeLinks } = await supabase
-    .from('period_linked_invoices')
-    .select('id, invoices(amount, client_name, status)').eq('period_id', periodId).eq('is_done', false)
-  for (const link of activeLinks ?? []) {
-    const inv = link.invoices as unknown as { amount: number | string; client_name: string; status: string } | null
-    if (inv && inv.status === 'received') {
-      await logDeductionContribution(supabase, householdId, periodId, 'invoice', link.id, inv.client_name, Number(inv.amount) || 0)
-    }
-  }
-  if (activeLinks && activeLinks.length) {
-    await supabase.from('period_linked_invoices').update({ is_done: true }).eq('period_id', periodId).eq('is_done', false)
-  }
-
-  // 4. Clear this check's income adjustments — they belonged to the check we just budgeted out.
-  await supabase.from('period_adjustments')
-    .delete().eq('period_id', periodId).eq('household_id', householdId)
-
-  // 5. Reset per-cycle completion checkmarks — next check starts fresh
-  await supabase.from('budget_periods')
-    .update({ deduction_paid: {}, updated_at: new Date().toISOString() })
-    .eq('id', periodId).eq('household_id', householdId)
-  await supabase.from('period_account_transfers')
-    .delete().eq('period_id', periodId).eq('household_id', householdId)
-
-  await recalculatePeriodIncome(periodId)
   revalidatePath(`/periods/${periodId}`)
   revalidatePath('/')
 }

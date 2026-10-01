@@ -23,19 +23,20 @@ Budget management system for modern creative/entrepreneurial families. Part of a
 - **Dev server:** `npm run dev` on port 3000 (use `preview_start` with config `caashflow-dev`)
 
 ## Key Conventions
-- Server actions live in `app/actions/` — always `'use server'`, always validate `household_id`
+- Server actions live in `app/actions/` — always `'use server'`, always validate `team_id`
 - Client components in `components/` — named by feature area (e.g. `components/periods/`, `components/settings/`)
 - All DB access goes through Supabase server client (`lib/supabase/server.ts`) — never query directly from client components
-- `getUserHouseholdId()` in `lib/supabase/helpers.ts` is the standard way to get the current user's household — reuse it everywhere
+- `getUserTeamId()` in `lib/supabase/helpers.ts` is the standard way to get the current user's team — reuse it everywhere
 - Middleware is in `middleware.ts` (deprecated name — should be `proxy.ts` per Next.js 16 but not yet renamed)
 - Route groups: `app/(dashboard)/` wraps all protected routes — `app/login/` is public
 
 ## Database Tables
 | Table | Purpose |
 |-------|---------|
-| `households` | Family/org unit — central entity |
-| `household_members` | User ↔ household join (role: owner\|member) |
-| `settings` | Deduction percentages (1:1 with household) |
+| `public.teams` | Family/org unit — shared across all theDailyStory apps (`slug` drives the public request link) |
+| `public.team_members` | User ↔ team join (role: owner\|member) |
+| `public.team_app_access` | Per-app grants for non-owner members (full\|read); owners always have access |
+| `settings` | Deduction percentages (1:1 with team) |
 | `base_budget_items` | Master expense template (has `debt_id`, `savings_goal_id` FK) |
 | `budget_periods` | Pay periods |
 | `period_expenses` | Expenses copied into a period (has `debt_id`, `savings_goal_id` FK) |
@@ -48,8 +49,9 @@ Budget management system for modern creative/entrepreneurial families. Part of a
 | `accounts` | User-defined account categories |
 | `priority_categories` | User-defined priority categories with colors |
 
-**RLS:** Enabled on all tables. Users access data only through their `household_id`.
-**Provisioning:** No `auth.users` trigger (shared-auth model — Daily Story users shouldn't get caashflow households). Instead, `getUserHouseholdId()` in `lib/supabase/helpers.ts` calls `caashflow.provision_household_for_current_user()` RPC on first visit if no household exists. The RPC is idempotent (advisory lock per user) and seeds default settings + 3 accounts + 6 priority categories.
+**RLS:** Enabled on all tables. Every caashflow table is keyed by `team_id` → `public.teams`. Reads use `caashflow.user_team_ids()`, writes use `caashflow.user_full_access_team_ids()` (both wrap `public.user_*_team_ids('caashflow')`).
+**Provisioning:** No `auth.users` trigger (shared auth; `on_auth_user_created` belongs to another app, never drop it). `getUserTeamId()` reuses the user's existing team from any app, or calls `caashflow.provision_team_for_current_user()` which creates one and seeds settings.
+**History:** households were migrated to teams on 2026-09-24 (`supabase/migrations/household_to_team.sql`); the Noonans household was folded into the owner's existing "My Team".
 
 ## Incoming Caashflow (Invoices) Feature
 - **Route:** `/invoices` (also accessible at `/cashflow` — both render the same `InvoicesClient`)

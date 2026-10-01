@@ -1,4 +1,4 @@
-import type { Settings, DeductionOverrides, PeriodExpense, PeriodSavingsAllocation, BaseBudgetItem } from './types'
+import type { Settings, DeductionOverrides, DeductionKey, PeriodExpense, PeriodSavingsAllocation, BaseBudgetItem } from './types'
 import { getOwedAmount } from './utils'
 
 export function getEffectivePercentage(
@@ -55,16 +55,39 @@ export function getEffectiveDeduction(
   }
 }
 
+export const DEDUCTION_KEYS: readonly DeductionKey[] = ['tithe', 'savings', 'tax', 'profit', 'fun_money']
+
+/**
+ * Per-deduction income base: each deduction is taken only from the income items
+ * that don't skip it (a gift can skip tax but still be tithed).
+ */
+export function getDeductionBases(
+  items: { amount: number; skip_deductions?: DeductionKey[] | null }[]
+): Record<DeductionKey, number> {
+  const bases = { tithe: 0, savings: 0, tax: 0, profit: 0, fun_money: 0 }
+  for (const item of items) {
+    const skip = new Set(item.skip_deductions ?? [])
+    for (const key of DEDUCTION_KEYS) if (!skip.has(key)) bases[key] += item.amount
+  }
+  return bases
+}
+
+/**
+ * `income` is the gross; `bases` (optional) narrows what each deduction is taken
+ * from. Without bases every deduction applies to the full income.
+ */
 export function calculateDeductions(
   income: number,
   settings: Settings,
-  overrides?: DeductionOverrides | null
+  overrides?: DeductionOverrides | null,
+  bases?: Partial<Record<DeductionKey, number>>
 ) {
-  const titheD = getEffectiveDeduction(income, overrides, settings, 'tithe_percentage', 'tithe_amount')
-  const savingsD = getEffectiveDeduction(income, overrides, settings, 'savings_percentage', 'savings_amount')
-  const taxD = getEffectiveDeduction(income, overrides, settings, 'tax_percentage', 'tax_amount')
-  const profitD = getEffectiveDeduction(income, overrides, settings, 'profit_percentage', 'profit_amount')
-  const funMoneyD = getEffectiveDeduction(income, overrides, settings, 'fun_money_percentage', 'fun_money_amount')
+  const base = (key: DeductionKey) => bases?.[key] ?? income
+  const titheD = getEffectiveDeduction(base('tithe'), overrides, settings, 'tithe_percentage', 'tithe_amount')
+  const savingsD = getEffectiveDeduction(base('savings'), overrides, settings, 'savings_percentage', 'savings_amount')
+  const taxD = getEffectiveDeduction(base('tax'), overrides, settings, 'tax_percentage', 'tax_amount')
+  const profitD = getEffectiveDeduction(base('profit'), overrides, settings, 'profit_percentage', 'profit_amount')
+  const funMoneyD = getEffectiveDeduction(base('fun_money'), overrides, settings, 'fun_money_percentage', 'fun_money_amount')
 
   const tithe = titheD.amount
   const savings = savingsD.amount
