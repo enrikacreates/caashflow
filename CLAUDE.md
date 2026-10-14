@@ -145,3 +145,10 @@ Budget management system for modern creative/entrepreneurial families. Part of a
 - The user is a designer — don't make unsanctioned visual changes without checking first
 - The LATER visual redesign is a **collaboration** — the user will design in Figma and work through it together
 - `caashflow.app` domain is the target — `.com` is taken
+
+## Build locally before pushing
+
+Before any `git push` or `vercel deploy`, run the project's build (`npm run build`, or the equivalent for its package manager) and make sure it passes. Every push to `main` triggers a paid Vercel build, and failed builds still burn build minutes, so catch errors locally first.
+
+- If the build fails, fix it before pushing. Don't push "to see if Vercel builds it."
+- Batch related commits and push once, rather than pushing after every small change.
