@@ -78,6 +78,8 @@ export function expensesForSession(expenses: PeriodExpense[], sessionId: string,
   const inView = (id: string | null) => id === sessionId || (isNewest && id === null)
   const result: PeriodExpense[] = []
   for (const e of expenses) {
+    // Paid outside the budget: no session's money is involved. The Month tab lists these.
+    if (e.paid_outside) continue
     if (e.is_split) {
       const payments = (e.payments ?? []).filter((p) => inView(p.session_id))
       if (payments.length > 0 || (isNewest && (e.payments ?? []).length === 0)) result.push({ ...e, payments })

@@ -174,6 +174,7 @@ export default function DebtModal({ debt, budgetItems, onClose }: Props) {
               <label className={labelClass}>Interest Rate (APR %)</label>
               <input
                 type="number"
+                data-no-round
                 value={interestRate}
                 onChange={(e) => setInterestRate(e.target.value)}
                 placeholder="e.g. 19.99"

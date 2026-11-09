@@ -1,12 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import Link from 'next/link'
 import { Menu, Settings2, LogOut } from 'lucide-react'
 import Sidebar from '@/components/layout/Sidebar'
 import HeaderAvatar from '@/components/layout/HeaderAvatar'
 import HeaderStats from '@/components/layout/HeaderStats'
 import ToastHost from '@/components/ui/ToastHost'
+import RoundUpPill from '@/components/ui/RoundUpPill'
+import { useAutoHideChrome } from '@/components/layout/useAutoHideChrome'
 import { signOut } from '@/app/actions/auth'
 
 /* -------------------------------------------------------
@@ -23,11 +25,13 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
+  useAutoHideChrome(rootRef)
 
   return (
-    <div className="min-h-screen bg-bg-cream flex flex-col">
+    <div ref={rootRef} className="min-h-screen bg-bg-cream flex flex-col overflow-clip">
       {/* ── Header band — off-white bg ────────────────── */}
-      <header className="sticky top-0 z-30 bg-white flex items-center justify-between px-6 md:px-10 h-[72px] md:h-[84px]">
+      <header className="chrome-top sticky top-0 z-30 bg-white flex items-center justify-between px-6 md:px-10 h-[72px] md:h-[84px]">
         {/* Big logo */}
         <Link href="/" className="hover:opacity-80 transition-opacity shrink-0">
           <img src="/logo.svg" alt="Caashflow" className="h-11 md:h-12 w-auto" />
@@ -85,7 +89,7 @@ export default function DashboardLayout({
       <button
         onClick={() => setSidebarOpen(true)}
         className="
-          fixed top-4 left-4 z-30 md:hidden
+          chrome-top fixed top-4 left-4 z-30 md:hidden
           bg-white border border-border rounded-2xl
           w-10 h-10 flex items-center justify-center
           text-text hover:bg-surface-beige
@@ -112,7 +116,7 @@ export default function DashboardLayout({
       {/* Footer — full-bleed teal band, flush to the very bottom (nothing beneath it).
           Shapes perch on the band's TOP edge (mostly above it, base dipping in); the band itself
           holds the big transparent CAA$H watermark + the logo. */}
-      <div className="sticky bottom-0 z-20 w-full">
+      <div className="footer-art chrome-bottom sticky bottom-0 z-20 w-full">
         {/* Colored backdrop behind the right-side wave stripes (same viewBox/positioning as the
             shapes so it tracks them on resize) — keeps the stripes visible over scrolling content. */}
         <img
@@ -167,6 +171,7 @@ export default function DashboardLayout({
         </footer>
       </div>
       <ToastHost />
+      <RoundUpPill />
     </div>
   )
 }

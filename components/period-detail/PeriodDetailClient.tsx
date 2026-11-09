@@ -46,6 +46,7 @@ import SavingsAllocationSection from '@/components/period-detail/SavingsAllocati
 import PeriodRequestsPanel from '@/components/period-detail/PeriodRequestsPanel'
 import PeriodExpenseEditModal from '@/components/period-detail/PeriodExpenseEditModal'
 import MathInput from '@/components/ui/MathInput'
+import { hasCents, roundUpToDollar } from '@/lib/math-input'
 import RecentActivity from '@/components/period-detail/RecentActivity'
 import type { LinkedInvoiceRow } from '@/lib/sessions'
 import type {
@@ -179,7 +180,7 @@ export default function PeriodDetailClient({
   const [justCaptured, setJustCaptured] = useState(false)
 
   // ─── Optimistic overlays — toggles flip instantly; server reconciles on revalidate ──
-  const [optExpenses, applyExpenseOpt] = useOptimistic(
+  const [optAllExpenses, applyExpenseOpt] = useOptimistic(
     expenses,
     (
       state: PeriodExpense[],
@@ -252,6 +253,8 @@ export default function PeriodDetailClient({
     delete patch.kind
     return state.map((r) => (r.id === u.id ? { ...r, ...patch } : r))
   }
+  // A line marked paid outside the budget leaves this view right away
+  const optExpenses = optAllExpenses.filter((e) => !e.paid_outside)
   const [optLinked, applyLinkedOpt] = useOptimistic(linkedInvoices, rowReducer<LinkedInvoiceRow>)
   const [optManual, applyManualOpt] = useOptimistic(manualIncome, rowReducer<PeriodManualIncome>)
   // Optimistic ledger of period-level income adjustments — captured rows
@@ -668,6 +671,20 @@ export default function PeriodDetailClient({
     startTransition(() => updateDeductionOverrides(period.id, session.id, updates))
   }
 
+  // Round up to a whole dollar. A % deduction becomes a fixed $ amount, since that's
+  // the only way to land on a whole dollar; the % | $ toggle switches it back.
+  const handleDeductionRoundUp = (pctKey: string, amtKey: string, amount: number) => {
+    // Drop any pending typed edit so it can't overwrite the rounded value
+    for (const k of [pctKey, amtKey]) clearTimeout(debounceTimers.current[`deduction-${k}`])
+    const updates: Record<string, number | null> = { [amtKey]: roundUpToDollar(amount), [pctKey]: null }
+    setOverridesLocal((prev) => {
+      const merged: Record<string, number | null> = { ...prev, ...updates }
+      delete merged[pctKey]
+      return merged as DeductionOverrides
+    })
+    startTransition(() => updateDeductionOverrides(period.id, session.id, updates))
+  }
+
   // ─── Adjustments ─────────────────────────────────────────────
   // flat = the entered amount is the adjustment; target = entered amount is the desired
   // "left to budget", and we back-solve the adjustment off the current available figure
@@ -724,6 +741,7 @@ export default function PeriodDetailClient({
       period_id: period.id,
       team_id: period.team_id,
       session_id: null,
+      paid_outside: false,
       base_item_id: null,
       due_day: null,
       account: null,
@@ -1040,7 +1058,7 @@ export default function PeriodDetailClient({
 
       {/* ─── Sticky Summary Bar (visible when scrolled past cards) ── */}
       {showStickyBar && (
-        <div className="sticky top-[72px] md:top-[84px] z-40 -mx-6 px-6 -mt-4">
+        <div className="under-chrome sticky top-[72px] md:top-[84px] z-40 -mx-6 px-6 -mt-4">
           <div className="bg-[#ebf0f0] rounded-b-lg shadow-card px-4 py-2 flex items-center justify-between gap-4">
             <div className="flex items-center gap-4 text-caption">
               <span className="text-text-muted">{period.kind === 'event' ? 'Contributions' : 'Income'} <span className="font-bold text-text-heading">{formatCurrency(sessionIncome)}</span></span>
@@ -1313,6 +1331,7 @@ export default function PeriodDetailClient({
               overridesLocal?.[amtKey as keyof DeductionOverrides] !== undefined
             const dkey = pctKey.replace('_percentage', '')
             const paid = deductionPaid.has(dkey)
+            const dollars = detail.mode === '$' ? detail.value : detail.amount
             return (
               <div key={pctKey} className="text-center">
                 <div className="text-caption font-bold text-text-muted uppercase mb-1">{label}</div>
@@ -1364,7 +1383,8 @@ export default function PeriodDetailClient({
                 <div className="flex items-center justify-center gap-1 mb-1">
                   <MathInput
                     key={`${pctKey}-${detail.mode}`}
-                    defaultValue={detail.value}
+                    value={detail.value}
+                    data-no-round
                     disabled={isLocked}
                     onChange={(value) => handleDeductionChange(
                       detail.mode === '%' ? pctKey : amtKey,
@@ -1382,6 +1402,19 @@ export default function PeriodDetailClient({
                 ) : (
                   <div className="text-[10px] text-text-muted">= {detail.percentage.toFixed(1)}%</div>
                 )}
+                {/* Round up — the slot is always reserved so the cards stay lined up */}
+                <div className="h-6 flex items-center justify-center">
+                  {!isLocked && hasCents(dollars) && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeductionRoundUp(pctKey, amtKey, dollars)}
+                      title={`Round up to ${formatCurrency(roundUpToDollar(dollars))}`}
+                      className="text-[11px] font-bold text-primary hover:text-primary-teal transition-colors"
+                    >
+                      ↑ ${roundUpToDollar(dollars).toLocaleString('en-US')}
+                    </button>
+                  )}
+                </div>
                 {/* Destination account — set in Settings, feeds Account Transfers */}
                 <div className="mt-1.5 text-[10px] text-text-muted truncate" title={settings[accountKey] ?? 'No account set'}>
                   {settings[accountKey] ? `→ ${settings[accountKey]}` : '→ no account'}
@@ -1835,6 +1868,7 @@ export default function PeriodDetailClient({
           accounts={accounts}
           categories={categories}
           focusMove={editFocusMove}
+          billMonth={period.period_month?.slice(0, 7)}
           onSaved={(patch) => applyExpenseOpt({ kind: 'patch', id: editExpense.id, patch })}
           onClose={() => { setEditExpense(null); setEditFocusMove(false) }}
         />

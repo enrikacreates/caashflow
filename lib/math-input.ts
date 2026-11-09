@@ -98,3 +98,13 @@ export function evalMath(input: string): number | null {
 export function round2(n: number): number {
   return Math.round(n * 100) / 100
 }
+
+/** Does this amount have cents? Compares at 2dp so float noise doesn't count. */
+export function hasCents(n: number): boolean {
+  return round2(n) % 1 !== 0
+}
+
+/** Round up to the nearest dollar. Goes through 2dp first so 70.00000000000001 stays 70. */
+export function roundUpToDollar(n: number): number {
+  return Math.ceil(round2(n))
+}

@@ -51,6 +51,7 @@ export default async function PeriodDetailPage({
         lastPeriodAllocations={detail.lastPeriodAllocations}
         requests={requests ?? []}
         accountTransfers={detail.accountTransfers}
+        billPayments={detail.billPayments}
         initialTab={initialTab}
       />
     </div>

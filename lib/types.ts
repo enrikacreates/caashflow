@@ -130,6 +130,8 @@ export interface PeriodExpense {
   savings_goal_id: string | null
   // Session whose income funded this bill; null = still in the month's unfunded pool
   session_id: string | null
+  // Paid without budgeted income behind it (see BillPayment); budget math skips these
+  paid_outside: boolean
   sort_order: number
   created_at: string
   updated_at: string
@@ -333,6 +335,21 @@ export interface PeriodSavingsAllocation {
   contributed: number
   created_at: string
   updated_at: string
+}
+
+/** A bill paid outside a budget: on its budget line, or waiting for that month's budget. */
+export interface BillPayment {
+  id: string
+  team_id: string
+  expense_id: string | null
+  base_item_id: string | null
+  name: string
+  amount: number
+  account: string | null
+  paid_on: string
+  for_month: string | null
+  note: string | null
+  created_at: string
 }
 
 export type DeductionKey = 'tithe' | 'savings' | 'tax' | 'profit' | 'fun_money'

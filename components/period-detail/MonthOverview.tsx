@@ -1,6 +1,7 @@
 'use client'
 
-import { useOptimistic, useTransition } from 'react'
+import { useOptimistic, useState, useTransition } from 'react'
+import PeriodExpenseEditModal from '@/components/period-detail/PeriodExpenseEditModal'
 import { completePeriod, reopenPeriod } from '@/app/actions/periods'
 import { notifyError } from '@/lib/toast'
 import { formatCurrency, getOwedAmount } from '@/lib/utils'
@@ -8,23 +9,27 @@ import { calculatePayNowTotal } from '@/lib/calculations'
 import { expensesForSession, sessionLabel, summarizeSession } from '@/lib/sessions'
 import type { LinkedInvoiceRow } from '@/lib/sessions'
 import type {
+  Account,
+  PriorityCategoryRecord,
   BudgetPeriod,
   BudgetSession,
+  BillPayment,
   PeriodAdjustment,
   PeriodExpense,
   PeriodManualIncome,
   Settings,
 } from '@/lib/types'
 
-type BillStatus = 'unfunded' | 'funded' | 'paid' | 'cleared'
+type BillStatus = 'unfunded' | 'funded' | 'paid' | 'cleared' | 'outside'
 
 const STATUS_STYLE: Record<BillStatus, { label: string; className: string }> = {
   unfunded: { label: 'Not funded', className: 'bg-warning/10 text-warning' },
   funded: { label: 'Funded', className: 'bg-pill-cyan-light text-primary' },
   paid: { label: 'Paid', className: 'bg-pill-peach/60 text-text-heading' },
   cleared: { label: 'Cleared', className: 'bg-surface-mint text-primary-teal' },
+  outside: { label: 'Paid outside budget', className: 'bg-surface-mint text-primary-teal' },
 }
-const STATUS_ORDER: BillStatus[] = ['unfunded', 'funded', 'paid', 'cleared']
+const STATUS_ORDER: BillStatus[] = ['unfunded', 'funded', 'paid', 'cleared', 'outside']
 
 const owedOf = (e: PeriodExpense) =>
   e.is_split ? (e.payments ?? []).reduce((s, p) => s + p.amount, 0) : getOwedAmount(e)
@@ -36,7 +41,10 @@ const owedOf = (e: PeriodExpense) =>
 export default function MonthOverview({
   period,
   sessions,
-  expenses,
+  expenses: serverExpenses,
+  accounts,
+  categories,
+  billPayments,
   manualIncome,
   linkedInvoices,
   adjustments,
@@ -46,6 +54,9 @@ export default function MonthOverview({
   period: BudgetPeriod
   sessions: BudgetSession[]
   expenses: PeriodExpense[]
+  accounts: Account[]
+  categories: PriorityCategoryRecord[]
+  billPayments: BillPayment[]
   manualIncome: PeriodManualIncome[]
   linkedInvoices: LinkedInvoiceRow[]
   adjustments: PeriodAdjustment[]
@@ -55,6 +66,13 @@ export default function MonthOverview({
   const [isPending, startTransition] = useTransition()
   const [status, applyStatus] = useOptimistic(period.status, (_s, next: 'active' | 'complete') => next)
   const isLocked = status === 'complete'
+  // Edits made from the bill list show right away
+  const [expenses, applyEdit] = useOptimistic(
+    serverExpenses,
+    (state: PeriodExpense[], u: { id: string; patch: Partial<PeriodExpense> }) =>
+      state.map((e) => (e.id === u.id ? { ...e, ...u.patch } : e))
+  )
+  const [editing, setEditing] = useState<PeriodExpense | null>(null)
   // Event budgets roll up only their own one-time lines, matching the session tabs
   const rollup = period.kind === 'event' ? expenses.filter((e) => e.base_item_id === null) : expenses
 
@@ -87,7 +105,17 @@ export default function MonthOverview({
   const bills = rollup.map((e) => {
     let billStatus: BillStatus
     let source: string | null
-    if (e.is_split) {
+    const outside = e.paid_outside ? billPayments.find((p) => p.expense_id === e.id) : undefined
+    if (e.paid_outside) {
+      billStatus = 'outside'
+      source = outside
+        ? [
+            new Date(`${outside.paid_on}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+            outside.account,
+            outside.note,
+          ].filter(Boolean).join(' · ')
+        : null
+    } else if (e.is_split) {
       const pays = e.payments ?? []
       const fundedPays = pays.filter((p) => p.session_id)
       billStatus = pays.length > 0 && pays.every((p) => p.cleared) ? 'cleared'
@@ -105,7 +133,8 @@ export default function MonthOverview({
 
   const countBy = (st: BillStatus) => bills.filter((b) => b.status === st).length
   const stillToFund = bills.filter((b) => b.status === 'unfunded').reduce((s, b) => s + b.amount, 0)
-  const notCleared = bills.length - countBy('cleared')
+  const settled = countBy('cleared') + countBy('outside')
+  const notCleared = bills.length - settled
   const ready = bills.length > 0 && notCleared === 0
 
   const handleComplete = () => {
@@ -150,7 +179,7 @@ export default function MonthOverview({
         </div>
         <div className={card}>
           <div className={statLabel}>Cleared</div>
-          <div className="text-h3 font-bold text-text-heading mt-1">{countBy('cleared')} of {bills.length}</div>
+          <div className="text-h3 font-bold text-text-heading mt-1">{settled} of {bills.length}</div>
           <div className="text-[11px] text-text-muted">bills</div>
         </div>
       </div>
@@ -191,7 +220,14 @@ export default function MonthOverview({
         ) : (
           <div className="divide-y divide-divider">
             {bills.map(({ expense, status: st, source, amount }) => (
-              <div key={expense.id} className="py-2 flex items-center justify-between gap-3">
+              <button
+                key={expense.id}
+                type="button"
+                disabled={isLocked}
+                onClick={() => setEditing(expense)}
+                title={isLocked ? undefined : `Edit ${expense.name}`}
+                className="w-full text-left py-2 flex items-center justify-between gap-3"
+              >
                 <div className="min-w-0">
                   <div className={`text-caption font-bold truncate ${st === 'cleared' ? 'text-text-muted' : 'text-text-heading'}`}>{expense.name}</div>
                   {source && <div className="text-[11px] text-text-muted truncate">{source}</div>}
@@ -200,11 +236,24 @@ export default function MonthOverview({
                   <span className="text-caption font-bold text-text-heading">{formatCurrency(amount)}</span>
                   <span className={`text-[11px] font-bold rounded-full px-2 py-0.5 ${STATUS_STYLE[st].className}`}>{STATUS_STYLE[st].label}</span>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         )}
       </div>
+
+      {editing && (
+        <PeriodExpenseEditModal
+          quick
+          expense={editing}
+          billMonth={period.period_month?.slice(0, 7)}
+          outsidePayment={billPayments.find((p) => p.expense_id === editing.id)}
+          accounts={accounts}
+          categories={categories}
+          onSaved={(patch) => applyEdit({ id: editing.id, patch })}
+          onClose={() => setEditing(null)}
+        />
+      )}
 
       {/* ─── Set aside by session ─────────────────────────── */}
       {showDeductions && totals.setAside > 0 && (

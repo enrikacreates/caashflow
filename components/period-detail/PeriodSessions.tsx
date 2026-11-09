@@ -13,6 +13,7 @@ import type {
   BudgetPeriod,
   BudgetRequest,
   BudgetSession,
+  BillPayment,
   Invoice,
   PeriodAdjustment,
   PeriodExpense,
@@ -41,6 +42,7 @@ interface Props {
   lastPeriodAllocations: PeriodSavingsAllocation[]
   requests: BudgetRequest[]
   accountTransfers: { session_id: string | null; account_name: string; transferred: boolean; cash_done: boolean }[]
+  billPayments: BillPayment[]
   // ?s= from the URL: a session seq, or "month"
   initialTab?: string
 }
@@ -310,6 +312,9 @@ export default function PeriodSessions(props: Props) {
           period={period}
           sessions={sessions}
           expenses={props.expenses}
+          accounts={props.accounts}
+          categories={props.categories}
+          billPayments={props.billPayments}
           manualIncome={props.manualIncome}
           linkedInvoices={props.linkedInvoices}
           adjustments={props.adjustments}

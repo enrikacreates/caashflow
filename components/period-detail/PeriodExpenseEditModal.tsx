@@ -3,31 +3,40 @@
 import { notifyError } from '@/lib/toast'
 import { useState, useTransition, useRef, useEffect } from 'react'
 import Link from 'next/link'
-import { updatePeriodExpenseDetails, transferFunds, undoTransfer } from '@/app/actions/period-expenses'
+import { updatePeriodExpenseDetails, transferFunds, undoTransfer, undoBillPaid } from '@/app/actions/period-expenses'
+import MarkPaidModal from '@/components/period-detail/MarkPaidModal'
 import { formatCurrency } from '@/lib/utils'
 import { getBudgetedAmount, getSpentSoFar } from '@/lib/calculations'
 import MathInput from '@/components/ui/MathInput'
 import { evalMath } from '@/lib/math-input'
-import type { PeriodExpense, PeriodExpenseTransfer, Account, PriorityCategoryRecord } from '@/lib/types'
+import type { BillPayment, PeriodExpense, PeriodExpenseTransfer, Account, PriorityCategoryRecord } from '@/lib/types'
 
 const round2 = (n: number) => Math.round(n * 100) / 100
 
 export default function PeriodExpenseEditModal({
-  expense, expenses, transfers, accounts, categories, onClose,
-  onSaved, focusMove = false,
+  expense, expenses = [], transfers = [], accounts, categories, onClose,
+  onSaved, focusMove = false, quick = false, billMonth, outsidePayment,
 }: {
   expense: PeriodExpense
-  expenses: PeriodExpense[]
-  transfers: PeriodExpenseTransfer[]
+  expenses?: PeriodExpense[]
+  transfers?: PeriodExpenseTransfer[]
   accounts: Account[]
   categories: PriorityCategoryRecord[]
   onClose: () => void
   // Applies the saved edits to the budget row immediately (optimistic)
   onSaved?: (patch: Partial<PeriodExpense>) => void
   focusMove?: boolean
+  // Opened away from the budget's table (dashboard, Month tab): no Move funds, since the
+  // other lines aren't at hand, and edits carry to the baseline unless unchecked
+  quick?: boolean
+  // The budget month this line belongs to (preselects the month when marking it paid)
+  billMonth?: string
+  // Set when this line was already paid outside a budget
+  outsidePayment?: BillPayment
 }) {
+  const [markingPaid, setMarkingPaid] = useState(false)
   const [, startTransition] = useTransition()
-  const [alsoMaster, setAlsoMaster] = useState(false)
+  const [alsoMaster, setAlsoMaster] = useState(quick)
   const [trackSpending, setTrackSpending] = useState(expense.track_spending)
   // Local amount state so the MathInput can hold an unresolved expression mid-typing.
   // Submit re-evaluates from `amountRaw` to catch un-blurred edits like "5*3".
@@ -146,6 +155,34 @@ export default function PeriodExpenseEditModal({
     })
   }
 
+  const handleUndoPaid = () => {
+    if (!outsidePayment) return
+    onClose()
+    startTransition(async () => {
+      onSaved?.({ paid_outside: false, is_complete: false, cleared: false, paid: false })
+      try { await undoBillPaid(outsidePayment.id) }
+      catch { notifyError('Could not undo that payment. Please try again.') }
+    })
+  }
+
+  if (markingPaid) {
+    return (
+      <MarkPaidModal
+        expenseId={expense.id}
+        name={expense.name}
+        amount={expense.amount_override ?? expense.default_amount}
+        account={expense.account}
+        accounts={accounts}
+        billMonth={billMonth}
+        onClose={onClose}
+        onMarked={(month) => {
+          // Paid for another month: that month's line is the one that changes, not this one
+          if (month === null || month === billMonth) onSaved?.({ paid_outside: true, is_complete: true, cleared: true, paid: true, pay_now: false, session_id: null })
+        }}
+      />
+    )
+  }
+
   return (
     <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-bg-white rounded-lg shadow-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -153,7 +190,11 @@ export default function PeriodExpenseEditModal({
           <h2 className="text-[36px] leading-tight font-bold text-text-heading">Edit Expense</h2>
           <button onClick={onClose} className="text-text-muted hover:text-text-heading text-xl transition-colors">✕</button>
         </div>
-        <p className="text-caption text-text-muted mb-5">Changes apply to this budget only — your baseline template stays untouched.</p>
+        <p className="text-caption text-text-muted mb-5">
+          {quick
+            ? 'Saves to this budget, and to future budgets while the box below stays checked.'
+            : 'Changes apply to this budget only — your baseline template stays untouched.'}
+        </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -206,7 +247,7 @@ export default function PeriodExpenseEditModal({
           </div>
 
           {/* Move funds — reallocate funded dollars to/from another line (zero-sum, both directions) */}
-          <div ref={moveSectionRef} className={`bg-surface-beige rounded-sm p-3 space-y-2.5 transition-shadow ${focusMove ? 'ring-2 ring-primary-teal' : ''}`}>
+          {!quick && <div ref={moveSectionRef} className={`bg-surface-beige rounded-sm p-3 space-y-2.5 transition-shadow ${focusMove ? 'ring-2 ring-primary-teal' : ''}`}>
             <div className="flex items-baseline justify-between">
               <span className="text-caption font-semibold text-text-heading">Move funds</span>
               <span className="text-caption text-text-muted">
@@ -282,7 +323,27 @@ export default function PeriodExpenseEditModal({
                 })}
               </ul>
             )}
-          </div>
+          </div>}
+
+          {/* Paid outside a budget: record it, or see and undo it */}
+          {outsidePayment ? (
+            <div className="bg-surface-mint rounded-sm p-3 flex items-center justify-between gap-3">
+              <span className="text-caption text-text-heading min-w-0">
+                <span className="font-semibold">Paid outside budget</span>
+                <span className="block text-text-muted">
+                  {formatCurrency(outsidePayment.amount)} on {new Date(`${outsidePayment.paid_on}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  {outsidePayment.account ? ` from ${outsidePayment.account}` : ''}
+                  {outsidePayment.note ? `. ${outsidePayment.note}` : ''}
+                </span>
+              </span>
+              <button type="button" onClick={handleUndoPaid} className="text-caption font-semibold text-primary hover:underline shrink-0">Undo</button>
+            </div>
+          ) : !expense.is_split && !expense.paid && !expense.cleared && !expense.is_complete && !expense.id.startsWith('tmp-') && (
+            <div className="bg-surface-beige rounded-sm p-3 flex items-center justify-between gap-3">
+              <span className="text-caption text-text-muted">Already paid without budgeting it?</span>
+              <button type="button" onClick={() => setMarkingPaid(true)} className="bg-bg-white shadow-card rounded-full px-4 py-2 text-caption font-semibold text-text-heading shrink-0">Mark paid</button>
+            </div>
+          )}
 
           {/* Track spending — turns this line into a draw-down category (log spends, attach receipts) */}
           <label className="flex items-start gap-2.5 bg-surface-beige rounded-sm p-3 cursor-pointer">
@@ -314,7 +375,14 @@ export default function PeriodExpenseEditModal({
           )}
 
           <div className="flex items-center justify-between gap-3 pt-2">
-            {expense.base_item_id ? (
+            {quick ? (
+              <Link
+                href={`/periods/${expense.period_id}`}
+                className="text-caption text-text-muted hover:text-primary font-semibold transition-colors"
+              >
+                Open budget →
+              </Link>
+            ) : expense.base_item_id ? (
               <Link
                 href={`/base-budget?edit=${expense.base_item_id}`}
                 className="text-caption text-text-muted hover:text-primary font-semibold transition-colors"

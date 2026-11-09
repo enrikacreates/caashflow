@@ -44,6 +44,8 @@ Budget management system for modern creative/entrepreneurial families. Part of a
 | `period_manual_income` | One-off income per period |
 | `invoices` | Income/invoice tracking |
 | `budget_requests` | Wish-list items |
+| `budget_sessions` | Budgeting sittings within a month (tabs on the budget page) |
+| `bill_payments` | Bills paid outside a budget; on the line, or waiting for that month's budget. The line gets `paid_outside`, which budget math skips |
 | `debts` | Debt tracking (balance, interest, payments) |
 | `savings_goals` | Savings goals (purchase 🎯 / fund 🌱 types) |
 | `accounts` | User-defined account categories |

@@ -3,6 +3,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { getUserTeamId } from '@/lib/supabase/helpers'
 import { revalidatePath } from 'next/cache'
+import { applyWaitingBillPayments } from '@/app/actions/period-expenses'
+import type { UpcomingBudget } from '@/lib/upcoming'
+import type { BillPayment } from '@/lib/types'
 
 // ── Period CRUD ─────────────────────────────────────────────────────────────
 // Period-level operations only. For expense/income/invoice actions within a
@@ -122,6 +125,7 @@ export async function createBudgetPeriod(formData: FormData) {
       .insert(periodExpenses)
 
     if (expensesError) throw new Error(`Failed to create period expenses: ${expensesError.message}`)
+    if (periodMonth) await applyWaitingBillPayments(period.id, periodMonth)
   }
 
   revalidatePath('/periods')
@@ -237,6 +241,64 @@ export async function deleteBudgetPeriod(id: string) {
   revalidatePath('/periods')
 }
 
+/**
+ * Bills for the dashboard's "Due this week": last, current, and next calendar month
+ * (the viewer's clock decides which ones the week touches). Each month is read from
+ * one budget: the newest active one, or the newest if all are complete. Events are out.
+ */
+export async function getWaitingBillPayments(): Promise<BillPayment[]> {
+  const supabase = await createClient()
+  const teamId = await getUserTeamId()
+  const { data } = await supabase
+    .from('bill_payments').select('*').eq('team_id', teamId).is('expense_id', null)
+  return (data ?? []) as BillPayment[]
+}
+
+export async function getUpcomingBudgets(): Promise<UpcomingBudget[]> {
+  const supabase = await createClient()
+  const teamId = await getUserTeamId()
+
+  const now = new Date()
+  const monthStart = (offset: number) => {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + offset, 1))
+    return d.toISOString().slice(0, 10)
+  }
+
+  const { data: periods, error } = await supabase
+    .from('budget_periods')
+    .select('id, period_month, status, created_at')
+    .eq('team_id', teamId)
+    .eq('kind', 'monthly')
+    .gte('period_month', monthStart(-1))
+    .lte('period_month', monthStart(1))
+    .order('created_at', { ascending: false })
+  if (error) throw new Error(`Failed to fetch upcoming budgets: ${error.message}`)
+
+  const byMonth = new Map<string, { id: string; status: string }>()
+  for (const p of periods ?? []) {
+    const month = (p.period_month as string).slice(0, 7)
+    const held = byMonth.get(month)
+    if (!held || (held.status === 'complete' && p.status !== 'complete')) byMonth.set(month, p)
+  }
+  const periodIds = [...byMonth.values()].map((p) => p.id)
+  if (periodIds.length === 0) return []
+
+  const { data: expenses, error: expensesError } = await supabase
+    .from('period_expenses')
+    .select('*, period_expense_payments(*)')
+    .eq('team_id', teamId)
+    .in('period_id', periodIds)
+  if (expensesError) throw new Error(`Failed to fetch upcoming bills: ${expensesError.message}`)
+
+  return [...byMonth.entries()].map(([month, p]) => ({
+    month,
+    periodId: p.id,
+    expenses: (expenses ?? [])
+      .filter((e) => e.period_id === p.id)
+      .map(({ period_expense_payments, ...e }) => ({ ...e, payments: period_expense_payments ?? [] })),
+  }))
+}
+
 export async function getPeriodDetail(periodId: string) {
   const supabase = await createClient()
   const teamId = await getUserTeamId()
@@ -299,7 +361,7 @@ export async function getPeriodDetail(periodId: string) {
   const lastPeriodId = otherPeriodsRes.data?.[0]?.id as string | undefined
 
   // Second wave: rows keyed off the first wave's results
-  const [paymentsRes, spendsRes, lastAllocsRes] = await Promise.all([
+  const [paymentsRes, spendsRes, lastAllocsRes, billPaymentsRes] = await Promise.all([
     expenseIds.length
       ? supabase.from('period_expense_payments').select('*').in('period_expense_id', expenseIds).order('sort_order', { ascending: true })
       : Promise.resolve({ data: [], error: null }),
@@ -308,6 +370,9 @@ export async function getPeriodDetail(periodId: string) {
       : Promise.resolve({ data: [], error: null }),
     lastPeriodId
       ? supabase.from('period_savings_allocations').select('*').eq('period_id', lastPeriodId).eq('team_id', teamId)
+      : Promise.resolve({ data: [], error: null }),
+    expenseIds.length
+      ? supabase.from('bill_payments').select('*').eq('team_id', teamId).in('expense_id', expenseIds)
       : Promise.resolve({ data: [], error: null }),
   ])
 
@@ -350,5 +415,6 @@ export async function getPeriodDetail(periodId: string) {
     savingsAllocations: savingsAllocationsRes.data ?? [],
     lastPeriodAllocations: lastAllocsRes.data ?? [],
     accountTransfers: accountTransfersRes.data ?? [],
+    billPayments: (billPaymentsRes.data ?? []) as BillPayment[],
   }
 }

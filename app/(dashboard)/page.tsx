@@ -2,16 +2,17 @@ import PeriodSwitcherHeader from '@/components/dashboard/PeriodSwitcherHeader'
 import NewBudgetButton from '@/components/dashboard/NewBudgetButton'
 import CashFlowChart from '@/components/dashboard/CashFlowChart'
 import BudgetSummaryBar from '@/components/dashboard/BudgetSummaryBar'
-import { getBudgetPeriods, getPeriodDetail, getMonthlyManualIncome } from '@/app/actions/periods'
+import ThisWeekBills from '@/components/dashboard/ThisWeekBills'
+import { getBudgetPeriods, getPeriodDetail, getMonthlyManualIncome, getUpcomingBudgets, getWaitingBillPayments } from '@/app/actions/periods'
 import { getInvoices } from '@/app/actions/invoices'
 import { getBaseBudgetItems } from '@/app/actions/base-budget'
-import { getSettings } from '@/app/actions/settings'
+import { getSettings, getAccounts, getPriorityCategories } from '@/app/actions/settings'
 import { getSavingsGoals } from '@/app/actions/savings'
 import { getDebts } from '@/app/actions/debts'
 import { getOwedAmount, formatCurrency, formatCurrencyShort } from '@/lib/utils'
 import { calculatePayNowTotal, calculateMonthlyEquivalent, calculatePeriodPaymentSummary } from '@/lib/calculations'
 import { summarizeSession } from '@/lib/sessions'
-import { CalendarClock, PiggyBank, Hammer, ArrowUpRight, ArrowDownRight } from 'lucide-react'
+import { PiggyBank, Hammer, ArrowUpRight, ArrowDownRight } from 'lucide-react'
 
 export default async function DashboardPage({
   searchParams,
@@ -20,7 +21,7 @@ export default async function DashboardPage({
 }) {
   const { period: periodParam } = await searchParams
 
-  const [periods, invoices, baseItems, settings, savingsGoals, debts, manualByMonth] = await Promise.all([
+  const [periods, invoices, baseItems, settings, savingsGoals, debts, manualByMonth, upcomingBudgets, accounts, categories, waitingPayments] = await Promise.all([
     getBudgetPeriods(),
     getInvoices(),
     getBaseBudgetItems(),
@@ -28,6 +29,10 @@ export default async function DashboardPage({
     getSavingsGoals(),
     getDebts(),
     getMonthlyManualIncome(),
+    getUpcomingBudgets(),
+    getAccounts(),
+    getPriorityCategories(),
+    getWaitingBillPayments(),
   ])
 
   // Dashboard only rolls up monthly pay-period budgets. Event budgets (parties,
@@ -55,31 +60,26 @@ export default async function DashboardPage({
   let incomeAfterDeductions = 0
   let totalExpenses = 0
   let stillToFund = 0
-  let nextBills: { id: string; name: string; due: number; amount: number }[] = []
 
   if (selectedPeriod) {
     const detail = await getPeriodDetail(selectedPeriod.id)
-    payNowTotal = calculatePayNowTotal(detail.expenses)
-    paidTotal = calculatePeriodPaymentSummary(detail.expenses).paid
+    // Bills paid outside the budget aren't part of its money
+    const budgetExpenses = detail.expenses.filter((e) => !e.paid_outside)
+    payNowTotal = calculatePayNowTotal(budgetExpenses)
+    paidTotal = calculatePeriodPaymentSummary(budgetExpenses).paid
     // Month totals = every session's income net of its own per-income deductions
     const sessionTotals = detail.sessions.map((s) => summarizeSession(s, detail, settings))
     const adjustment = sessionTotals.reduce((sum, t) => sum + t.adjustment, 0)
     incomeAfterDeductions = sessionTotals.reduce((sum, t) => sum + t.deductions.incomeAfterDeductions, 0)
-    const expenseOwed = (e: typeof detail.expenses[number]) =>
+    const expenseOwed = (e: typeof budgetExpenses[number]) =>
       e.is_split ? (e.payments ?? []).reduce((s: number, p: { amount: number }) => s + p.amount, 0) : getOwedAmount(e)
-    totalExpenses = detail.expenses.reduce((sum, e) => sum + expenseOwed(e), 0)
+    totalExpenses = budgetExpenses.reduce((sum, e) => sum + expenseOwed(e), 0)
     // Already settled (cleared) expenses are funded — exclude them from "still to fund".
-    const clearedExpenseTotal = detail.expenses.reduce((sum, e) => (e.is_complete ? sum + expenseOwed(e) : sum), 0)
+    const clearedExpenseTotal = budgetExpenses.reduce((sum, e) => (e.is_complete ? sum + expenseOwed(e) : sum), 0)
     // Amount Left = unspent income capacity. Cleared dollars are locked (already left the
     // account), so they stay subtracted alongside the committed pay-now total.
     amountLeft = incomeAfterDeductions + adjustment - payNowTotal - clearedExpenseTotal
     stillToFund = Math.max(0, totalExpenses - payNowTotal - clearedExpenseTotal)
-    // Soonest unpaid bills with a due day
-    nextBills = detail.expenses
-      .filter((e) => !e.paid && !e.is_complete && e.due_day != null)
-      .sort((a, b) => (a.due_day ?? 99) - (b.due_day ?? 99))
-      .slice(0, 5)
-      .map((e) => ({ id: e.id, name: e.name, due: e.due_day as number, amount: getOwedAmount(e) }))
   }
 
   // Income still expected this month — invoices dated this month not yet received
@@ -132,28 +132,14 @@ export default async function DashboardPage({
         )}
       </div>
 
+      {/* What's coming due, by date. Follows today's date, not the budget picked above. */}
+      <ThisWeekBills budgets={upcomingBudgets} baseItems={baseItems} waitingPayments={waitingPayments} accounts={accounts ?? []} categories={categories ?? []} />
+
       {/* 6-Month Income — primary cash-flow view, kept up top */}
       <CashFlowChart invoices={invoices} incomeGoal={settings.monthly_income_goal} expenseNeed={monthlyExpenses} periods={monthlyPeriods} manualByMonth={manualByMonth} />
 
       {/* Insight cards */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {nextBills.length > 0 && (
-          <a href={`/periods/${selectedPeriod?.id ?? ''}`} className="block bg-bg-white rounded-lg shadow-card p-5 hover:shadow-lg transition-shadow">
-            <div className={cardLabel}><CalendarClock size={16} /> Next bills due</div>
-            <ul className="space-y-2">
-              {nextBills.map((b) => (
-                <li key={b.id} className="flex items-center justify-between text-caption">
-                  <span className="text-text-heading font-medium truncate mr-3">{b.name}</span>
-                  <span className="flex items-center gap-3 shrink-0">
-                    <span className="text-text-muted">the {b.due}{b.due === 1 ? 'st' : b.due === 2 ? 'nd' : b.due === 3 ? 'rd' : 'th'}</span>
-                    <span className="font-bold text-text-heading w-20 text-right">{formatCurrency(b.amount)}</span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </a>
-        )}
-
         {incomeDelta != null && prevPeriod && (
           <a href="/cashflow" className="block bg-bg-white rounded-lg shadow-card p-5 hover:shadow-lg transition-shadow">
             <div className={cardLabel}>

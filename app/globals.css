@@ -378,3 +378,43 @@ body {
   scrollbar-width: thin;
   scrollbar-color: rgba(176, 158, 138, 0.38) transparent;
 }
+
+/* Footer graphics step aside while a number field has focus, so they don't sit
+   over the figures being edited. The return is delayed so moving from one field
+   to the next doesn't make them flicker. */
+.footer-art {
+  transition: opacity 200ms ease 150ms, transform 300ms ease;
+}
+body:has(input:is([type="number"], [inputmode="decimal"]):focus) .footer-art {
+  opacity: 0;
+  pointer-events: none;
+  transition-delay: 0ms;
+}
+
+/* Header slides up and footer art slides down while working (see useAutoHideChrome).
+   The footer also clears its shapes, which sit above the band at 164/1440 of the page width.
+   Keyboard focus inside either one brings it back. */
+.chrome-top {
+  transition: transform 300ms ease;
+}
+[data-chrome="hidden"] .chrome-top:not(:has(:focus-visible), :focus-visible) {
+  transform: translateY(calc(-100% - 24px));
+}
+[data-chrome="hidden"] .chrome-bottom:not(:has(:focus-visible)) {
+  transform: translateY(calc(100% + 12vw + 8px));
+}
+/* Anything pinned under the header moves up into its place */
+.under-chrome {
+  transition: top 300ms ease;
+}
+[data-chrome="hidden"] .under-chrome {
+  top: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .chrome-top,
+  .chrome-bottom,
+  .footer-art,
+  .under-chrome {
+    transition: none;
+  }
+}

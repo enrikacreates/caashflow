@@ -1482,3 +1482,167 @@ export async function bulkMarkPaid(periodId: string, sessionId: string) {
   revalidatePath(`/periods/${periodId}`)
   revalidatePath('/')
 }
+
+/* ─── Bills paid outside a budget ───────────────────────────────────── */
+
+/** The line for a baseline bill in a month's budget: newest active budget, else newest. */
+async function findBudgetLine(supabase: SupabaseServer, teamId: string, baseItemId: string, month: string): Promise<string | null> {
+  const { data: periods } = await supabase
+    .from('budget_periods')
+    .select('id, status')
+    .eq('team_id', teamId).eq('kind', 'monthly').eq('period_month', `${month}-01`)
+    .order('created_at', { ascending: false })
+  const period = (periods ?? []).find((p) => p.status !== 'complete') ?? periods?.[0]
+  if (!period) return null
+  const { data: line } = await supabase
+    .from('period_expenses')
+    .select('id')
+    .eq('team_id', teamId).eq('period_id', period.id).eq('base_item_id', baseItemId)
+    .limit(1).maybeSingle()
+  return line?.id ?? null
+}
+
+/**
+ * Close a budget line as paid outside the budget. Goes through the normal closing path so
+ * linked debts and savings still move; paid_outside then keeps it out of the budget's math.
+ * Clearing the session returns any funds it had committed from that session's income.
+ */
+async function closeLineAsPaidOutside(supabase: SupabaseServer, teamId: string, expenseId: string, amount: number) {
+  const { data: line, error } = await supabase
+    .from('period_expenses')
+    .select('default_amount, amount_override')
+    .eq('id', expenseId).eq('team_id', teamId).single()
+  if (error || !line) throw new Error('Expense not found')
+  const owed = line.amount_override ?? line.default_amount ?? 0
+  await supabase
+    .from('period_expenses')
+    .update({
+      paid_outside: true,
+      pay_now: false,
+      session_id: null,
+      amount_override: round2(amount) === Number(owed) ? line.amount_override : round2(amount),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', expenseId).eq('team_id', teamId)
+  return reconcileExpenseSpend(supabase, teamId, expenseId, { forceClosed: true })
+}
+
+/**
+ * Record a bill as paid without budgeting it. `forMonth` ("YYYY-MM") can point at another
+ * month's line; when that month has no budget yet the payment waits for it. Baseline bills
+ * with no budget line must say which month they're for.
+ */
+export async function markBillPaid(input: {
+  expenseId?: string | null
+  baseItemId?: string | null
+  name: string
+  amount: number
+  account: string | null
+  paidOn: string
+  forMonth: string | null
+  note: string | null
+}): Promise<RippleFlags> {
+  const supabase = await createClient()
+  const teamId = await getUserTeamId()
+
+  let targetId = input.expenseId ?? null
+  let baseItemId = input.baseItemId ?? null
+  if (targetId) {
+    const { data: source } = await supabase
+      .from('period_expenses')
+      .select('base_item_id, budget_periods(period_month)')
+      .eq('id', targetId).eq('team_id', teamId).single()
+    baseItemId = source?.base_item_id ?? null
+    const sourceMonth = (source?.budget_periods as unknown as { period_month: string | null } | null)?.period_month?.slice(0, 7)
+    if (input.forMonth && baseItemId && input.forMonth !== sourceMonth) {
+      targetId = await findBudgetLine(supabase, teamId, baseItemId, input.forMonth)
+    }
+  } else if (baseItemId && input.forMonth) {
+    targetId = await findBudgetLine(supabase, teamId, baseItemId, input.forMonth)
+  }
+  if (!targetId && !(baseItemId && input.forMonth)) throw new Error('Pick the month this payment was for')
+
+  let priorOverride: number | null = null
+  if (targetId) {
+    const { data: line } = await supabase
+      .from('period_expenses')
+      .select('amount_override, cleared, is_complete')
+      .eq('id', targetId).eq('team_id', teamId).single()
+    if (line?.cleared || line?.is_complete) throw new Error('That bill is already paid for that month')
+    priorOverride = line?.amount_override ?? null
+  }
+
+  const { error } = await supabase.from('bill_payments').insert({
+    team_id: teamId,
+    expense_id: targetId,
+    base_item_id: baseItemId,
+    name: input.name,
+    amount: round2(input.amount),
+    account: input.account,
+    paid_on: input.paidOn,
+    for_month: input.forMonth ? `${input.forMonth}-01` : null,
+    note: input.note?.trim() || null,
+    prior_amount_override: priorOverride,
+  })
+  if (error) throw new Error(`Failed to record payment: ${error.message}`)
+
+  const flags = targetId ? await closeLineAsPaidOutside(supabase, teamId, targetId, input.amount) : { ...NO_RIPPLE }
+
+  revalidatePath('/periods', 'layout')
+  revalidatePath('/')
+  return flags
+}
+
+/** Undo a bill paid outside a budget: the line goes back to unfunded and any debt/savings move reverses. */
+export async function undoBillPaid(paymentId: string) {
+  const supabase = await createClient()
+  const teamId = await getUserTeamId()
+
+  const { data: payment, error } = await supabase
+    .from('bill_payments')
+    .select('expense_id, prior_amount_override')
+    .eq('id', paymentId).eq('team_id', teamId).single()
+  if (error || !payment) throw new Error('Payment not found')
+
+  if (payment.expense_id) {
+    await supabase
+      .from('period_expenses')
+      .update({
+        paid_outside: false,
+        paid: false,
+        amount_override: payment.prior_amount_override,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', payment.expense_id).eq('team_id', teamId)
+    await reconcileExpenseSpend(supabase, teamId, payment.expense_id, { forceClosed: false })
+  }
+  await supabase.from('bill_payments').delete().eq('id', paymentId).eq('team_id', teamId)
+
+  revalidatePath('/periods', 'layout')
+  revalidatePath('/')
+}
+
+/** A new budget picks up payments already made for its month, before it existed. */
+export async function applyWaitingBillPayments(periodId: string, periodMonth: string) {
+  const supabase = await createClient()
+  const teamId = await getUserTeamId()
+
+  const { data: waiting } = await supabase
+    .from('bill_payments')
+    .select('id, base_item_id, amount')
+    .eq('team_id', teamId).is('expense_id', null).eq('for_month', periodMonth)
+  for (const payment of waiting ?? []) {
+    if (!payment.base_item_id) continue
+    const { data: line } = await supabase
+      .from('period_expenses')
+      .select('id, amount_override')
+      .eq('team_id', teamId).eq('period_id', periodId).eq('base_item_id', payment.base_item_id)
+      .limit(1).maybeSingle()
+    if (!line) continue
+    await supabase
+      .from('bill_payments')
+      .update({ expense_id: line.id, prior_amount_override: line.amount_override })
+      .eq('id', payment.id).eq('team_id', teamId)
+    await closeLineAsPaidOutside(supabase, teamId, line.id, Number(payment.amount))
+  }
+}
