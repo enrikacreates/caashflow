@@ -48,6 +48,7 @@ import PeriodExpenseEditModal from '@/components/period-detail/PeriodExpenseEdit
 import MathInput from '@/components/ui/MathInput'
 import { hasCents, roundUpToDollar } from '@/lib/math-input'
 import RecentActivity from '@/components/period-detail/RecentActivity'
+import { expenseLabel } from '@/lib/annual'
 import type { LinkedInvoiceRow } from '@/lib/sessions'
 import type {
   BudgetPeriod,
@@ -742,6 +743,8 @@ export default function PeriodDetailClient({
       team_id: period.team_id,
       session_id: null,
       paid_outside: false,
+      annual_part: null,
+      annual_parts: null,
       base_item_id: null,
       due_day: null,
       account: null,
@@ -1058,7 +1061,7 @@ export default function PeriodDetailClient({
 
       {/* ─── Sticky Summary Bar (visible when scrolled past cards) ── */}
       {showStickyBar && (
-        <div className="under-chrome sticky top-[72px] md:top-[84px] z-40 -mx-6 px-6 -mt-4">
+        <div className="under-chrome sticky z-40 -mx-6 px-6 -mt-4">
           <div className="bg-[#ebf0f0] rounded-b-lg shadow-card px-4 py-2 flex items-center justify-between gap-4">
             <div className="flex items-center gap-4 text-caption">
               <span className="text-text-muted">{period.kind === 'event' ? 'Contributions' : 'Income'} <span className="font-bold text-text-heading">{formatCurrency(sessionIncome)}</span></span>
@@ -1870,6 +1873,7 @@ export default function PeriodDetailClient({
           focusMove={editFocusMove}
           billMonth={period.period_month?.slice(0, 7)}
           onSaved={(patch) => applyExpenseOpt({ kind: 'patch', id: editExpense.id, patch })}
+          onArchived={() => applyExpenseOpt({ kind: 'remove', id: editExpense.id })}
           onClose={() => { setEditExpense(null); setEditFocusMove(false) }}
         />
       )}
@@ -2300,10 +2304,10 @@ function ExpenseRow({
                 title="Click to edit"
                 className="text-caption font-medium text-text-heading underline decoration-dotted decoration-text-muted underline-offset-4 hover:text-primary hover:decoration-solid hover:decoration-primary transition-colors text-left cursor-pointer"
               >
-                {expense.name}
+                {expenseLabel(expense)}
               </button>
             ) : (
-              <span className="text-caption font-medium text-text-heading">{expense.name}</span>
+              <span className="text-caption font-medium text-text-heading">{expenseLabel(expense)}</span>
             )}
             {expense.pay_url && (
               <a

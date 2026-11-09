@@ -2,6 +2,7 @@ import { getPeriodDetail, getBudgetPeriods } from '@/app/actions/periods'
 import { getPriorityCategories } from '@/app/actions/settings'
 import { getBudgetRequests } from '@/app/actions/requests'
 import PeriodSessions from '@/components/period-detail/PeriodSessions'
+import Breadcrumbs from '@/components/layout/Breadcrumbs'
 import PeriodPicker from '@/components/period-detail/PeriodPicker'
 import NewBudgetButton from '@/components/dashboard/NewBudgetButton'
 
@@ -22,7 +23,9 @@ export default async function PeriodDetailPage({
   ])
 
   return (
-    <div className="space-y-8">
+    <div>
+      <Breadcrumbs current={detail.period.period_name} />
+      <div className="space-y-8">
       <div className="flex items-start justify-between gap-4">
         <div>
           <PeriodPicker current={detail.period} periods={allPeriods ?? []} />
@@ -54,6 +57,7 @@ export default async function PeriodDetailPage({
         billPayments={detail.billPayments}
         initialTab={initialTab}
       />
+      </div>
     </div>
   )
 }

@@ -1,12 +1,13 @@
-import { getBaseBudgetItems } from '@/app/actions/base-budget'
+import { getBaseBudgetItems, getArchivedBaseItems } from '@/app/actions/base-budget'
 import { getAccounts, getPriorityCategories, getSettings } from '@/app/actions/settings'
 import { calculateMonthlyEquivalent } from '@/lib/calculations'
 import { formatCurrency } from '@/lib/utils'
 import BaseBudgetClient from '@/components/base-budget/BaseBudgetClient'
 
 export default async function BaseBudgetPage() {
-  const [items, accounts, categories, settings] = await Promise.all([
+  const [items, archivedItems, accounts, categories, settings] = await Promise.all([
     getBaseBudgetItems(),
+    getArchivedBaseItems(),
     getAccounts(),
     getPriorityCategories(),
     getSettings(),
@@ -43,7 +44,7 @@ export default async function BaseBudgetPage() {
         </div>
       </div>
 
-      <BaseBudgetClient items={items} accounts={accounts ?? []} categories={categories ?? []} />
+      <BaseBudgetClient items={items} archivedItems={archivedItems} accounts={accounts ?? []} categories={categories ?? []} />
     </div>
   )
 }

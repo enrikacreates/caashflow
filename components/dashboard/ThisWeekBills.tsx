@@ -5,6 +5,7 @@ import { CalendarClock, ChevronDown } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import { localToday } from '@/lib/sessions'
 import { pastDueBillsByDay, upcomingBillsByDay } from '@/lib/upcoming'
+import { annualComingUp } from '@/lib/annual'
 import PeriodExpenseEditModal from '@/components/period-detail/PeriodExpenseEditModal'
 import ExpenseFormModal from '@/components/base-budget/ExpenseFormModal'
 import MarkPaidModal from '@/components/period-detail/MarkPaidModal'
@@ -26,6 +27,14 @@ function dayLabel(day: UpcomingDay): string {
   if (day.offset === -1) return 'Yesterday'
   const [y, m, d] = day.date.split('-').map(Number)
   return new Date(y, m - 1, d).toLocaleDateString('en-US', { weekday: 'long' })
+}
+
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+
+function annualDueLabel(monthsAway: number | null, dueMonth: number | null): string {
+  if (monthsAway === null || !dueMonth) return 'No due month yet'
+  if (monthsAway === 0) return 'Due this month'
+  return `Due in ${MONTH_NAMES[dueMonth - 1]}`
 }
 
 function shortDate(iso: string): string {
@@ -66,6 +75,7 @@ function DayCards({ days, onEdit, onPaid }: {
                       <span className="block text-caption font-medium text-text-heading truncate group-hover:text-primary transition-colors">{bill.name}</span>
                       <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1 mt-0.5">
                         <span className={`text-[11px] font-bold rounded-full px-2 py-0.5 ${STATUS[bill.status].className}`}>{STATUS[bill.status].label}</span>
+                        {bill.annual && <span className="text-[11px] font-bold rounded-full px-2 py-0.5 bg-pill-lavender text-text-heading">Annual</span>}
                         {bill.autoPay && <span className="text-[11px] font-bold rounded-full px-2 py-0.5 bg-surface-mint text-primary-teal">Auto</span>}
                         {bill.account && <span className="text-[11px] text-text-muted">{bill.account}</span>}
                         {askIfPaid(bill, day) && (
@@ -106,8 +116,11 @@ export default function ThisWeekBills({ budgets: serverBudgets, baseItems, waiti
   // Saved edits land right away, so a changed due day moves the bill to its new date
   const [budgets, applyEdit] = useOptimistic(
     serverBudgets,
-    (state: UpcomingBudget[], u: { id: string; patch: Partial<PeriodExpense> }) =>
-      state.map((b) => ({ ...b, expenses: b.expenses.map((e) => (e.id === u.id ? { ...e, ...u.patch } : e)) }))
+    (state: UpcomingBudget[], u: { id: string; patch: Partial<PeriodExpense> } | { id: string; remove: true }) =>
+      state.map((b) => ({
+        ...b,
+        expenses: 'remove' in u ? b.expenses.filter((e) => e.id !== u.id) : b.expenses.map((e) => (e.id === u.id ? { ...e, ...u.patch } : e)),
+      }))
   )
   const [waitingPayments, addWaiting] = useOptimistic(
     serverWaiting as Pick<BillPayment, 'base_item_id' | 'for_month'>[],
@@ -126,6 +139,8 @@ export default function ThisWeekBills({ budgets: serverBudgets, baseItems, waiti
   const pastDueTotal = pastDue.reduce((s, d) => s + d.total, 0)
   const pastDueCount = pastDue.reduce((n, d) => n + d.bills.length, 0)
   const [showPastDue, setShowPastDue] = useState(false)
+  const currentLines = today ? budgets.find((b) => b.month === today.slice(0, 7))?.expenses ?? [] : []
+  const annual = today ? annualComingUp(today, baseItems, currentLines, waitingPayments) : []
 
   return (
     <section aria-labelledby="this-week-heading">
@@ -154,6 +169,49 @@ export default function ThisWeekBills({ budgets: serverBudgets, baseItems, waiti
         </div>
       )}
 
+      {annual.length > 0 && (
+        <ul className="mb-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {annual.map(({ item, monthsAway, amountNow, part, parts }) => {
+            const money = amountNow ?? item.default_amount
+            return (
+              <li key={item.id} className="relative bg-bg-white rounded-lg shadow-card p-4 group">
+                <button type="button" onClick={() => setEditing({ kind: 'base', item, month: today!.slice(0, 7) })} aria-label={`Edit ${item.name}`} title={`Edit ${item.name}`} className="absolute inset-0 rounded-lg" />
+                <div className="flex items-start justify-between gap-3">
+                  <span className="min-w-0">
+                    <span className="block text-caption font-medium text-text-heading truncate group-hover:text-primary transition-colors">
+                      {item.name}{part && parts ? ` (${part} of ${parts})` : ''}
+                    </span>
+                    <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1 mt-1">
+                      {monthsAway === null ? (
+                        <span className="text-[11px] font-bold rounded-full px-2 py-0.5 bg-warning/10 text-warning">Set month</span>
+                      ) : (
+                        <span className="text-[11px] font-bold rounded-full px-2 py-0.5 bg-pill-lavender text-text-heading">Annual expense coming up</span>
+                      )}
+                      <span className="text-[11px] text-text-muted">{annualDueLabel(monthsAway, item.due_month)}</span>
+                      {item.account && <span className="text-[11px] text-text-muted">{item.account}</span>}
+                      {amountNow !== null && monthsAway !== null && (
+                        <button
+                          type="button"
+                          onClick={() => setPaying({
+                            bill: { key: item.id, edit: { kind: 'base', item, month: today!.slice(0, 7) }, name: item.name, annual: true, amount: money, status: 'baseline', autoPay: item.auto_pay, account: item.account },
+                            date: today!,
+                          })}
+                          title={`Record ${item.name} as paid`}
+                          className="relative z-10 text-[11px] font-bold text-primary hover:underline"
+                        >
+                          Paid?
+                        </button>
+                      )}
+                    </span>
+                  </span>
+                  <span className="text-caption text-text-heading shrink-0">{formatCurrency(money)}</span>
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+
       {today && days.length === 0 && (
         <div className="bg-bg-white rounded-lg shadow-card p-5 text-caption text-text-muted">
           Nothing due in the next 7 days.
@@ -170,6 +228,7 @@ export default function ThisWeekBills({ budgets: serverBudgets, baseItems, waiti
           accounts={accounts}
           categories={categories}
           onSaved={(patch) => applyEdit({ id: editing.expense.id, patch })}
+          onArchived={() => applyEdit({ id: editing.expense.id, remove: true })}
           onClose={() => setEditing(null)}
         />
       )}

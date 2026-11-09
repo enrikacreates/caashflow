@@ -3,7 +3,8 @@ import NewBudgetButton from '@/components/dashboard/NewBudgetButton'
 import CashFlowChart from '@/components/dashboard/CashFlowChart'
 import BudgetSummaryBar from '@/components/dashboard/BudgetSummaryBar'
 import ThisWeekBills from '@/components/dashboard/ThisWeekBills'
-import { getBudgetPeriods, getPeriodDetail, getMonthlyManualIncome, getUpcomingBudgets, getWaitingBillPayments } from '@/app/actions/periods'
+import TrackedMonths from '@/components/dashboard/TrackedMonths'
+import { getBudgetPeriods, getPeriodDetail, getMonthlyManualIncome, getUpcomingBudgets, getWaitingBillPayments, getTrackedMonths } from '@/app/actions/periods'
 import { getInvoices } from '@/app/actions/invoices'
 import { getBaseBudgetItems } from '@/app/actions/base-budget'
 import { getSettings, getAccounts, getPriorityCategories } from '@/app/actions/settings'
@@ -12,7 +13,7 @@ import { getDebts } from '@/app/actions/debts'
 import { getOwedAmount, formatCurrency, formatCurrencyShort } from '@/lib/utils'
 import { calculatePayNowTotal, calculateMonthlyEquivalent, calculatePeriodPaymentSummary } from '@/lib/calculations'
 import { summarizeSession } from '@/lib/sessions'
-import { PiggyBank, Hammer, ArrowUpRight, ArrowDownRight } from 'lucide-react'
+import { PiggyBank, Hammer, ArrowUpRight, ArrowDownRight, MessageCircleHeart } from 'lucide-react'
 
 export default async function DashboardPage({
   searchParams,
@@ -21,7 +22,7 @@ export default async function DashboardPage({
 }) {
   const { period: periodParam } = await searchParams
 
-  const [periods, invoices, baseItems, settings, savingsGoals, debts, manualByMonth, upcomingBudgets, accounts, categories, waitingPayments] = await Promise.all([
+  const [periods, invoices, baseItems, settings, savingsGoals, debts, manualByMonth, upcomingBudgets, accounts, categories, waitingPayments, trackedMonths] = await Promise.all([
     getBudgetPeriods(),
     getInvoices(),
     getBaseBudgetItems(),
@@ -33,6 +34,7 @@ export default async function DashboardPage({
     getAccounts(),
     getPriorityCategories(),
     getWaitingBillPayments(),
+    getTrackedMonths(new Date().getFullYear()),
   ])
 
   // Dashboard only rolls up monthly pay-period budgets. Event budgets (parties,
@@ -130,6 +132,7 @@ export default async function DashboardPage({
             daysLeft={daysLeft}
           />
         )}
+        <TrackedMonths months={trackedMonths} year={now.getFullYear()} currentMonth={now.getMonth()} />
       </div>
 
       {/* What's coming due, by date. Follows today's date, not the budget picked above. */}
@@ -192,6 +195,15 @@ export default async function DashboardPage({
             </>
           )}
         </a>
+
+        {/* Not clickable yet: statements wait for a private database */}
+        <div className="bg-bg-white rounded-lg shadow-card p-5">
+          <div className={cardLabel}><MessageCircleHeart size={16} /> Clay the coach</div>
+          <span className="inline-block text-[11px] font-bold rounded-full px-2 py-0.5 bg-pill-lavender text-text-heading">Coming soon</span>
+          <p className="text-caption text-text-muted mt-2">
+            Upload your last 3 bank statements. Clay finds your recurring bills, checks them against your baseline, and shows where the money really goes.
+          </p>
+        </div>
       </div>
 
     </div>

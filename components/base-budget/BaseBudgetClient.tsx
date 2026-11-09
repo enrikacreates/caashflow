@@ -1,8 +1,10 @@
 'use client'
 
 import { useOptimistic, useState, useTransition, useEffect } from 'react'
+import { ChevronDown } from 'lucide-react'
+import { localToday } from '@/lib/sessions'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { deleteBaseBudgetItem, resetBaseBudgetToDefaults, setBaseItemTrackSpending } from '@/app/actions/base-budget'
+import { restoreBaseItem, deleteBaseBudgetItem, resetBaseBudgetToDefaults, setBaseItemTrackSpending } from '@/app/actions/base-budget'
 import { notifyError } from '@/lib/toast'
 import { formatCurrency, getPriorityColor } from '@/lib/utils'
 import type { BaseBudgetItem, Frequency, Account, PriorityCategoryRecord } from '@/lib/types'
@@ -20,11 +22,13 @@ type SortKey = 'name' | 'default_amount' | 'due_day' | 'account' | 'priority_cat
 
 interface Props {
   items: BaseBudgetItem[]
+  archivedItems: BaseBudgetItem[]
   accounts: Account[]
   categories: PriorityCategoryRecord[]
 }
 
-export default function BaseBudgetClient({ items, accounts, categories }: Props) {
+export default function BaseBudgetClient({ items, archivedItems, accounts, categories }: Props) {
+  const [showArchived, setShowArchived] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [modalOpen, setModalOpen] = useState(false)
   const [editItem, setEditItem] = useState<BaseBudgetItem | null>(null)
@@ -100,6 +104,17 @@ export default function BaseBudgetClient({ items, accounts, categories }: Props)
       catch { notifyError() }
     })
   }
+
+  const [optArchived, applyRestoreOpt] = useOptimistic(
+    archivedItems,
+    (state: BaseBudgetItem[], id: string) => state.filter((i) => i.id !== id)
+  )
+  const handleRestore = (id: string) =>
+    startTransition(async () => {
+      applyRestoreOpt(id)
+      try { await restoreBaseItem(id, localToday().slice(0, 7)) }
+      catch { notifyError('Could not restore that bill. Please try again.') }
+    })
 
   const handleReset = () => {
     if (!confirm('Reset all base budget items to defaults? This will delete your current items.')) return
@@ -209,8 +224,39 @@ export default function BaseBudgetClient({ items, accounts, categories }: Props)
         </div>
       ))}
 
+      {optArchived.length > 0 && (
+        <section className="mt-8">
+          <button
+            type="button"
+            onClick={() => setShowArchived((v) => !v)}
+            aria-expanded={showArchived}
+            className="flex items-center gap-1.5 text-caption font-bold text-text-muted hover:text-text-heading transition-colors"
+          >
+            <ChevronDown size={16} aria-hidden="true" className={`transition-transform ${showArchived ? '' : '-rotate-90'}`} />
+            Archived ({optArchived.length})
+          </button>
+          {showArchived && (
+            <ul className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {optArchived.map((item) => (
+                <li key={item.id} className="bg-bg-white rounded-lg shadow-card p-4 flex items-center justify-between gap-3">
+                  <span className="min-w-0">
+                    <span className="block text-caption font-medium text-text-heading truncate">{item.name}</span>
+                    <span className="text-[11px] text-text-muted">
+                      {formatCurrency(item.default_amount)} {item.frequency.toLowerCase()}
+                      {item.archived_at ? `, archived ${new Date(item.archived_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}
+                    </span>
+                  </span>
+                  <button type="button" onClick={() => handleRestore(item.id)} className="bg-surface-beige rounded-full px-4 py-2 text-caption font-semibold text-text-heading shrink-0">Restore</button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
       {modalOpen && (
         <ExpenseFormModal
+          onArchived={() => { if (editItem) applyItemsOpt({ kind: 'delete', id: editItem.id }) }}
           editItem={editItem}
           onClose={() => { setModalOpen(false); setEditItem(null) }}
           accounts={accounts}

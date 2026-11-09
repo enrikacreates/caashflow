@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { TrendingUp, ChevronLeft, ChevronRight } from 'lucide-react'
 import { formatCurrency, formatCurrencyShort } from '@/lib/utils'
+import { incomeStability } from '@/lib/stability'
 import type { Invoice, BudgetPeriod } from '@/lib/types'
 
 /** 6-month window spanning 2 months back → 3 months ahead, shifted by `offset` months for prev/next browsing. */
@@ -99,6 +100,13 @@ export default function CashFlowChart({
     return { month: m, projected, received }
   })
 
+  // Received income by month across all history, for the stability score
+  const receivedByMonth: Record<string, number> = { ...manualByMonth }
+  for (const inv of invoices) {
+    const m = inv.actual_received_date?.slice(0, 7) ?? inv.month ?? inv.projected_date?.slice(0, 7)
+    if (inv.status === 'received' && m) receivedByMonth[m] = (receivedByMonth[m] ?? 0) + inv.amount
+  }
+
   const goal = incomeGoal && incomeGoal > 0 ? incomeGoal : 0
   const expense = expenseNeed > 0 ? expenseNeed : 0
   // Projected view is smart per-month: past → received (actual), current/future → projected
@@ -135,8 +143,22 @@ export default function CashFlowChart({
   // dy lifts lighter crest layers above the body; phase/amp vary per layer for overlapping swells.
   const incomeAreaAt = (dy: number, phase: number, amp: number) => `${incomeTop(dy, phase, amp)} L 100,100 L 0,100 Z`
 
+  const stability = incomeStability(receivedByMonth, nowMonth)
+
   return (
     <div>
+      {stability && (
+        <div
+          className="mb-3 flex items-center gap-3 bg-bg-white shadow-card rounded-full px-4 py-2.5"
+          title={`Based on the last ${stability.months} finished months with income. 100% means the same every month; 5% means wildly different.`}
+        >
+          <span className="text-caption font-bold text-text-heading whitespace-nowrap">Income stability {stability.score}%</span>
+          <span className="flex-1 h-1.5 rounded-full bg-surface-beige overflow-hidden" aria-hidden="true">
+            <span className={`block h-full rounded-full ${stability.score >= 50 ? 'bg-primary-teal' : 'bg-warning'}`} style={{ width: `${stability.score}%` }} />
+          </span>
+          <span className="text-caption text-text-muted whitespace-nowrap">{stability.label}</span>
+        </div>
+      )}
       <div className="flex items-center gap-2 mb-3">
         <TrendingUp size={16} className="text-text-muted" />
         <h2 className="text-caption font-semibold text-text-muted uppercase tracking-wide">6-Month Income</h2>

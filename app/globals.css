@@ -403,17 +403,37 @@ body:has(input:is([type="number"], [inputmode="decimal"]):focus) .footer-art {
 [data-chrome="hidden"] .chrome-bottom:not(:has(:focus-visible)) {
   transform: translateY(calc(100% + 12vw + 8px));
 }
-/* Anything pinned under the header moves up into its place */
+/* Anything pinned under the header moves up into its place. Breadcrumbs sit just below
+   the header's wave; the budget's sticky summary sits below the breadcrumbs. */
+.chrome-pinned,
 .under-chrome {
   transition: top 300ms ease;
 }
+.chrome-pinned {
+  top: 80px;
+}
+.under-chrome {
+  top: 122px;
+}
+@media (min-width: 768px) {
+  .chrome-pinned {
+    top: 92px;
+  }
+  .under-chrome {
+    top: 134px;
+  }
+}
+[data-chrome="hidden"] .chrome-pinned {
+  top: 8px;
+}
 [data-chrome="hidden"] .under-chrome {
-  top: 0;
+  top: 50px;
 }
 @media (prefers-reduced-motion: reduce) {
   .chrome-top,
   .chrome-bottom,
   .footer-art,
+  .chrome-pinned,
   .under-chrome {
     transition: none;
   }

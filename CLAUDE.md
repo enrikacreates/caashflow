@@ -37,7 +37,7 @@ Budget management system for modern creative/entrepreneurial families. Part of a
 | `public.team_members` | User ↔ team join (role: owner\|member) |
 | `public.team_app_access` | Per-app grants for non-owner members (full\|read); owners always have access |
 | `settings` | Deduction percentages (1:1 with team) |
-| `base_budget_items` | Master expense template (has `debt_id`, `savings_goal_id` FK) |
+| `base_budget_items` | Master expense template (has `debt_id`, `savings_goal_id` FK). Annual bills: `due_month`, `remind_months`, `split_months` (see `lib/annual.ts`). `archived_at` hides a bill going forward |
 | `budget_periods` | Pay periods |
 | `period_expenses` | Expenses copied into a period (has `debt_id`, `savings_goal_id` FK) |
 | `period_linked_invoices` | Many-to-many: periods ↔ invoices |

@@ -7,6 +7,7 @@ import { notifyError } from '@/lib/toast'
 import { formatCurrency, getOwedAmount } from '@/lib/utils'
 import { calculatePayNowTotal } from '@/lib/calculations'
 import { expensesForSession, sessionLabel, summarizeSession } from '@/lib/sessions'
+import { expenseLabel } from '@/lib/annual'
 import type { LinkedInvoiceRow } from '@/lib/sessions'
 import type {
   Account,
@@ -69,8 +70,8 @@ export default function MonthOverview({
   // Edits made from the bill list show right away
   const [expenses, applyEdit] = useOptimistic(
     serverExpenses,
-    (state: PeriodExpense[], u: { id: string; patch: Partial<PeriodExpense> }) =>
-      state.map((e) => (e.id === u.id ? { ...e, ...u.patch } : e))
+    (state: PeriodExpense[], u: { id: string; patch: Partial<PeriodExpense> } | { id: string; remove: true }) =>
+      'remove' in u ? state.filter((e) => e.id !== u.id) : state.map((e) => (e.id === u.id ? { ...e, ...u.patch } : e))
   )
   const [editing, setEditing] = useState<PeriodExpense | null>(null)
   // Event budgets roll up only their own one-time lines, matching the session tabs
@@ -229,7 +230,7 @@ export default function MonthOverview({
                 className="w-full text-left py-2 flex items-center justify-between gap-3"
               >
                 <div className="min-w-0">
-                  <div className={`text-caption font-bold truncate ${st === 'cleared' ? 'text-text-muted' : 'text-text-heading'}`}>{expense.name}</div>
+                  <div className={`text-caption font-bold truncate ${st === 'cleared' ? 'text-text-muted' : 'text-text-heading'}`}>{expenseLabel(expense)}</div>
                   {source && <div className="text-[11px] text-text-muted truncate">{source}</div>}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -251,6 +252,7 @@ export default function MonthOverview({
           accounts={accounts}
           categories={categories}
           onSaved={(patch) => applyEdit({ id: editing.id, patch })}
+          onArchived={() => applyEdit({ id: editing.id, remove: true })}
           onClose={() => setEditing(null)}
         />
       )}

@@ -59,6 +59,12 @@ export interface BaseBudgetItem {
   debt_id: string | null
   savings_goal_id: string | null
   track_spending: boolean
+  // Annual bills: month it's due (1-12), months of notice (null = the default), and
+  // how many months to split it over, ending in the due month (null = pay in full)
+  due_month: number | null
+  remind_months: number | null
+  split_months: number | null
+  archived_at: string | null
   sort_order: number
   created_at: string
   updated_at: string
@@ -132,6 +138,9 @@ export interface PeriodExpense {
   session_id: string | null
   // Paid without budgeted income behind it (see BillPayment); budget math skips these
   paid_outside: boolean
+  // Which part of a split annual bill this line is (null otherwise)
+  annual_part: number | null
+  annual_parts: number | null
   sort_order: number
   created_at: string
   updated_at: string

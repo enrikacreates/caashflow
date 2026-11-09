@@ -5,6 +5,8 @@ import { useState, useTransition, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { updatePeriodExpenseDetails, transferFunds, undoTransfer, undoBillPaid } from '@/app/actions/period-expenses'
 import MarkPaidModal from '@/components/period-detail/MarkPaidModal'
+import { archiveBaseItem } from '@/app/actions/base-budget'
+import { localToday } from '@/lib/sessions'
 import { formatCurrency } from '@/lib/utils'
 import { getBudgetedAmount, getSpentSoFar } from '@/lib/calculations'
 import MathInput from '@/components/ui/MathInput'
@@ -15,7 +17,7 @@ const round2 = (n: number) => Math.round(n * 100) / 100
 
 export default function PeriodExpenseEditModal({
   expense, expenses = [], transfers = [], accounts, categories, onClose,
-  onSaved, focusMove = false, quick = false, billMonth, outsidePayment,
+  onSaved, onArchived, focusMove = false, quick = false, billMonth, outsidePayment,
 }: {
   expense: PeriodExpense
   expenses?: PeriodExpense[]
@@ -25,6 +27,8 @@ export default function PeriodExpenseEditModal({
   onClose: () => void
   // Applies the saved edits to the budget row immediately (optimistic)
   onSaved?: (patch: Partial<PeriodExpense>) => void
+  // The bill was archived and this untouched line comes off: drop the row right away
+  onArchived?: () => void
   focusMove?: boolean
   // Opened away from the budget's table (dashboard, Month tab): no Move funds, since the
   // other lines aren't at hand, and edits carry to the baseline unless unchecked
@@ -36,7 +40,9 @@ export default function PeriodExpenseEditModal({
 }) {
   const [markingPaid, setMarkingPaid] = useState(false)
   const [, startTransition] = useTransition()
-  const [alsoMaster, setAlsoMaster] = useState(quick)
+  // A split part's amount is only a slice of the bill, so it never saves back to the baseline
+  const isSplitPart = !!expense.annual_parts
+  const [alsoMaster, setAlsoMaster] = useState(quick && !isSplitPart)
   const [trackSpending, setTrackSpending] = useState(expense.track_spending)
   // Local amount state so the MathInput can hold an unresolved expression mid-typing.
   // Submit re-evaluates from `amountRaw` to catch un-blurred edits like "5*3".
@@ -162,6 +168,19 @@ export default function PeriodExpenseEditModal({
       onSaved?.({ paid_outside: false, is_complete: false, cleared: false, paid: false })
       try { await undoBillPaid(outsidePayment.id) }
       catch { notifyError('Could not undo that payment. Please try again.') }
+    })
+  }
+
+  const handleArchive = () => {
+    if (!expense.base_item_id) return
+    if (!confirm(`Archive ${expense.name}?\n\nIt stays in past budgets and stops showing up going forward. You can restore it from Baseline anytime.`)) return
+    const untouched = !expense.pay_now && !expense.paid && !expense.cleared && !expense.is_complete && !(expense.paid_amount > 0)
+    const baseId = expense.base_item_id
+    onClose()
+    startTransition(async () => {
+      if (untouched) onArchived?.()
+      try { await archiveBaseItem(baseId, localToday().slice(0, 7)) }
+      catch { notifyError('Could not archive that bill. Please try again.') }
     })
   }
 
@@ -359,7 +378,7 @@ export default function PeriodExpenseEditModal({
             </span>
           </label>
 
-          {expense.base_item_id && (
+          {expense.base_item_id && !isSplitPart && (
             <label className="flex items-start gap-2.5 bg-surface-beige rounded-sm p-3 cursor-pointer">
               <input
                 type="checkbox"
@@ -372,6 +391,13 @@ export default function PeriodExpenseEditModal({
                 <span className="text-text-muted"> — apply these changes to the recurring template so future budgets inherit them.</span>
               </span>
             </label>
+          )}
+
+          {expense.base_item_id && (
+            <div className="bg-surface-beige rounded-sm p-3 flex items-center justify-between gap-3">
+              <span className="text-caption text-text-muted">No longer paying this?</span>
+              <button type="button" onClick={handleArchive} className="bg-bg-white shadow-card rounded-full px-4 py-2 text-caption font-semibold text-text-heading shrink-0">Archive</button>
+            </div>
           )}
 
           <div className="flex items-center justify-between gap-3 pt-2">

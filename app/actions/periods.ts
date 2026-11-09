@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getUserTeamId } from '@/lib/supabase/helpers'
 import { revalidatePath } from 'next/cache'
 import { applyWaitingBillPayments } from '@/app/actions/period-expenses'
+import { budgetLineFor } from '@/lib/annual'
 import type { UpcomingBudget } from '@/lib/upcoming'
 import type { BillPayment } from '@/lib/types'
 
@@ -88,17 +89,26 @@ export async function createBudgetPeriod(formData: FormData) {
     .from('base_budget_items')
     .select('*')
     .eq('team_id', teamId)
+    .is('archived_at', null)
     .order('sort_order', { ascending: true })
 
   if (baseError) throw new Error(`Failed to fetch base budget items: ${baseError.message}`)
 
   if (baseItems && baseItems.length > 0) {
-    const periodExpenses = baseItems.map((item, index) => ({
+    // Annual bills only land in their due month, or the months of their split
+    const monthIndex = periodMonth ? Number(periodMonth.slice(5, 7)) - 1 : null
+    const lines = baseItems.flatMap((item, index) => {
+      const line = monthIndex === null ? { amount: item.default_amount, part: null, parts: null } : budgetLineFor(item, monthIndex)
+      return line ? [{ item, index, line }] : []
+    })
+    const periodExpenses = lines.map(({ item, index, line }) => ({
       period_id: period.id,
       team_id: teamId,
       base_item_id: item.id,
       name: item.name,
-      default_amount: item.default_amount,
+      default_amount: line.amount,
+      annual_part: line.part,
+      annual_parts: line.parts,
       due_day: item.due_day,
       account: item.account,
       priority_category: item.priority_category,
@@ -246,6 +256,34 @@ export async function deleteBudgetPeriod(id: string) {
  * (the viewer's clock decides which ones the week touches). Each month is read from
  * one budget: the newest active one, or the newest if all are complete. Events are out.
  */
+/** Months (0-11) of `year` where a monthly budget got used: a bill funded, paid, or cleared. */
+export async function getTrackedMonths(year: number): Promise<number[]> {
+  const supabase = await createClient()
+  const teamId = await getUserTeamId()
+
+  const { data: periods } = await supabase
+    .from('budget_periods')
+    .select('id, period_month')
+    .eq('team_id', teamId)
+    .eq('kind', 'monthly')
+    .gte('period_month', `${year}-01-01`)
+    .lte('period_month', `${year}-12-31`)
+  if (!periods?.length) return []
+
+  const { data: worked } = await supabase
+    .from('period_expenses')
+    .select('period_id')
+    .eq('team_id', teamId)
+    .in('period_id', periods.map((p) => p.id))
+    .or('pay_now.eq.true,paid.eq.true,cleared.eq.true,is_complete.eq.true')
+  const usedPeriods = new Set((worked ?? []).map((e) => e.period_id))
+
+  const months = periods
+    .filter((p) => usedPeriods.has(p.id))
+    .map((p) => Number((p.period_month as string).slice(5, 7)) - 1)
+  return [...new Set(months)]
+}
+
 export async function getWaitingBillPayments(): Promise<BillPayment[]> {
   const supabase = await createClient()
   const teamId = await getUserTeamId()

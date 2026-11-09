@@ -8,6 +8,7 @@ import HeaderAvatar from '@/components/layout/HeaderAvatar'
 import HeaderStats from '@/components/layout/HeaderStats'
 import ToastHost from '@/components/ui/ToastHost'
 import RoundUpPill from '@/components/ui/RoundUpPill'
+import Breadcrumbs from '@/components/layout/Breadcrumbs'
 import { useAutoHideChrome } from '@/components/layout/useAutoHideChrome'
 import { signOut } from '@/app/actions/auth'
 
@@ -109,6 +110,7 @@ export default function DashboardLayout({
       {/* Main content — offset for floating nav on desktop; grows to push footer flush to bottom */}
       <main className="flex-1 px-6 pt-10 pb-[200px] md:pl-[220px] md:pr-10 md:pt-14 md:pb-[238px]">
         <div className="max-w-3xl mx-auto">
+          <Breadcrumbs />
           {children}
         </div>
       </main>

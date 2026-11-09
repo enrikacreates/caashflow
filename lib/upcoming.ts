@@ -1,4 +1,5 @@
 import { getOwedAmount } from './utils'
+import { budgetLineFor, expenseLabel } from './annual'
 import type { BaseBudgetItem, BillPayment, PeriodExpense, PeriodExpensePayment } from './types'
 
 export type UpcomingStatus = 'unfunded' | 'funded' | 'paid' | 'baseline'
@@ -18,6 +19,7 @@ export interface UpcomingBill {
   amount: number
   status: UpcomingStatus
   isSplitPart?: boolean
+  annual: boolean
   autoPay: boolean
   account: string | null
 }
@@ -51,6 +53,7 @@ function billsFromBudget(budget: UpcomingBudget, matches: (dueDay: number) => bo
           isSplitPart: true,
           edit: { kind: 'expense', expense: e, month: budget.month },
           name: p.label ? `${e.name}: ${p.label}` : e.name,
+          annual: e.frequency === 'Annually',
           amount: p.amount,
           status: p.paid ? 'paid' : p.pay_now || p.session_id ? 'funded' : 'unfunded',
           autoPay: e.auto_pay,
@@ -61,7 +64,8 @@ function billsFromBudget(budget: UpcomingBudget, matches: (dueDay: number) => bo
       bills.push({
         key: e.id,
         edit: { kind: 'expense', expense: e, month: budget.month },
-        name: e.name,
+        name: expenseLabel(e),
+        annual: e.frequency === 'Annually',
         amount: getOwedAmount(e),
         status: e.paid ? 'paid' : e.pay_now || e.session_id ? 'funded' : 'unfunded',
         autoPay: e.auto_pay,
@@ -96,10 +100,10 @@ export function upcomingBillsByDay(
     const bills: UpcomingBill[] = budget
       ? billsFromBudget(budget, matches)
       : baseItems
-          .filter((i) => i.frequency === 'Monthly' && i.due_day != null && matches(i.due_day))
+          .filter((i) => (i.frequency === 'Monthly' || (i.frequency === 'Annually' && budgetLineFor(i, monthIndex) !== null && !!i.due_month)) && i.due_day != null && matches(i.due_day))
           // Already paid ahead of this month's budget
           .filter((i) => !waitingPayments.some((p) => p.base_item_id === i.id && p.for_month === `${iso.slice(0, 7)}-01`))
-          .map((i) => ({ key: `base-${i.id}-${iso}`, edit: { kind: 'base' as const, item: i, month: iso.slice(0, 7) }, name: i.name, amount: i.default_amount, status: 'baseline' as const, autoPay: i.auto_pay, account: i.account }))
+          .map((i) => ({ key: `base-${i.id}-${iso}`, edit: { kind: 'base' as const, item: i, month: iso.slice(0, 7) }, name: i.name, annual: i.frequency === 'Annually', amount: budgetLineFor(i, monthIndex)?.amount ?? i.default_amount, status: 'baseline' as const, autoPay: i.auto_pay, account: i.account }))
 
     if (bills.length > 0) {
       bills.sort((a, b) => b.amount - a.amount)
