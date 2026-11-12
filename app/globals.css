@@ -391,49 +391,62 @@ body:has(input:is([type="number"], [inputmode="decimal"]):focus) .footer-art {
   transition-delay: 0ms;
 }
 
-/* Header slides up and footer art slides down while working (see useAutoHideChrome).
-   The footer also clears its shapes, which sit above the band at 164/1440 of the page width.
-   Keyboard focus inside either one brings it back. */
+/* After login the header and footer art greet you, then slide away for the session
+   (see useAutoHideChrome). The footer also clears its shapes, which sit above the band at
+   164/1440 of the page width. The page closes up the space they held. */
 .chrome-top {
-  transition: transform 300ms ease;
+  transition: transform 300ms ease, margin-bottom 300ms ease;
 }
-[data-chrome="hidden"] .chrome-top:not(:has(:focus-visible), :focus-visible) {
+.chrome-main {
+  transition: padding 300ms ease;
+}
+[data-chrome="hidden"] .chrome-top {
   transform: translateY(calc(-100% - 24px));
+  margin-bottom: -72px;
 }
-[data-chrome="hidden"] .chrome-bottom:not(:has(:focus-visible)) {
+[data-chrome="hidden"] .chrome-bottom {
   transform: translateY(calc(100% + 12vw + 8px));
 }
-/* Anything pinned under the header moves up into its place. Breadcrumbs sit just below
-   the header's wave; the budget's sticky summary sits below the breadcrumbs. */
-.chrome-pinned,
-.under-chrome {
-  transition: top 300ms ease;
+[data-chrome="hidden"] .chrome-main {
+  padding-top: 8px;
+  padding-bottom: 32px;
 }
-.chrome-pinned {
-  top: 80px;
+/* The phone menu button loses the header it sat on, so it moves up beside the breadcrumb */
+[data-chrome="hidden"] .chrome-menu {
+  top: 8px;
+  left: auto;
+  right: 16px;
 }
-.under-chrome {
-  top: 122px;
+.chrome-mark {
+  display: none;
 }
 @media (min-width: 768px) {
-  .chrome-pinned {
+  [data-chrome="hidden"] .chrome-top {
+    margin-bottom: -84px;
+  }
+  [data-chrome="hidden"] .chrome-mark {
+    display: flex;
+  }
+}
+/* The budget's sticky summary sits under the header, or under the breadcrumb bar once the
+   header has slid away. */
+.under-chrome {
+  top: 80px;
+  transition: top 300ms ease;
+}
+@media (min-width: 768px) {
+  .under-chrome {
     top: 92px;
   }
-  .under-chrome {
-    top: 134px;
-  }
-}
-[data-chrome="hidden"] .chrome-pinned {
-  top: 8px;
 }
 [data-chrome="hidden"] .under-chrome {
-  top: 50px;
+  top: 57px;
 }
 @media (prefers-reduced-motion: reduce) {
   .chrome-top,
+  .chrome-main,
   .chrome-bottom,
   .footer-art,
-  .chrome-pinned,
   .under-chrome {
     transition: none;
   }

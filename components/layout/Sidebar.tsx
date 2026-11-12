@@ -10,7 +10,11 @@ import {
   ListPlus,
   BarChart2,
   X,
+  Settings2,
+  LogOut,
 } from 'lucide-react'
+import { signOut } from '@/app/actions/auth'
+import { resetChromeAway } from '@/components/layout/useAutoHideChrome'
 
 /* -------------------------------------------------------
  * NAV ITEMS — flat list, no sections
@@ -112,6 +116,24 @@ export default function Sidebar({
               </li>
             )
           })}
+        </ul>
+
+        {/* Always reachable, since the header with its own links slides away while working */}
+        <ul className="space-y-0.5 mt-2 pt-2 border-t border-divider">
+          <li>
+            <Link href="/settings" onClick={onClose} className="flex items-center justify-between gap-4 px-4 py-2 rounded-2xl text-[13px] font-bold uppercase tracking-wider transition-all duration-150 text-text-muted hover:text-text-heading hover:bg-surface-beige/50">
+              Settings
+              <Settings2 size={18} strokeWidth={1.75} className="text-text-muted/60" aria-hidden="true" />
+            </Link>
+          </li>
+          <li>
+            <form action={signOut} onSubmit={resetChromeAway}>
+              <button type="submit" className="w-full flex items-center justify-between gap-4 px-4 py-2 rounded-2xl text-[13px] font-bold uppercase tracking-wider transition-all duration-150 text-text-muted hover:text-text-heading hover:bg-surface-beige/50">
+                Sign out
+                <LogOut size={18} strokeWidth={1.75} className="text-text-muted/60" aria-hidden="true" />
+              </button>
+            </form>
+          </li>
         </ul>
       </nav>
     </>

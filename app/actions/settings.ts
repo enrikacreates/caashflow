@@ -56,6 +56,38 @@ export async function updateSettings(formData: FormData) {
   revalidatePath('/')
 }
 
+/** Record what a finished month with no income was, for the stability score. Null clears the answer. */
+export async function setIncomeMonthAnswer(month: string, answer: 'not_tracked' | 'no_earnings' | null) {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new Error('Invalid month')
+  if (answer !== null && answer !== 'not_tracked' && answer !== 'no_earnings') throw new Error('Invalid answer')
+
+  const supabase = await createClient()
+  const teamId = await getUserTeamId()
+
+  const { data: current, error: readError } = await supabase
+    .from('settings')
+    .select('income_month_answers')
+    .eq('team_id', teamId)
+    .limit(1)
+    .single()
+  if (readError) throw new Error(`Failed to read answers: ${readError.message}`)
+
+  const answers: Record<string, string> = { ...(current.income_month_answers ?? {}) }
+  if (answer) answers[month] = answer
+  else delete answers[month]
+
+  // A read-only member's update matches no rows and returns no error, so ask for the row back
+  const { data: updated, error } = await supabase
+    .from('settings')
+    .update({ income_month_answers: answers, updated_at: new Date().toISOString() })
+    .eq('team_id', teamId)
+    .select('id')
+  if (error) throw new Error(`Failed to save answer: ${error.message}`)
+  if (!updated?.length) throw new Error('Not allowed to save answers')
+
+  revalidatePath('/')
+}
+
 // ── Accounts CRUD ────────────────────────────────────────────────────────────
 
 export async function getAccounts() {

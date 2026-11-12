@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useSearchParams } from 'next/navigation'
 import { Eye, EyeOff } from 'lucide-react'
+import { resetChromeAway } from '@/components/layout/useAutoHideChrome'
 
 function LoginForm() {
   const searchParams = useSearchParams()
@@ -19,6 +20,9 @@ function LoginForm() {
   const supabase = createClient()
 
   // Sync mode if URL param changes
+  // A fresh login gets the full logo and footer art again
+  useEffect(() => { resetChromeAway() }, [])
+
   useEffect(() => {
     setMode(initialMode)
   }, [initialMode])

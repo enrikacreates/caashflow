@@ -40,6 +40,8 @@ export interface Settings {
   tax_account: string | null
   profit_account: string | null
   fun_money_account: string | null
+  // Finished months with no income, keyed YYYY-MM (see lib/stability.ts)
+  income_month_answers: Record<string, 'not_tracked' | 'no_earnings'>
   updated_at: string
 }
 

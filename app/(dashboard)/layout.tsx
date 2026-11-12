@@ -9,7 +9,7 @@ import HeaderStats from '@/components/layout/HeaderStats'
 import ToastHost from '@/components/ui/ToastHost'
 import RoundUpPill from '@/components/ui/RoundUpPill'
 import Breadcrumbs from '@/components/layout/Breadcrumbs'
-import { useAutoHideChrome } from '@/components/layout/useAutoHideChrome'
+import { RESTORE_CHROME_SCRIPT, resetChromeAway, useAutoHideChrome } from '@/components/layout/useAutoHideChrome'
 import { signOut } from '@/app/actions/auth'
 
 /* -------------------------------------------------------
@@ -30,7 +30,8 @@ export default function DashboardLayout({
   useAutoHideChrome(rootRef)
 
   return (
-    <div ref={rootRef} className="min-h-screen bg-bg-cream flex flex-col overflow-clip">
+    <div ref={rootRef} suppressHydrationWarning className="min-h-screen bg-bg-cream flex flex-col overflow-clip">
+      <script dangerouslySetInnerHTML={{ __html: RESTORE_CHROME_SCRIPT }} />
       {/* ── Header band — off-white bg ────────────────── */}
       <header className="chrome-top sticky top-0 z-30 bg-white flex items-center justify-between px-6 md:px-10 h-[72px] md:h-[84px]">
         {/* Big logo */}
@@ -60,7 +61,7 @@ export default function DashboardLayout({
           </Link>
 
           {/* Sign out */}
-          <form action={signOut}>
+          <form action={signOut} onSubmit={resetChromeAway}>
             <button
               type="submit"
               className="text-text-muted hover:text-text-heading transition-colors p-1"
@@ -90,7 +91,7 @@ export default function DashboardLayout({
       <button
         onClick={() => setSidebarOpen(true)}
         className="
-          chrome-top fixed top-4 left-4 z-30 md:hidden
+          chrome-menu fixed top-4 left-4 z-30 md:hidden
           bg-white border border-border rounded-2xl
           w-10 h-10 flex items-center justify-center
           text-text hover:bg-surface-beige
@@ -101,6 +102,20 @@ export default function DashboardLayout({
         <Menu size={18} aria-hidden="true" />
       </button>
 
+      {/* The mark takes over from the big logo once it's slid away. Phones have the breadcrumb. */}
+      <Link
+        href="/"
+        aria-label="Caashflow home"
+        title="Home"
+        className="chrome-mark fixed top-3 left-6 z-30 w-10 h-10 items-center justify-center rounded-full bg-white shadow-card"
+      >
+        <svg viewBox="4 7 24 18" className="w-6 h-6 text-income" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M6 11 q2.5 -2.4 5 0 t5 0 t5 0 t5 0" />
+          <path d="M6 16 q2.5 -2.4 5 0 t5 0 t5 0 t5 0" />
+          <path d="M6 21 q2.5 -2.4 5 0 t5 0 t5 0 t5 0" />
+        </svg>
+      </Link>
+
       {/* Floating nav card */}
       <Sidebar
         open={sidebarOpen}
@@ -108,7 +123,7 @@ export default function DashboardLayout({
       />
 
       {/* Main content — offset for floating nav on desktop; grows to push footer flush to bottom */}
-      <main className="flex-1 px-6 pt-10 pb-[200px] md:pl-[220px] md:pr-10 md:pt-14 md:pb-[238px]">
+      <main className="chrome-main flex-1 px-6 pt-10 pb-[136px] md:pl-[220px] md:pr-10 md:pt-14 md:pb-[152px]">
         <div className="max-w-3xl mx-auto">
           <Breadcrumbs />
           {children}
@@ -125,7 +140,7 @@ export default function DashboardLayout({
           src="/shapes/navshapes/footer-wave-backdrop.svg"
           alt=""
           aria-hidden="true"
-          className="pointer-events-none select-none absolute left-0 bottom-full w-full translate-y-[5%]"
+          className="pointer-events-none select-none absolute left-0 bottom-full w-full translate-y-[30%]"
         />
         {/* Footer shapes — full-width organic composition; rendered BEHIND the band (no z bump,
             band paints on top) and dropped down so the bases tuck behind the teal. */}
@@ -133,14 +148,14 @@ export default function DashboardLayout({
           src="/shapes/navshapes/footershapes2.svg"
           alt=""
           aria-hidden="true"
-          className="pointer-events-none select-none absolute left-0 bottom-full w-full translate-y-[5%]"
+          className="pointer-events-none select-none absolute left-0 bottom-full w-full translate-y-[30%]"
         />
         {/* Red dashed wavy accent — rendered BEHIND the band so its ends tuck behind the green */}
         <img
           src="/shapes/navshapes/footer-dash-wave.svg"
           alt=""
           aria-hidden="true"
-          className="pointer-events-none select-none absolute left-0 bottom-full w-full translate-y-[5%]"
+          className="pointer-events-none select-none absolute left-0 bottom-full w-full translate-y-[30%]"
         />
 
         {/* The band — full-bleed teal, fixed compact height; overflow-hidden clips the watermark + surface accents */}
@@ -163,11 +178,11 @@ export default function DashboardLayout({
             <span className="font-display leading-none whitespace-nowrap text-white/10 text-[32vw]">CAA$H</span>
           </div>
 
-          <div className="relative h-20 md:h-24">
+          <div className="relative h-9 md:h-10">
             <img
               src="/logo-footer.svg"
               alt="Caashflow"
-              className="pointer-events-none select-none absolute left-[5%] bottom-[20%] w-[26%] max-w-[220px] h-auto"
+              className="pointer-events-none select-none absolute left-[5%] top-1/2 -translate-y-1/2 h-7 md:h-8 w-auto"
             />
           </div>
         </footer>

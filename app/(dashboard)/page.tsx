@@ -4,6 +4,7 @@ import CashFlowChart from '@/components/dashboard/CashFlowChart'
 import BudgetSummaryBar from '@/components/dashboard/BudgetSummaryBar'
 import ThisWeekBills from '@/components/dashboard/ThisWeekBills'
 import TrackedMonths from '@/components/dashboard/TrackedMonths'
+import TipOfTheDay from '@/components/dashboard/TipOfTheDay'
 import { getBudgetPeriods, getPeriodDetail, getMonthlyManualIncome, getUpcomingBudgets, getWaitingBillPayments, getTrackedMonths } from '@/app/actions/periods'
 import { getInvoices } from '@/app/actions/invoices'
 import { getBaseBudgetItems } from '@/app/actions/base-budget'
@@ -110,6 +111,9 @@ export default async function DashboardPage({
   const cardLabel = 'flex items-center gap-2 text-caption font-bold uppercase tracking-wide text-text-muted mb-3'
 
   return (
+    <>
+    {/* Phones: scrolls with the page. Wider screens get it in the breadcrumb bar. */}
+    <TipOfTheDay className="mb-6 flex sm:hidden" />
     <div className="space-y-8">
 
       {/* Latest budget — header + live metrics in one card */}
@@ -139,7 +143,7 @@ export default async function DashboardPage({
       <ThisWeekBills budgets={upcomingBudgets} baseItems={baseItems} waitingPayments={waitingPayments} accounts={accounts ?? []} categories={categories ?? []} />
 
       {/* 6-Month Income — primary cash-flow view, kept up top */}
-      <CashFlowChart invoices={invoices} incomeGoal={settings.monthly_income_goal} expenseNeed={monthlyExpenses} periods={monthlyPeriods} manualByMonth={manualByMonth} />
+      <CashFlowChart invoices={invoices} incomeGoal={settings.monthly_income_goal} expenseNeed={monthlyExpenses} periods={monthlyPeriods} manualByMonth={manualByMonth} incomeMonthAnswers={settings.income_month_answers ?? {}} />
 
       {/* Insight cards */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -207,5 +211,6 @@ export default async function DashboardPage({
       </div>
 
     </div>
+    </>
   )
 }

@@ -72,7 +72,7 @@ function DayCards({ days, onEdit, onPaid }: {
                 <div className="relative flex items-center justify-between gap-3 group">
                     <button type="button" onClick={() => onEdit(bill)} aria-label={`Edit ${bill.name}`} title={`Edit ${bill.name}`} className="absolute inset-0" />
                     <span className="min-w-0">
-                      <span className="block text-caption font-medium text-text-heading truncate group-hover:text-primary transition-colors">{bill.name}</span>
+                      <span className="block text-caption font-bold text-text-heading truncate group-hover:text-primary transition-colors">{bill.name}</span>
                       <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1 mt-0.5">
                         <span className={`text-[11px] font-bold rounded-full px-2 py-0.5 ${STATUS[bill.status].className}`}>{STATUS[bill.status].label}</span>
                         {bill.annual && <span className="text-[11px] font-bold rounded-full px-2 py-0.5 bg-pill-lavender text-text-heading">Annual</span>}
@@ -90,7 +90,7 @@ function DayCards({ days, onEdit, onPaid }: {
                         )}
                       </span>
                     </span>
-                    <span className="text-caption text-text-heading shrink-0">{formatCurrency(bill.amount)}</span>
+                    <span className="text-caption font-bold text-text-heading shrink-0">{formatCurrency(bill.amount)}</span>
                   </div>
               </li>
             ))}
@@ -178,7 +178,7 @@ export default function ThisWeekBills({ budgets: serverBudgets, baseItems, waiti
                 <button type="button" onClick={() => setEditing({ kind: 'base', item, month: today!.slice(0, 7) })} aria-label={`Edit ${item.name}`} title={`Edit ${item.name}`} className="absolute inset-0 rounded-lg" />
                 <div className="flex items-start justify-between gap-3">
                   <span className="min-w-0">
-                    <span className="block text-caption font-medium text-text-heading truncate group-hover:text-primary transition-colors">
+                    <span className="block text-caption font-bold text-text-heading truncate group-hover:text-primary transition-colors">
                       {item.name}{part && parts ? ` (${part} of ${parts})` : ''}
                     </span>
                     <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1 mt-1">
@@ -204,7 +204,7 @@ export default function ThisWeekBills({ budgets: serverBudgets, baseItems, waiti
                       )}
                     </span>
                   </span>
-                  <span className="text-caption text-text-heading shrink-0">{formatCurrency(money)}</span>
+                  <span className="text-caption font-bold text-text-heading shrink-0">{formatCurrency(money)}</span>
                 </div>
               </li>
             )
