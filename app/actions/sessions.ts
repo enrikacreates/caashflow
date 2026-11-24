@@ -53,8 +53,77 @@ export async function startNewSession(periodId: string, sessionDate: string): Pr
   })
   if (error) throw new Error(`Failed to start session: ${error.message}`)
 
+  await refillWeeklyBills(supabase, teamId, periodId)
   revalidatePeriod(periodId)
   return seq
+}
+
+/**
+ * Weekly bills (Groceries, Tesla Energy) come back with every new check: once a weekly line
+ * has been settled, a fresh unfunded copy at the Baseline amount joins the month pool. A
+ * weekly bill that still has an open line is left alone, so it never doubles up.
+ */
+async function refillWeeklyBills(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  teamId: string,
+  periodId: string
+) {
+  const { data: lines, error } = await supabase
+    .from('period_expenses')
+    .select('*')
+    .eq('period_id', periodId)
+    .eq('team_id', teamId)
+    .eq('frequency', 'Weekly')
+    .not('base_item_id', 'is', null)
+    .order('created_at', { ascending: false })
+  if (error || !lines?.length) return
+
+  const isOpen = (l: { is_complete: boolean; cleared: boolean; paid_outside: boolean | null }) =>
+    !l.is_complete && !l.cleared && !l.paid_outside
+  const byItem = new Map<string, typeof lines>()
+  for (const l of lines) byItem.set(l.base_item_id, [...(byItem.get(l.base_item_id) ?? []), l])
+  const settled = [...byItem.entries()].filter(([, ls]) => !ls.some(isOpen)).map(([id, ls]) => ({ id, latest: ls[0] }))
+  if (!settled.length) return
+
+  // Baseline sets the amount; a bill archived or moved off Weekly there doesn't come back
+  const { data: items } = await supabase
+    .from('base_budget_items')
+    .select('id, default_amount, frequency, archived_at')
+    .eq('team_id', teamId)
+    .in('id', settled.map((s) => s.id))
+  const live = new Map((items ?? []).filter((i) => i.frequency === 'Weekly' && !i.archived_at).map((i) => [i.id, i]))
+
+  const fresh = settled.flatMap(({ id, latest: l }) => {
+    const item = live.get(id)
+    if (!item) return []
+    return [{
+      period_id: periodId,
+      team_id: teamId,
+      base_item_id: id,
+      name: l.name,
+      default_amount: item.default_amount,
+      due_day: l.due_day,
+      account: l.account,
+      priority_category: l.priority_category,
+      frequency: 'Weekly',
+      auto_pay: l.auto_pay,
+      pay_url: l.pay_url,
+      notes: l.notes,
+      tags: l.tags ?? [],
+      debt_id: l.debt_id,
+      savings_goal_id: l.savings_goal_id,
+      track_spending: l.track_spending ?? false,
+      is_cash: l.is_cash ?? false,
+      sort_order: l.sort_order,
+      pay_now: false,
+      transferred: false,
+      paid: false,
+      cleared: false,
+      amount_override: null,
+      paid_amount: 0,
+    }]
+  })
+  if (fresh.length) await supabase.from('period_expenses').insert(fresh)
 }
 
 /**
