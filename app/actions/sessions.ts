@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getUserTeamId } from '@/lib/supabase/helpers'
 import { revalidatePath } from 'next/cache'
 import type { DeductionOverrides } from '@/lib/types'
+import { clearAllPayNow } from '@/app/actions/period-expenses'
 
 const PERCENT_KEYS: (keyof DeductionOverrides)[] = [
   'tithe_percentage', 'savings_percentage', 'tax_percentage', 'profit_percentage', 'fun_money_percentage',
@@ -54,6 +55,30 @@ export async function startNewSession(periodId: string, sessionDate: string): Pr
 
   revalidatePeriod(periodId)
   return seq
+}
+
+/**
+ * Close out the newest session and start fresh: every bill checked to Pay in it is settled
+ * (paid and cleared, like the Clear all button), then a new $0 session opens. Unchecked bills
+ * were never funded, so they move along to the new session. Any bill can be reopened from its row.
+ */
+export async function closeOutAndStartSession(periodId: string, sessionId: string, sessionDate: string): Promise<number> {
+  const supabase = await createClient()
+  const teamId = await getUserTeamId()
+
+  const { data: newest, error } = await supabase
+    .from('budget_sessions')
+    .select('id')
+    .eq('period_id', periodId)
+    .eq('team_id', teamId)
+    .order('seq', { ascending: false })
+    .limit(1)
+    .single()
+  if (error) throw new Error(`Failed to load sessions: ${error.message}`)
+  if (newest.id !== sessionId) throw new Error('Only the newest session can be closed out')
+
+  await clearAllPayNow(periodId, sessionId)
+  return startNewSession(periodId, sessionDate)
 }
 
 /** Rename a session and/or change its date. An empty name falls back to "S{seq}". */

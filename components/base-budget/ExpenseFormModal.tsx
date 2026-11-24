@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { archiveBaseItem, createBaseBudgetItem, updateBaseBudgetItem } from '@/app/actions/base-budget'
+import { archiveBaseItem, createBaseBudgetItem, createBaseItemFromExpense, updateBaseBudgetItem } from '@/app/actions/base-budget'
 import { localToday } from '@/lib/sessions'
 import { notifyError } from '@/lib/toast'
 import type { BaseBudgetItem, Account, PriorityCategoryRecord } from '@/lib/types'
@@ -19,6 +19,9 @@ export default function ExpenseFormModal({
   categories,
   tagOptions,
   onArchived,
+  prefill,
+  fromExpenseId,
+  onSaved,
 }: {
   editItem: BaseBudgetItem | null
   onClose: () => void
@@ -27,15 +30,22 @@ export default function ExpenseFormModal({
   tagOptions: string[]
   // Lets the list drop this row right away
   onArchived?: () => void
+  // Starting values for a new bill (Add to baseline from a budget's one-time line)
+  prefill?: Partial<BaseBudgetItem>
+  // That budget line: once saved it becomes this baseline bill's line
+  fromExpenseId?: string
+  onSaved?: () => void
 }) {
+  // Defaults come from the bill being edited, else the prefill
+  const d: Partial<BaseBudgetItem> | null = editItem ?? prefill ?? null
   const [isPending, startTransition] = useTransition()
-  const [tags, setTags] = useState<string[]>(editItem?.tags ?? [])
+  const [tags, setTags] = useState<string[]>(d?.tags ?? [])
   const [newTag, setNewTag] = useState('')
-  const [frequency, setFrequency] = useState<string>(editItem?.frequency || 'Monthly')
-  const [amount, setAmount] = useState(editItem?.default_amount ?? 0)
-  const [dueMonth, setDueMonth] = useState<number | null>(editItem?.due_month ?? null)
-  const [notice, setNotice] = useState<number | null>(editItem?.remind_months ?? null)
-  const [split, setSplit] = useState<number | null>(editItem?.split_months ?? null)
+  const [frequency, setFrequency] = useState<string>(d?.frequency || 'Monthly')
+  const [amount, setAmount] = useState(d?.default_amount ?? 0)
+  const [dueMonth, setDueMonth] = useState<number | null>(d?.due_month ?? null)
+  const [notice, setNotice] = useState<number | null>(d?.remind_months ?? null)
+  const [split, setSplit] = useState<number | null>(d?.split_months ?? null)
   // Only months still ahead can hold a part: can't split a December bill over 3 months in November
   const [thisMonth] = useState(() => new Date().getMonth())
   const maxSplit = dueMonth ? Math.min(monthsUntilDue(dueMonth, thisMonth) + 1, 6) : 1
@@ -65,8 +75,15 @@ export default function ExpenseFormModal({
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {
-      if (editItem) await updateBaseBudgetItem(formData)
-      else await createBaseBudgetItem(formData)
+      try {
+        if (editItem) await updateBaseBudgetItem(formData)
+        else if (fromExpenseId) await createBaseItemFromExpense(formData, fromExpenseId)
+        else await createBaseBudgetItem(formData)
+      } catch {
+        notifyError('Could not save that bill. Please try again.')
+        return
+      }
+      onSaved?.()
       onClose()
     })
   }
@@ -80,7 +97,7 @@ export default function ExpenseFormModal({
       <div className="bg-bg-white rounded-lg shadow-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-[36px] leading-tight font-bold text-text-heading">
-            {editItem ? 'Edit Expense' : 'Add Expense'}
+            {editItem ? 'Edit Expense' : fromExpenseId ? 'Add to Baseline' : 'Add Expense'}
           </h2>
           <button onClick={onClose} className="text-text-muted hover:text-text-heading text-xl transition-colors">✕</button>
         </div>
@@ -90,23 +107,23 @@ export default function ExpenseFormModal({
 
           <div>
             <label className="block text-caption font-semibold text-text-heading mb-1">Name *</label>
-            <input type="text" name="name" required defaultValue={editItem?.name || ''} className={inputClass} />
+            <input type="text" name="name" required defaultValue={d?.name || ''} className={inputClass} />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-caption font-semibold text-text-heading mb-1">Default Amount</label>
-              <input type="number" name="default_amount" step="0.01" defaultValue={editItem?.default_amount || ''} onChange={(e) => setAmount(parseFloat(e.target.value) || 0)} className={inputClass} />
+              <input type="number" name="default_amount" step="0.01" defaultValue={d?.default_amount || ''} onChange={(e) => setAmount(parseFloat(e.target.value) || 0)} className={inputClass} />
             </div>
             <div>
               <label className="block text-caption font-semibold text-text-heading mb-1">Due Day (1-31)</label>
-              <input type="number" name="due_day" min="1" max="31" defaultValue={editItem?.due_day || ''} className={inputClass} />
+              <input type="number" name="due_day" min="1" max="31" defaultValue={d?.due_day || ''} className={inputClass} />
             </div>
           </div>
 
           <div>
             <label className="block text-caption font-semibold text-text-heading mb-1">Account</label>
-            <select name="account" defaultValue={editItem?.account || ''} className={inputClass}>
+            <select name="account" defaultValue={d?.account || ''} className={inputClass}>
               <option value="">Select Account</option>
               {accounts.map((a) => <option key={a.id} value={a.name}>{a.name}</option>)}
             </select>
@@ -114,7 +131,7 @@ export default function ExpenseFormModal({
 
           <div>
             <label className="block text-caption font-semibold text-text-heading mb-1">Priority</label>
-            <select name="priority_category" defaultValue={editItem?.priority_category || ''} className={inputClass}>
+            <select name="priority_category" defaultValue={d?.priority_category || ''} className={inputClass}>
               <option value="">Select Priority</option>
               {categories.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
             </select>
@@ -204,13 +221,13 @@ export default function ExpenseFormModal({
           </div>
 
           <div className="flex items-center gap-3">
-            <input type="checkbox" name="auto_pay" id="auto_pay" defaultChecked={editItem?.auto_pay || false}
+            <input type="checkbox" name="auto_pay" id="auto_pay" defaultChecked={d?.auto_pay || false}
               className="w-5 h-5 accent-primary-teal" />
             <label htmlFor="auto_pay" className="text-caption font-medium text-text-heading">Auto Pay</label>
           </div>
 
           <div className="flex items-start gap-3">
-            <input type="checkbox" name="track_spending" id="track_spending" defaultChecked={editItem?.track_spending || false}
+            <input type="checkbox" name="track_spending" id="track_spending" defaultChecked={d?.track_spending || false}
               className="mt-0.5 w-5 h-5 accent-primary-teal shrink-0" />
             <label htmlFor="track_spending" className="text-caption font-medium text-text-heading">
               Track spending
@@ -220,12 +237,12 @@ export default function ExpenseFormModal({
 
           <div>
             <label className="block text-caption font-semibold text-text-heading mb-1">Payment URL</label>
-            <input type="text" name="pay_url" placeholder="https://..." defaultValue={editItem?.pay_url || ''} className={inputClass} />
+            <input type="text" name="pay_url" placeholder="https://..." defaultValue={d?.pay_url || ''} className={inputClass} />
           </div>
 
           <div>
             <label className="block text-caption font-semibold text-text-heading mb-1">Notes</label>
-            <textarea name="notes" rows={2} defaultValue={editItem?.notes || ''} className={inputClass + ' resize-y'} />
+            <textarea name="notes" rows={2} defaultValue={d?.notes || ''} className={inputClass + ' resize-y'} />
           </div>
 
           <div className="flex items-center justify-end gap-3 pt-2">

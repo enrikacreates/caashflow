@@ -45,6 +45,7 @@ import type { DeductionMode } from '@/lib/calculations'
 import SavingsAllocationSection from '@/components/period-detail/SavingsAllocationSection'
 import PeriodRequestsPanel from '@/components/period-detail/PeriodRequestsPanel'
 import PeriodExpenseEditModal from '@/components/period-detail/PeriodExpenseEditModal'
+import ExpenseFormModal from '@/components/base-budget/ExpenseFormModal'
 import MathInput from '@/components/ui/MathInput'
 import { hasCents, roundUpToDollar } from '@/lib/math-input'
 import RecentActivity from '@/components/period-detail/RecentActivity'
@@ -79,6 +80,11 @@ type SortDir = 'asc' | 'desc'
 // the row's edit modal (tap the expense name). The header cell and every matching
 // row/sub-row cell share this class so the grid stays aligned at all widths.
 const HIDE_SM = 'hidden sm:table-cell'
+
+/** !! priority holds until the line is settled (cleared, sealed, or paid outside the budget). */
+function isUrgent(e: PeriodExpense): boolean {
+  return !!e.urgent && !e.is_complete && !e.cleared && !e.paid_outside
+}
 
 /** Compact priority label — "P1: Essentials" → "P1" (keeps the table narrow). */
 function priorityCode(name: string): string {
@@ -155,6 +161,8 @@ export default function PeriodDetailClient({
   const [showManualIncomeForm, setShowManualIncomeForm] = useState(false)
   const [showOneTimeForm, setShowOneTimeForm] = useState(false)
   const [editExpense, setEditExpense] = useState<PeriodExpense | null>(null)
+  // One-time line being added to the baseline
+  const [toBaseline, setToBaseline] = useState<PeriodExpense | null>(null)
   const [editFocusMove, setEditFocusMove] = useState(false)
   // Open an expense's editor jumped straight to the Move funds section (used by the overage prompt).
   const openMoveFunds = (expense: PeriodExpense) => { setEditFocusMove(true); setEditExpense(expense) }
@@ -443,6 +451,9 @@ export default function PeriodDetailClient({
   }
 
   const sortedExpenses = [...optExpenses].sort((a, b) => {
+    // !! priority bills sit above everything, whatever the column sort
+    const urgentDiff = Number(isUrgent(b)) - Number(isUrgent(a))
+    if (urgentDiff !== 0) return urgentDiff
     const mul = sortDir === 'asc' ? 1 : -1
     if (sortKey === 'pay_now') {
       // Group by whether the item is set to pay (handles split via budgeted amount)
@@ -743,6 +754,7 @@ export default function PeriodDetailClient({
       team_id: period.team_id,
       session_id: null,
       paid_outside: false,
+      urgent: false,
       annual_part: null,
       annual_parts: null,
       base_item_id: null,
@@ -841,6 +853,13 @@ export default function PeriodDetailClient({
       }
     })
   }
+
+  const handleToggleUrgent = (id: string, value: boolean) =>
+    startTransition(async () => {
+      applyExpenseOpt({ kind: 'field', id, field: 'urgent', value })
+      try { await updateExpenseField(id, 'urgent', value) }
+      catch { notifyError() }
+    })
 
   const handleToggleOverdue = (id: string, value: boolean) => {
     const exp = optExpenses.find((e) => e.id === id)
@@ -1684,6 +1703,7 @@ export default function PeriodDetailClient({
                     onDebouncedUpdate={debouncedUpdate}
                     onToggleSplit={handleToggleSplit}
                     onToggleOverdue={handleToggleOverdue}
+                    onToggleUrgent={handleToggleUrgent}
                     onToggleCleared={handleToggleCleared}
                     onAddPayment={handleAddPayment}
                     onPaymentField={debouncedPaymentUpdate}
@@ -1814,6 +1834,7 @@ export default function PeriodDetailClient({
                       onDebouncedUpdate={debouncedUpdate}
                       onToggleSplit={handleToggleSplit}
                       onToggleOverdue={handleToggleOverdue}
+                      onToggleUrgent={handleToggleUrgent}
                       onToggleCleared={handleToggleCleared}
                       onAddPayment={handleAddPayment}
                       onPaymentField={debouncedPaymentUpdate}
@@ -1827,6 +1848,7 @@ export default function PeriodDetailClient({
                       onOpenMoveFunds={openMoveFunds}
                       siblingExpenses={optExpenses}
                       onRemove={handleRemoveOneTime}
+                      onAddToBaseline={setToBaseline}
                       onEdit={setEditExpense}
                       inputClass={inputClass}
                       categoryColorMap={categoryColorMap}
@@ -1875,6 +1897,30 @@ export default function PeriodDetailClient({
           onSaved={(patch) => applyExpenseOpt({ kind: 'patch', id: editExpense.id, patch })}
           onArchived={() => applyExpenseOpt({ kind: 'remove', id: editExpense.id })}
           onClose={() => { setEditExpense(null); setEditFocusMove(false) }}
+        />
+      )}
+
+      {toBaseline && (
+        <ExpenseFormModal
+          editItem={null}
+          fromExpenseId={toBaseline.id}
+          prefill={{
+            name: toBaseline.name,
+            default_amount: toBaseline.amount_override ?? toBaseline.default_amount,
+            due_day: toBaseline.due_day,
+            account: toBaseline.account,
+            priority_category: toBaseline.priority_category,
+            frequency: 'Monthly',
+            auto_pay: toBaseline.auto_pay,
+            track_spending: toBaseline.track_spending,
+            pay_url: toBaseline.pay_url,
+            notes: toBaseline.notes,
+            tags: toBaseline.tags,
+          }}
+          accounts={accounts}
+          categories={categories}
+          tagOptions={[...new Set(optExpenses.flatMap((e) => e.tags ?? []))]}
+          onClose={() => setToBaseline(null)}
         />
       )}
 
@@ -2173,6 +2219,7 @@ function ExpenseRow({
   onDebouncedUpdate,
   onToggleSplit,
   onToggleOverdue,
+  onToggleUrgent,
   onToggleCleared,
   onAddPayment,
   onPaymentField,
@@ -2186,6 +2233,7 @@ function ExpenseRow({
   onOpenMoveFunds,
   siblingExpenses,
   onRemove,
+  onAddToBaseline,
   onEdit,
   inputClass,
   categoryColorMap,
@@ -2196,6 +2244,7 @@ function ExpenseRow({
   onDebouncedUpdate: (id: string, field: string, value: boolean | number | string | null) => void
   onToggleSplit: (id: string, value: boolean) => void
   onToggleOverdue: (id: string, value: boolean) => void
+  onToggleUrgent: (id: string, value: boolean) => void
   onToggleCleared: (id: string, value: boolean) => void
   onAddPayment: (id: string) => void
   onPaymentField: (paymentId: string, field: string, value: string | number | boolean | null) => void
@@ -2209,6 +2258,7 @@ function ExpenseRow({
   onOpenMoveFunds: (expense: PeriodExpense) => void
   siblingExpenses: PeriodExpense[]
   onRemove?: (id: string) => void
+  onAddToBaseline?: (expense: PeriodExpense) => void
   onEdit?: (expense: PeriodExpense) => void
   inputClass: string
   categoryColorMap: Map<string, string>
@@ -2296,6 +2346,20 @@ function ExpenseRow({
             </button>
           )}
           <span className="inline-flex items-center gap-1 flex-wrap">
+            {!rowDisabled && (
+              <button
+                type="button"
+                onClick={() => onToggleUrgent(expense.id, !isUrgent(expense))}
+                aria-pressed={isUrgent(expense)}
+                aria-label={isUrgent(expense) ? 'Remove priority' : 'Make this a priority'}
+                title={isUrgent(expense) ? 'Priority: stays at the top until paid. Tap to remove.' : 'Make this a priority: pins it to the top until paid'}
+                className={`-my-1 -ml-1 w-7 h-7 shrink-0 inline-flex items-center justify-center rounded-full text-[13px] font-black leading-none tracking-tighter transition-colors ${
+                  isUrgent(expense) ? 'text-urgent bg-urgent/10' : 'text-text-muted/35 hover:text-urgent hover:bg-urgent/10'
+                }`}
+              >
+                !!
+              </button>
+            )}
             {expense.is_overdue && <span title="Overdue — carried from a prior period">🚩</span>}
             {onEdit && !rowDisabled ? (
               <button
@@ -2494,13 +2558,25 @@ function ExpenseRow({
         {onRemove && (
           <td className="text-center px-1.5 py-3">
             {!rowDisabled && (
-              <button
-                onClick={() => onRemove(expense.id)}
-                title="Remove this expense from this budget"
-                className="text-caption font-semibold text-text-muted hover:text-warning transition-colors disabled:opacity-50"
-              >
-                Remove
-              </button>
+              <div className="flex flex-col items-center gap-1">
+                {onAddToBaseline && !expense.id.startsWith('tmp-') && (
+                  <button
+                    type="button"
+                    onClick={() => onAddToBaseline(expense)}
+                    title="Add this to your regular baseline expenses, so future budgets include it"
+                    className="whitespace-nowrap rounded-full bg-bg-white shadow-card px-2.5 py-1 text-caption font-semibold text-primary hover:text-primary-teal transition-colors"
+                  >
+                    + Baseline
+                  </button>
+                )}
+                <button
+                  onClick={() => onRemove(expense.id)}
+                  title="Remove this expense from this budget"
+                  className="text-caption font-semibold text-text-muted hover:text-warning transition-colors disabled:opacity-50"
+                >
+                  Remove
+                </button>
+              </div>
             )}
           </td>
         )}

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { signOut } from '@/app/actions/auth'
 import { resetChromeAway } from '@/components/layout/useAutoHideChrome'
+import HouseRules from '@/components/layout/HouseRules'
 
 /* -------------------------------------------------------
  * NAV ITEMS — flat list, no sections
@@ -54,26 +55,28 @@ export default function Sidebar({
         />
       )}
 
-      {/* ── Floating nav card ───────────────────────────── */}
-      <nav
+      {/* ── Floating nav card + House Rules ──────────────────
+          Phones: one slide-in white panel holding both.
+          Desktop: two separate cards on the ground, the rules under the menu. */}
+      <div
         className={`
-          fixed z-50
-          bg-white rounded-3xl shadow-md
-          px-2 py-3
+          fixed z-50 flex flex-col gap-4
           transition-all duration-200
 
           /* Mobile: full slide-in panel */
-          top-0 left-0 h-screen w-[220px]
-          md:top-auto md:left-6 md:h-auto md:w-auto
-          md:rounded-3xl
+          top-0 left-0 h-screen w-[220px] overflow-y-auto
+          bg-white rounded-r-3xl shadow-md
 
-          /* Desktop: floating card below header */
-          md:mt-[120px]
+          /* Desktop: floating cards below the header */
+          md:top-[120px] md:left-6 md:h-auto md:w-[184px]
+          md:max-h-[calc(100vh-140px)]
+          md:bg-transparent md:shadow-none md:rounded-none
 
           md:translate-x-0
           ${open ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
         `}
       >
+      <nav className="px-2 py-3 md:bg-white md:rounded-3xl md:shadow-md">
         {/* Mobile close button */}
         <div className="flex justify-end px-2 pb-2 md:hidden">
           <button
@@ -136,6 +139,8 @@ export default function Sidebar({
           </li>
         </ul>
       </nav>
+      <HouseRules className="px-2 pb-4 border-t border-divider pt-3 mx-2 md:mx-0 md:border-t-0 md:py-3 md:bg-white md:rounded-3xl md:shadow-md" />
+      </div>
     </>
   )
 }

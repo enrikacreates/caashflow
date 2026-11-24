@@ -1,10 +1,10 @@
 'use client'
 
 import { useOptimistic, useState, useTransition } from 'react'
-import { Pencil, Plus } from 'lucide-react'
+import { CheckCheck, Pencil, Plus } from 'lucide-react'
 import PeriodDetailClient from '@/components/period-detail/PeriodDetailClient'
 import MonthOverview from '@/components/period-detail/MonthOverview'
-import { startNewSession, updateSession, removeEmptySession } from '@/app/actions/sessions'
+import { closeOutAndStartSession, startNewSession, updateSession, removeEmptySession } from '@/app/actions/sessions'
 import { notifyError } from '@/lib/toast'
 import { expensesForSession, localToday, sessionLabel } from '@/lib/sessions'
 import type { LinkedInvoiceRow } from '@/lib/sessions'
@@ -88,9 +88,14 @@ export default function PeriodSessions(props: Props) {
 
   const isLocked = period.status === 'complete'
 
-  const handleStartSession = () => {
+  // closeOut: settle every bill checked to Pay in the newest session first, then start fresh
+  const handleStartSession = (closeOut = false) => {
     if (isSaving(newest)) return
-    if (!confirm('Start a new session?\n\nUse this when new money lands. Bills you already funded stay with their session; unfunded bills move along to the new one.')) return
+    const question = closeOut
+      ? `Close out ${sessionLabel(newest)} and start fresh?\n\nEvery bill checked to Pay is marked paid and cleared, then a new session starts at $0. Unchecked bills move to the new session. You can reopen any bill from its row.`
+      : 'Start a new session?\n\nUse this when new money lands. Bills you already funded stay with their session; unfunded bills move along to the new one.'
+    if (!confirm(question)) return
+    const closingId = newest.id
     const seq = newest.seq + 1
     const now = new Date().toISOString()
     setTab(seq)
@@ -110,10 +115,11 @@ export default function PeriodSessions(props: Props) {
         },
       })
       try {
-        await startNewSession(period.id, localToday())
+        if (closeOut) await closeOutAndStartSession(period.id, closingId, localToday())
+        else await startNewSession(period.id, localToday())
       } catch {
         setTab(newest.seq)
-        notifyError('Could not start a new session. Please try again.')
+        notifyError(closeOut ? 'Could not close out that session. Please try again.' : 'Could not start a new session. Please try again.')
       }
     })
   }
@@ -194,9 +200,20 @@ export default function PeriodSessions(props: Props) {
           {!isLocked && (
             <button
               type="button"
-              onClick={handleStartSession}
+              onClick={() => handleStartSession(true)}
               disabled={isSaving(newest)}
-              title="Start a new session when new money lands"
+              title="Mark every bill checked to Pay as paid and cleared, then start a new $0 session"
+              className="shrink-0 inline-flex items-center gap-1 rounded-full bg-primary-teal text-white px-3 py-1.5 text-caption font-bold hover:bg-primary-teal/90 disabled:opacity-50 transition-colors"
+            >
+              <CheckCheck size={14} /> Close out &amp; start fresh
+            </button>
+          )}
+          {!isLocked && (
+            <button
+              type="button"
+              onClick={() => handleStartSession()}
+              disabled={isSaving(newest)}
+              title="Start a new session when new money lands, without settling anything"
               className="shrink-0 inline-flex items-center gap-1 rounded-full border border-dashed border-primary-teal text-primary-teal px-3 py-1.5 text-caption font-bold hover:bg-primary-teal/10 disabled:opacity-50 transition-colors"
             >
               <Plus size={14} /> New session

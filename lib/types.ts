@@ -42,6 +42,7 @@ export interface Settings {
   fun_money_account: string | null
   // Finished months with no income, keyed YYYY-MM (see lib/stability.ts)
   income_month_answers: Record<string, 'not_tracked' | 'no_earnings'>
+  house_rules_seeded: boolean
   updated_at: string
 }
 
@@ -140,6 +141,8 @@ export interface PeriodExpense {
   session_id: string | null
   // Paid without budgeted income behind it (see BillPayment); budget math skips these
   paid_outside: boolean
+  // !! priority: pinned to the top of this month's budget until the line is settled
+  urgent: boolean
   // Which part of a split annual bill this line is (null otherwise)
   annual_part: number | null
   annual_parts: number | null
@@ -417,3 +420,12 @@ export type InvoiceStatus = 'projected' | 'sent' | 'received'
 export type RequestStatus = 'requested' | 'approved' | 'purchased' | 'obtained'
 
 export const FREQUENCIES: Frequency[] = ['Monthly', 'Weekly', 'Annually', 'One-Time']
+
+export interface HouseRule {
+  id: string
+  team_id: string
+  text: string
+  sort_order: number
+  created_at: string
+  updated_at: string
+}

@@ -58,6 +58,64 @@ export async function createBaseBudgetItem(formData: FormData) {
   revalidatePath('/')
 }
 
+/**
+ * Add a budget's one-time line to the baseline. The new bill goes into future budgets, and
+ * this line becomes its line for this month (moving up into the regular Expenses list), so it
+ * can't be added twice.
+ */
+export async function createBaseItemFromExpense(formData: FormData, expenseId: string) {
+  const supabase = await createClient()
+  const teamId = await getUserTeamId()
+
+  const { data: line, error: lineError } = await supabase
+    .from('period_expenses')
+    .select('id, period_id, base_item_id')
+    .eq('id', expenseId)
+    .eq('team_id', teamId)
+    .single()
+  if (lineError || !line) throw new Error('Budget line not found')
+  if (line.base_item_id) throw new Error('That line is already on the baseline')
+
+  const item = {
+    team_id: teamId,
+    name: formData.get('name') as string,
+    default_amount: parseFloat(formData.get('default_amount') as string) || 0,
+    due_day: formData.get('due_day') ? parseInt(formData.get('due_day') as string, 10) : null,
+    account: formData.get('account') as string || null,
+    priority_category: formData.get('priority_category') as string || null,
+    frequency: formData.get('frequency') as string || 'Monthly',
+    auto_pay: formData.get('auto_pay') === 'on',
+    track_spending: formData.get('track_spending') === 'on',
+    pay_url: formData.get('pay_url') as string || null,
+    notes: formData.get('notes') as string || null,
+    tags: (formData.get('tags') as string || '').split(',').map(t => t.trim()).filter(Boolean),
+    due_month: formInt(formData, 'due_month'),
+    remind_months: formInt(formData, 'remind_months'),
+    split_months: formInt(formData, 'split_months'),
+  }
+
+  const { data: created, error } = await supabase
+    .from('base_budget_items')
+    .insert(item)
+    .select('id')
+    .single()
+  if (error || !created) throw new Error(`Failed to create base budget item: ${error?.message}`)
+
+  // Link only while still unlinked, so a double tap can't attach two bills to one line
+  const { error: linkError } = await supabase
+    .from('period_expenses')
+    .update({ base_item_id: created.id, frequency: item.frequency, updated_at: new Date().toISOString() })
+    .eq('id', expenseId)
+    .eq('team_id', teamId)
+    .is('base_item_id', null)
+  if (linkError) throw new Error(`Failed to link the budget line: ${linkError.message}`)
+
+  revalidatePath('/base-budget')
+  revalidatePath(`/periods/${line.period_id}`)
+  revalidatePath('/periods')
+  revalidatePath('/')
+}
+
 export async function updateBaseBudgetItem(formData: FormData) {
   const supabase = await createClient()
   const teamId = await getUserTeamId()
