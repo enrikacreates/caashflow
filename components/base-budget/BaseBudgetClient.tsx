@@ -4,7 +4,9 @@ import { useOptimistic, useState, useTransition, useEffect } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { localToday } from '@/lib/sessions'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { restoreBaseItem, deleteBaseBudgetItem, resetBaseBudgetToDefaults, setBaseItemTrackSpending } from '@/app/actions/base-budget'
+import { restoreBaseItem, deleteBaseBudgetItem, resetBaseBudgetToDefaults, setBaseItemTrackSpending, reorderBaseItems } from '@/app/actions/base-budget'
+import { startDragReorder } from '@/lib/dragReorder'
+import DotCorner from '@/components/ui/DotCorner'
 import { notifyError } from '@/lib/toast'
 import { formatCurrency, getPriorityColor } from '@/lib/utils'
 import type { BaseBudgetItem, Frequency, Account, PriorityCategoryRecord } from '@/lib/types'
@@ -40,8 +42,9 @@ export default function BaseBudgetClient({ items, archivedItems, accounts, categ
   // Optimistic mirror — deletes drop instantly, track-spending flips instantly.
   const [optItems, applyItemsOpt] = useOptimistic(
     items,
-    (state: BaseBudgetItem[], u: { kind: 'delete'; id: string } | { kind: 'track'; id: string; value: boolean }) => {
+    (state: BaseBudgetItem[], u: { kind: 'delete'; id: string } | { kind: 'track'; id: string; value: boolean } | { kind: 'order'; ids: string[]; base: number }) => {
       if (u.kind === 'delete') return state.filter((i) => i.id !== u.id)
+      if (u.kind === 'order') return state.map((i) => (u.ids.includes(i.id) ? { ...i, sort_order: u.base + u.ids.indexOf(i.id) } : i))
       return state.map((i) => (i.id === u.id ? { ...i, track_spending: u.value } : i))
     }
   )
@@ -72,8 +75,49 @@ export default function BaseBudgetClient({ items, archivedItems, accounts, categ
     total: optItems.filter((i) => i.frequency === freq).reduce((s, i) => s + i.default_amount, 0),
   })).filter((g) => g.items.length > 0)
 
+  // Drag to reorder: the order while dragging, and the row being dragged
+  const [dragPreview, setDragPreview] = useState<string[] | null>(null)
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+  // Your order, shown live while dragging; it's the tie-break for every column sort
+  const byOrder = (a: BaseBudgetItem, b: BaseBudgetItem) => {
+    if (dragPreview) {
+      const ia = dragPreview.indexOf(a.id)
+      const ib = dragPreview.indexOf(b.id)
+      if (ia !== -1 && ib !== -1) return ia - ib
+    }
+    return (a.sort_order ?? 0) - (b.sort_order ?? 0)
+  }
+  // Drag works in your order, or within one priority when sorted by Priority (low to high)
+  const canReorder = sortKey === null || (sortKey === 'priority_category' && sortDir === 'asc')
+  const startRowDrag = (e: React.PointerEvent, item: BaseBudgetItem, list: BaseBudgetItem[], box: HTMLElement | null) => {
+    e.stopPropagation()
+    if (!box || draggingId) return
+    const group = list
+      .filter((x) => sortKey !== 'priority_category' || x.priority_category === item.priority_category)
+      .map((x) => x.id)
+    if (group.length < 2) return
+    setDraggingId(item.id)
+    startDragReorder(
+      e,
+      item.id,
+      group,
+      box,
+      (order) => setDragPreview(order),
+      (order) => {
+        const base = Math.min(...order.map((id) => optItems.find((x) => x.id === id)?.sort_order ?? 0))
+        startTransition(async () => {
+          applyItemsOpt({ kind: 'order', ids: order, base })
+          setDragPreview(null)
+          try { await reorderBaseItems(order) }
+          catch { notifyError('Could not save that order. Please try again.') }
+        })
+      },
+      () => setDraggingId(null)
+    )
+  }
+
   const sortItems = (list: BaseBudgetItem[]) => {
-    if (!sortKey) return list
+    if (!sortKey) return [...list].sort(byOrder)
     return [...list].sort((a, b) => {
       let vA: string | number, vB: string | number
       switch (sortKey) {
@@ -87,7 +131,7 @@ export default function BaseBudgetClient({ items, archivedItems, accounts, categ
         default: return 0
       }
       const cmp = vA < vB ? -1 : vA > vB ? 1 : 0
-      return sortDir === 'desc' ? -cmp : cmp
+      return (sortDir === 'desc' ? -cmp : cmp) || byOrder(a, b)
     })
   }
 
@@ -171,14 +215,27 @@ export default function BaseBudgetClient({ items, archivedItems, accounts, categ
                   </tr>
                 </thead>
                 <tbody>
-                  {sortItems(group.items).map((item) => (
+                  {sortItems(group.items).map((item, _i, visible) => (
                     <tr
                       key={item.id}
+                      data-drag-id={item.id}
                       onClick={() => { setEditItem(item); setModalOpen(true) }}
                       title="Click to edit"
-                      className="odd:bg-bg-white even:bg-[#ebf0f0] hover:bg-[#f2e9e9] transition-colors cursor-pointer"
+                      className={`odd:bg-bg-white even:bg-[#ebf0f0] hover:bg-[#f2e9e9] transition-colors cursor-pointer ${draggingId === item.id ? 'outline outline-2 -outline-offset-2 outline-primary-teal/60' : ''}`}
                     >
-                      <td className="px-4 py-3">
+                      <td className="relative px-4 py-3">
+                        {canReorder && (
+                          <button
+                            type="button"
+                            aria-label={`Drag to reorder ${item.name}`}
+                            title="Drag to reorder"
+                            onClick={(e) => e.stopPropagation()}
+                            onPointerDown={(e) => startRowDrag(e, item, visible, e.currentTarget.closest('tbody'))}
+                            className="touch-none absolute left-0 bottom-0 w-6 h-6 flex items-end justify-start p-1 text-text-muted/40 hover:text-urgent cursor-grab active:cursor-grabbing"
+                          >
+                            <DotCorner />
+                          </button>
+                        )}
                         <span className="text-caption font-medium text-text-heading underline decoration-dotted decoration-text-muted underline-offset-4">
                           {item.name}
                         </span>

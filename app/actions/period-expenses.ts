@@ -543,13 +543,36 @@ export async function toggleExpenseSplit(expenseId: string, periodId: string, is
       .limit(1)
 
     if (!existing || existing.length === 0) {
-      await supabase.from('period_expense_payments').insert({
+      // Payment 1 is what's on the line now and keeps its state: a bill already funded or
+      // paid in a session stays that way. When this month's amount was trimmed (Rent $1,850
+      // of $3,300), Payment 2 picks up the rest, ready for the next check.
+      const { data: line } = await supabase
+        .from('period_expenses')
+        .select('default_amount, amount_override, pay_now, paid, transferred, cleared, paid_amount, session_id')
+        .eq('id', expenseId)
+        .eq('team_id', teamId)
+        .single()
+      const first = Number(line?.amount_override ?? line?.default_amount ?? 0)
+      const whole = Math.max(Number(line?.default_amount ?? 0), first)
+      const rest = Math.round((whole - first) * 100) / 100
+      const rows: Record<string, unknown>[] = [{
         team_id: teamId,
         period_expense_id: expenseId,
         label: 'Payment 1',
-        amount: 0,
+        amount: first,
+        pay_now: line?.pay_now ?? false,
+        paid: line?.paid ?? false,
+        transferred: line?.transferred ?? false,
+        cleared: line?.cleared ?? false,
+        paid_amount: Number(line?.paid_amount ?? 0),
+        session_id: line?.session_id ?? null,
         sort_order: 0,
-      })
+      }]
+      if (rest > 0.005) {
+        rows.push({ team_id: teamId, period_expense_id: expenseId, label: 'Payment 2', amount: rest, sort_order: 1 })
+      }
+      const { error: insertError } = await supabase.from('period_expense_payments').insert(rows)
+      if (insertError) throw new Error(`Failed to split: ${insertError.message}`)
     }
   }
 
@@ -557,7 +580,8 @@ export async function toggleExpenseSplit(expenseId: string, periodId: string, is
 }
 
 /** Add a new sub-payment row to a split expense. */
-export async function addExpensePayment(expenseId: string, periodId: string) {
+/** Add a payment to a split bill. `amount` is what's still left of the bill (worked out on screen). */
+export async function addExpensePayment(expenseId: string, periodId: string, amount = 0) {
   const supabase = await createClient()
   const teamId = await getUserTeamId()
 
@@ -575,7 +599,7 @@ export async function addExpensePayment(expenseId: string, periodId: string) {
     team_id: teamId,
     period_expense_id: expenseId,
     label: `Payment ${nextOrder + 1}`,
-    amount: 0,
+    amount: Math.max(0, Math.round(amount * 100) / 100),
     sort_order: nextOrder,
   })
 
@@ -1134,10 +1158,12 @@ export async function clearAllPayNow(periodId: string, sessionId: string) {
       await supabase.from('period_expense_payments')
         .update({ cleared: true, pay_now: false, updated_at: new Date().toISOString() })
         .in('id', subs.map((s) => s.id))
+      // Seal a split bill only once every installment is cleared: an unfunded one (Rent's
+      // second half) still has to be paid from a later check
       const affected = [...new Set(subs.map((s) => s.period_expense_id))]
       const { data: remaining } = await supabase
         .from('period_expense_payments').select('period_expense_id')
-        .eq('team_id', teamId).eq('pay_now', true).in('period_expense_id', affected)
+        .eq('team_id', teamId).eq('cleared', false).in('period_expense_id', affected)
       const stillActive = new Set((remaining ?? []).map((r) => r.period_expense_id))
       const sealed = affected.filter((id) => !stillActive.has(id))
       if (sealed.length) {
@@ -1645,4 +1671,74 @@ export async function applyWaitingBillPayments(periodId: string, periodMonth: st
       .eq('id', payment.id).eq('team_id', teamId)
     await closeLineAsPaidOutside(supabase, teamId, line.id, Number(payment.amount))
   }
+}
+
+/* ─── Fill + reorder ────────────────────────────────────────────────── */
+
+/** Check (or uncheck) Pay on several split payments at once: Fill, and its Undo. */
+export async function setPaymentPayNowMany(periodId: string, ids: string[], value: boolean) {
+  if (ids.length === 0) return
+  const supabase = await createClient()
+  const teamId = await getUserTeamId()
+
+  const { error } = await supabase
+    .from('period_expense_payments')
+    .update({ pay_now: value, updated_at: new Date().toISOString() })
+    .eq('team_id', teamId)
+    .in('id', ids)
+  if (error) throw new Error(`Failed to update Pay: ${error.message}`)
+
+  revalidatePath(`/periods/${periodId}`)
+  revalidatePath('/periods')
+  revalidatePath('/')
+}
+
+/** Check (or uncheck) Pay on several lines at once: Fill, and its Undo. */
+export async function setPayNowMany(periodId: string, ids: string[], value: boolean) {
+  if (ids.length === 0) return
+  const supabase = await createClient()
+  const teamId = await getUserTeamId()
+
+  const { error } = await supabase
+    .from('period_expenses')
+    .update({ pay_now: value, updated_at: new Date().toISOString() })
+    .eq('team_id', teamId)
+    .eq('period_id', periodId)
+    .in('id', ids)
+  if (error) throw new Error(`Failed to update Pay: ${error.message}`)
+
+  revalidatePath(`/periods/${periodId}`)
+  revalidatePath('/periods')
+  revalidatePath('/')
+}
+
+/**
+ * Save a new order for a group of a budget's lines (`ids` top to bottom). The group reuses
+ * its lowest existing position and counts up, so other groups keep their places.
+ */
+export async function reorderPeriodLines(periodId: string, ids: string[]) {
+  if (ids.length < 2) return
+  const supabase = await createClient()
+  const teamId = await getUserTeamId()
+
+  const { data: rows, error: readError } = await supabase
+    .from('period_expenses')
+    .select('id, sort_order')
+    .eq('team_id', teamId)
+    .eq('period_id', periodId)
+    .in('id', ids)
+  if (readError) throw new Error(`Failed to load lines: ${readError.message}`)
+  if ((rows ?? []).length !== ids.length) throw new Error('Some lines are no longer in this budget')
+
+  const base = Math.min(...(rows ?? []).map((r) => r.sort_order ?? 0))
+  const now = new Date().toISOString()
+  const results = await Promise.all(
+    ids.map((id, i) =>
+      supabase.from('period_expenses').update({ sort_order: base + i, updated_at: now }).eq('id', id).eq('team_id', teamId)
+    )
+  )
+  const failed = results.find((r) => r.error)
+  if (failed?.error) throw new Error(`Failed to reorder: ${failed.error.message}`)
+
+  revalidatePath(`/periods/${periodId}`)
 }

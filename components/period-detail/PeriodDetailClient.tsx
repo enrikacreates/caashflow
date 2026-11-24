@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation'
 import { ChevronsDownUp, ChevronsUpDown, Pencil, Camera, Eye, EyeOff } from 'lucide-react'
 import {
   updateExpenseField,
+  setPayNowMany,
+  setPaymentPayNowMany,
+  reorderPeriodLines,
   updateDeductionOverrides,
   linkInvoiceToPeriod,
   unlinkInvoiceFromPeriod,
@@ -47,6 +50,9 @@ import PeriodRequestsPanel from '@/components/period-detail/PeriodRequestsPanel'
 import PeriodExpenseEditModal from '@/components/period-detail/PeriodExpenseEditModal'
 import ExpenseFormModal from '@/components/base-budget/ExpenseFormModal'
 import FloatingColumnLabels from '@/components/period-detail/FloatingColumnLabels'
+import { startDragReorder } from '@/lib/dragReorder'
+import DotCorner from '@/components/ui/DotCorner'
+import PourIcon from '@/components/ui/PourIcon'
 import MathInput from '@/components/ui/MathInput'
 import { hasCents, roundUpToDollar } from '@/lib/math-input'
 import RecentActivity from '@/components/period-detail/RecentActivity'
@@ -81,6 +87,8 @@ type SortDir = 'asc' | 'desc'
 // the row's edit modal (tap the expense name). The header cell and every matching
 // row/sub-row cell share this class so the grid stays aligned at all widths.
 const HIDE_SM = 'hidden sm:table-cell'
+
+type FillBy = 'mine' | 'due'
 
 /** !! priority holds until the line is settled (cleared, sealed, or paid outside the budget). */
 function isUrgent(e: PeriodExpense): boolean {
@@ -158,6 +166,16 @@ export default function PeriodDetailClient({
   const [sortKey, setSortKey] = useState<SortKey>('priority_category')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [expenseSearch, setExpenseSearch] = useState('')
+  // Fill: order to fill by (remembered on this device), and what the last fill did
+  const [fillBy, setFillBy] = useState<FillBy>('mine')
+  // Read the saved choice after load, so the server and first paint agree
+  useEffect(() => {
+    try { if (localStorage.getItem('caashflow:fill-by') === 'due') setFillBy('due') } catch {}
+  }, [])
+  const [fillResult, setFillResult] = useState<{ ids: string[]; paymentIds: string[]; total: number; next: { name: string; short: number } | null; none: boolean; from: 'top' | 'expenses' } | null>(null)
+  // Drag to reorder within a priority: the order while dragging, and the row being dragged
+  const [dragPreview, setDragPreview] = useState<string[] | null>(null)
+  const [draggingId, setDraggingId] = useState<string | null>(null)
   const [showInvoiceSelector, setShowInvoiceSelector] = useState(false)
   const [showManualIncomeForm, setShowManualIncomeForm] = useState(false)
   const [showOneTimeForm, setShowOneTimeForm] = useState(false)
@@ -479,8 +497,17 @@ export default function PeriodDetailClient({
     }
     const aVal = a[sortKey] ?? ''
     const bVal = b[sortKey] ?? ''
-    if (typeof aVal === 'number' && typeof bVal === 'number') return (aVal - bVal) * mul
-    return String(aVal).localeCompare(String(bVal)) * mul
+    const primary = typeof aVal === 'number' && typeof bVal === 'number'
+      ? (aVal - bVal) * mul
+      : String(aVal).localeCompare(String(bVal)) * mul
+    if (primary !== 0) return primary
+    // Same priority: your order (drag to change), shown live while dragging
+    if (dragPreview) {
+      const ia = dragPreview.indexOf(a.id)
+      const ib = dragPreview.indexOf(b.id)
+      if (ia !== -1 && ib !== -1) return ia - ib
+    }
+    return (a.sort_order ?? 0) - (b.sort_order ?? 0)
   })
 
   // Baseline (from settings) vs one-time (ad-hoc, this period only)
@@ -830,6 +857,35 @@ export default function PeriodDetailClient({
   // ─── Split / sub-payments / complete ─────────────────────────
   const handleToggleSplit = (id: string, value: boolean) =>
     startTransition(async () => {
+      // Show the split the server will make right away: Payment 1 keeps this line's amount and
+      // funded state, Payment 2 holds the rest of a trimmed bill. Otherwise the line would read
+      // as $0 budgeted until the save lands, briefly freeing its money.
+      const line = optExpenses.find((e) => e.id === id)
+      if (value && line && (line.payments ?? []).length === 0) {
+        const first = line.amount_override ?? line.default_amount
+        const rest = Math.round((Math.max(line.default_amount, first) - first) * 100) / 100
+        const now = new Date(0).toISOString()
+        const ghost = (n: number, amount: number, funded: boolean): PeriodExpensePayment => ({
+          id: `tmp-split-${id}-${n}`,
+          team_id: period.team_id,
+          period_expense_id: id,
+          session_id: funded ? line.session_id : null,
+          label: `Payment ${n}`,
+          amount,
+          due_day: null,
+          pay_now: funded && line.pay_now,
+          transferred: funded && line.transferred,
+          paid: funded && line.paid,
+          cleared: funded && line.cleared,
+          paid_amount: funded ? line.paid_amount : 0,
+          sort_order: n - 1,
+          created_at: now,
+          updated_at: now,
+          adjustments: [],
+        })
+        applyExpenseOpt({ kind: 'addPayment', expenseId: id, payment: ghost(1, first, true) })
+        if (rest > 0.005) applyExpenseOpt({ kind: 'addPayment', expenseId: id, payment: ghost(2, rest, false) })
+      }
       applyExpenseOpt({ kind: 'field', id, field: 'is_split', value })
       try { await toggleExpenseSplit(id, period.id, value) }
       catch { notifyError() }
@@ -882,13 +938,19 @@ export default function PeriodDetailClient({
 
   const handleAddPayment = (id: string) => {
     const now = new Date(0).toISOString()
+    // A new payment starts with what's still left of the bill after the others. When this
+    // month's amount was trimmed (Rent $1,850 of $3,300), the full bill is the larger one.
+    const line = optExpenses.find((e) => e.id === id)
+    const billTotal = line ? Math.max(line.default_amount, line.amount_override ?? 0) : 0
+    const planned = (line?.payments ?? []).reduce((sum, p) => sum + (p.amount || 0), 0)
+    const remaining = Math.max(0, Math.round((billTotal - planned) * 100) / 100)
     const ghost: PeriodExpensePayment = {
       id: `tmp-${Date.now()}`,
       team_id: period.team_id,
       period_expense_id: id,
       session_id: null,
       label: null,
-      amount: 0,
+      amount: remaining,
       due_day: null,
       pay_now: false,
       transferred: false,
@@ -902,7 +964,7 @@ export default function PeriodDetailClient({
     }
     startTransition(async () => {
       applyExpenseOpt({ kind: 'addPayment', expenseId: id, payment: ghost })
-      try { await addExpensePayment(id, period.id) }
+      try { await addExpensePayment(id, period.id, remaining) }
       catch { notifyError() }
     })
   }
@@ -1033,6 +1095,123 @@ export default function PeriodDetailClient({
     })
   }
 
+  // ─── Fill: check Pay down the list until the money runs out ───────────
+  // Order: !! first, then P1, P2… (priority list order), then your order or soonest due.
+  // Stops at the first bill that doesn't fit, so smaller bills can't take money a
+  // higher-priority bill is waiting on.
+  const priorityRank = new Map(categories.map((c) => [c.name, c.sort_order]))
+  const fillOrder = (a: PeriodExpense, b: PeriodExpense) =>
+    (Number(isUrgent(b)) - Number(isUrgent(a))) ||
+    ((priorityRank.get(a.priority_category ?? '') ?? 999) - (priorityRank.get(b.priority_category ?? '') ?? 999)) ||
+    (fillBy === 'due' ? (a.due_day ?? 99) - (b.due_day ?? 99) : 0) ||
+    ((a.sort_order ?? 0) - (b.sort_order ?? 0))
+  const canFill = isNewestSession && !isLocked
+
+  const chooseFillBy = (by: FillBy) => {
+    setFillBy(by)
+    try { localStorage.setItem('caashflow:fill-by', by) } catch {}
+  }
+
+  // A fill step is a whole bill, or one unfunded payment of a split bill (Rent's second half)
+  type FillStep = { line: PeriodExpense; payment: PeriodExpensePayment | null; amount: number }
+
+  const handleFill = (from: 'top' | 'expenses' = 'top') => {
+    const open = (e: PeriodExpense) => !e.is_complete && !e.cleared && !e.paid_outside && !e.id.startsWith('tmp-')
+    const steps: FillStep[] = []
+    for (const e of [...optExpenses].sort(fillOrder)) {
+      if (!open(e)) continue
+      if (e.is_split) {
+        for (const p of [...(e.payments ?? [])].sort((a, b) => a.sort_order - b.sort_order)) {
+          if (!p.pay_now && !p.paid && !p.cleared && p.amount > 0 && !p.id.startsWith('tmp-')) steps.push({ line: e, payment: p, amount: p.amount })
+        }
+      } else if (!e.pay_now && getOwedAmount(e) > 0) {
+        steps.push({ line: e, payment: null, amount: getOwedAmount(e) })
+      }
+    }
+    let left = Math.round(amountLeft * 100) / 100
+    const picked: FillStep[] = []
+    let next: FillStep | null = null
+    for (const step of steps) {
+      if (step.amount > left + 0.005) { next = step; break }
+      picked.push(step)
+      left = Math.round((left - step.amount) * 100) / 100
+    }
+    const ids = picked.filter((st) => !st.payment).map((st) => st.line.id)
+    const paymentIds = picked.filter((st) => st.payment).map((st) => st.payment!.id)
+    setFillResult({
+      ids,
+      paymentIds,
+      total: picked.reduce((sum, st) => sum + st.amount, 0),
+      next: next ? { name: next.payment ? `${next.line.name} (${next.payment.label || 'payment'})` : next.line.name, short: Math.round((next.amount - left) * 100) / 100 } : null,
+      none: steps.length === 0,
+      from,
+    })
+    if (picked.length === 0) return
+    startTransition(async () => {
+      for (const id of ids) applyExpenseOpt({ kind: 'field', id, field: 'pay_now', value: true })
+      for (const id of paymentIds) applyExpenseOpt({ kind: 'payment', id, field: 'pay_now', value: true })
+      try {
+        await Promise.all([setPayNowMany(period.id, ids, true), setPaymentPayNowMany(period.id, paymentIds, true)])
+      } catch { setFillResult(null); notifyError('Could not fill. Please try again.') }
+    })
+  }
+
+  const handleUndoFill = () => {
+    if (!fillResult) return
+    const { ids, paymentIds } = fillResult
+    setFillResult(null)
+    startTransition(async () => {
+      for (const id of ids) applyExpenseOpt({ kind: 'field', id, field: 'pay_now', value: false })
+      for (const id of paymentIds) applyExpenseOpt({ kind: 'payment', id, field: 'pay_now', value: false })
+      try {
+        await Promise.all([setPayNowMany(period.id, ids, false), setPaymentPayNowMany(period.id, paymentIds, false)])
+      } catch { notifyError('Could not undo the fill. Please try again.') }
+    })
+  }
+
+  // What the last fill did, shown under the Fill button that was tapped
+  const fillNote = (className: string) => fillResult && (
+    <p className={`text-caption text-text-muted ${className}`} aria-live="polite">
+      {fillResult.ids.length + fillResult.paymentIds.length > 0
+        ? <>Funded {fillResult.ids.length + fillResult.paymentIds.length} {fillResult.ids.length + fillResult.paymentIds.length === 1 ? 'bill' : 'bills'}, {formatCurrency(fillResult.total)}.</>
+        : fillResult.none ? <>Every bill is already funded.</> : <>Nothing fits yet.</>}
+      {fillResult.next && <> Next up: <span className="font-semibold text-text-heading">{fillResult.next.name}</span>, needs {formatCurrency(fillResult.next.short)} more.</>}
+      {fillResult.ids.length + fillResult.paymentIds.length > 0 && (
+        <button type="button" onClick={handleUndoFill} className="ml-2 font-semibold text-primary hover:underline">Undo fill</button>
+      )}
+    </p>
+  )
+
+  // ─── Drag to reorder within a priority ─────────────────────────────────
+  // Only while the table shows priority order (the default), so the drop lands where you see it
+  const canReorder = sortKey === 'priority_category' && sortDir === 'asc' && !expenseSearch && !isLocked
+  const startRowDrag = (e: React.PointerEvent, expense: PeriodExpense, list: PeriodExpense[], box: HTMLDivElement | null) => {
+    if (!box || draggingId) return
+    const group = list
+      .filter((x) => !x.id.startsWith('tmp-') && x.priority_category === expense.priority_category && isUrgent(x) === isUrgent(expense))
+      .map((x) => x.id)
+    if (group.length < 2) return
+    setDraggingId(expense.id)
+    startDragReorder(
+      e,
+      expense.id,
+      group,
+      box,
+      (order) => setDragPreview(order),
+      (order) => {
+        // Hand the new order to the optimistic rows before dropping the live preview
+        const base = Math.min(...order.map((id) => optExpenses.find((x) => x.id === id)?.sort_order ?? 0))
+        startTransition(async () => {
+          order.forEach((id, i) => applyExpenseOpt({ kind: 'field', id, field: 'sort_order', value: base + i }))
+          setDragPreview(null)
+          try { await reorderPeriodLines(period.id, order) }
+          catch { notifyError('Could not save that order. Please try again.') }
+        })
+      },
+      () => setDraggingId(null)
+    )
+  }
+
   const inputClass = 'bg-bg-white border border-border rounded-sm px-2 py-1 text-caption focus:outline-none focus:border-primary transition-colors'
   const thClass = 'text-left text-caption font-bold uppercase text-text-muted px-2 py-3 whitespace-nowrap cursor-pointer hover:text-text-heading select-none'
 
@@ -1046,8 +1225,35 @@ export default function PeriodDetailClient({
         </div>
       )}
 
-      {/* Expand / collapse all sections */}
-      <div className="flex justify-end">
+      {/* Auto Fill + expand / collapse all sections */}
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {canFill && (
+          <>
+            <button
+              type="button"
+              onClick={() => handleFill('top')}
+              title="Check Pay on bills in priority order (!! first) until the money left runs out"
+              className="inline-flex items-center gap-2 rounded-full bg-income text-white pl-3.5 pr-4 py-2 text-caption font-bold shadow-card hover:bg-income/90 transition-colors"
+            >
+              <PourIcon size={18} />
+              Auto Fill {formatCurrency(Math.max(0, amountLeft))}
+            </button>
+            <div role="group" aria-label="Fill order" className="inline-flex items-center gap-1 text-caption mr-auto sm:mr-2">
+              <span className="text-text-muted">by</span>
+              {([['mine', 'My order'], ['due', 'Due date']] as const).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  aria-pressed={fillBy === key}
+                  onClick={() => chooseFillBy(key)}
+                  className={`rounded-full px-3 py-1 font-semibold shadow-card transition-colors ${fillBy === key ? 'bg-text-heading text-white' : 'bg-bg-white text-text-muted hover:text-text-heading'}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
         <button
           type="button"
           onClick={() => setAllSections(!allCollapsed)}
@@ -1057,6 +1263,7 @@ export default function PeriodDetailClient({
           {allCollapsed ? <ChevronsUpDown size={14} /> : <ChevronsDownUp size={14} />}
           {allCollapsed ? 'Expand all' : 'Collapse all'}
         </button>
+        {canFill && fillResult?.from === 'top' && fillNote('basis-full text-right')}
       </div>
 
       {/* ─── Summary Cards ─────────────────────────────────── */}
@@ -1639,6 +1846,16 @@ export default function PeriodDetailClient({
             <button type="button" onClick={() => setExpenseSearch('')} title="Clear search" className="text-caption text-text-muted hover:text-warning font-semibold shrink-0">✕</button>
           )}
           <div className="ml-auto flex items-center gap-1.5 shrink-0">
+            {canFill && (
+              <button
+                type="button"
+                onClick={() => handleFill('expenses')}
+                title="Auto Fill: check Pay on bills in priority order (!! first) until the money left runs out"
+                className="inline-flex items-center gap-1 text-[10px] font-bold uppercase bg-income text-white rounded-full pl-2 pr-3 py-1.5 hover:bg-income/90 transition-colors"
+              >
+                <PourIcon size={13} /> Fill
+              </button>
+            )}
             <button
               type="button"
               onClick={handleBulkPaid}
@@ -1659,6 +1876,7 @@ export default function PeriodDetailClient({
             </button>
           </div>
         </div>
+        {canFill && fillResult?.from === 'expenses' && fillNote('-mt-1 mb-3')}
         <FloatingColumnLabels boxRef={expensesBoxRef} />
         <div ref={expensesBoxRef} className="rounded-lg overflow-auto max-h-[70vh]">
             <table className="w-full border-separate border-spacing-0">
@@ -1703,6 +1921,8 @@ export default function PeriodDetailClient({
                   <ExpenseRow
                     key={expense.id}
                     expense={expense}
+                    onGripDown={canReorder ? (ev) => startRowDrag(ev, expense, baselineExpenses, expensesBoxRef.current) : undefined}
+                    isDragging={draggingId === expense.id}
                     isLocked={isLocked}
                     onCheckboxChange={handleCheckboxChange}
                     onDebouncedUpdate={debouncedUpdate}
@@ -1836,6 +2056,8 @@ export default function PeriodDetailClient({
                     <ExpenseRow
                       key={expense.id}
                       expense={expense}
+                      onGripDown={canReorder ? (ev) => startRowDrag(ev, expense, oneTimeExpenses, extraBoxRef.current) : undefined}
+                      isDragging={draggingId === expense.id}
                       isLocked={isLocked}
                       onCheckboxChange={handleCheckboxChange}
                       onDebouncedUpdate={debouncedUpdate}
@@ -2222,6 +2444,8 @@ function SpendLedger({
 // ─── Expense Row Component ───────────────────────────────────────
 function ExpenseRow({
   expense,
+  onGripDown,
+  isDragging,
   isLocked,
   onCheckboxChange,
   onDebouncedUpdate,
@@ -2247,6 +2471,8 @@ function ExpenseRow({
   categoryColorMap,
 }: {
   expense: PeriodExpense
+  onGripDown?: (e: React.PointerEvent) => void
+  isDragging?: boolean
   isLocked: boolean
   onCheckboxChange: (id: string, field: string, value: boolean) => void
   onDebouncedUpdate: (id: string, field: string, value: boolean | number | string | null) => void
@@ -2327,9 +2553,20 @@ function ExpenseRow({
 
   return (
     <>
-      <tr className={`transition-colors ${rowBg} ${settled ? 'opacity-60' : ''}`}>
+      <tr data-drag-id={expense.id} className={`transition-colors ${rowBg} ${settled ? 'opacity-60' : ''} ${isDragging ? 'outline outline-2 -outline-offset-2 outline-primary-teal/60' : ''}`}>
         {/* !! priority + PayNow: the leftmost, easiest spot to tap */}
-        <td className="px-1 py-3">
+        <td className="relative px-1 py-3">
+          {onGripDown && !rowDisabled && (
+            <button
+              type="button"
+              aria-label={`Drag to reorder ${expense.name}`}
+              title="Drag to reorder within its priority"
+              onPointerDown={onGripDown}
+              className="touch-none absolute left-0 bottom-0 w-6 h-6 flex items-end justify-start p-1 text-text-muted/40 hover:text-urgent cursor-grab active:cursor-grabbing"
+            >
+              <DotCorner />
+            </button>
+          )}
           <div className="flex items-center justify-center gap-0.5">
             {!rowDisabled && (
               <button

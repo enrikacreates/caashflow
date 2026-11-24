@@ -325,3 +325,55 @@ export async function restoreBaseItem(id: string, currentMonth: string) {
   }
   revalidateBills()
 }
+
+/**
+ * Save a new order for a group of baseline bills (`ids` top to bottom). New budgets copy this
+ * order, and open budgets update their lines to match, so Fill follows it right away.
+ */
+export async function reorderBaseItems(ids: string[]) {
+  if (ids.length < 2) return
+  const supabase = await createClient()
+  const teamId = await getUserTeamId()
+
+  const { data: rows, error: readError } = await supabase
+    .from('base_budget_items')
+    .select('id, sort_order')
+    .eq('team_id', teamId)
+    .in('id', ids)
+  if (readError) throw new Error(`Failed to load bills: ${readError.message}`)
+  if ((rows ?? []).length !== ids.length) throw new Error('Some bills are no longer on the baseline')
+
+  const base = Math.min(...(rows ?? []).map((r) => r.sort_order ?? 0))
+  const now = new Date().toISOString()
+  const results = await Promise.all(
+    ids.map((id, i) =>
+      supabase.from('base_budget_items').update({ sort_order: base + i, updated_at: now }).eq('id', id).eq('team_id', teamId)
+    )
+  )
+  const failed = results.find((r) => r.error)
+  if (failed?.error) throw new Error(`Failed to reorder: ${failed.error.message}`)
+
+  // Open budgets follow the new order
+  const { data: open } = await supabase
+    .from('budget_periods')
+    .select('id')
+    .eq('team_id', teamId)
+    .neq('status', 'complete')
+  const openIds = (open ?? []).map((p) => p.id)
+  if (openIds.length) {
+    await Promise.all(
+      ids.map((id, i) =>
+        supabase
+          .from('period_expenses')
+          .update({ sort_order: base + i, updated_at: now })
+          .eq('team_id', teamId)
+          .eq('base_item_id', id)
+          .in('period_id', openIds)
+      )
+    )
+  }
+
+  revalidatePath('/base-budget')
+  revalidatePath('/periods', 'layout')
+  revalidatePath('/')
+}
