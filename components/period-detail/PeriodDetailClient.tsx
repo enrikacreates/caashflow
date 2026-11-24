@@ -46,6 +46,7 @@ import SavingsAllocationSection from '@/components/period-detail/SavingsAllocati
 import PeriodRequestsPanel from '@/components/period-detail/PeriodRequestsPanel'
 import PeriodExpenseEditModal from '@/components/period-detail/PeriodExpenseEditModal'
 import ExpenseFormModal from '@/components/base-budget/ExpenseFormModal'
+import FloatingColumnLabels from '@/components/period-detail/FloatingColumnLabels'
 import MathInput from '@/components/ui/MathInput'
 import { hasCents, roundUpToDollar } from '@/lib/math-input'
 import RecentActivity from '@/components/period-detail/RecentActivity'
@@ -163,6 +164,9 @@ export default function PeriodDetailClient({
   const [editExpense, setEditExpense] = useState<PeriodExpense | null>(null)
   // One-time line being added to the baseline
   const [toBaseline, setToBaseline] = useState<PeriodExpense | null>(null)
+  // Table scroll boxes, so their column titles can float when scrolled out of view
+  const expensesBoxRef = useRef<HTMLDivElement>(null)
+  const extraBoxRef = useRef<HTMLDivElement>(null)
   const [editFocusMove, setEditFocusMove] = useState(false)
   // Open an expense's editor jumped straight to the Move funds section (used by the overage prompt).
   const openMoveFunds = (expense: PeriodExpense) => { setEditFocusMove(true); setEditExpense(expense) }
@@ -1655,7 +1659,8 @@ export default function PeriodDetailClient({
             </button>
           </div>
         </div>
-        <div className="rounded-lg overflow-auto max-h-[70vh]">
+        <FloatingColumnLabels boxRef={expensesBoxRef} />
+        <div ref={expensesBoxRef} className="rounded-lg overflow-auto max-h-[70vh]">
             <table className="w-full border-separate border-spacing-0">
               <thead>
                 <tr className="bg-bg-white [&>th]:sticky [&>th]:top-0 [&>th]:z-20 [&>th]:bg-bg-white [&>th]:border-b [&>th]:border-[#e9e9e9]">
@@ -1807,7 +1812,9 @@ export default function PeriodDetailClient({
             No extra expenses yet. Add ad-hoc costs that apply to <span className="font-semibold">this budget only</span> — they won&apos;t touch your settings baseline.
           </div>
         ) : (
-          <div className="rounded-lg overflow-auto max-h-[70vh]">
+          <>
+          <FloatingColumnLabels boxRef={extraBoxRef} />
+          <div ref={extraBoxRef} className="rounded-lg overflow-auto max-h-[70vh]">
               <table className="w-full border-separate border-spacing-0">
                 <thead>
                   <tr className="bg-bg-white [&>th]:sticky [&>th]:top-0 [&>th]:z-20 [&>th]:bg-bg-white [&>th]:border-b [&>th]:border-[#e9e9e9]">
@@ -1865,6 +1872,7 @@ export default function PeriodDetailClient({
                 </tfoot>
               </table>
           </div>
+          </>
         )}
         </>)}
       </div>
