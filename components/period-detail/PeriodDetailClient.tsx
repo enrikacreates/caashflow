@@ -1334,7 +1334,7 @@ export default function PeriodDetailClient({
       )}
 
       {/* ─── Budget details: the numbers in one line; open for everything behind them ── */}
-      <div ref={summaryCardsRef} className="bg-bg-white rounded-lg shadow-card px-6 py-3">
+      <div ref={summaryCardsRef} className="rounded-lg border border-text-muted/30 px-6 py-3">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
           <button
             type="button"
