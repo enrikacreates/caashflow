@@ -1308,6 +1308,35 @@ export async function addManualIncome(
   await recalculatePeriodIncome(periodId)
 }
 
+/** Fix a manual income entry in place (a typo in the name or the cents). */
+export async function updateManualIncome(id: string, data: { description?: string; amount?: number }) {
+  const supabase = await createClient()
+  const teamId = await getUserTeamId()
+
+  const update: Record<string, unknown> = {}
+  if (data.description !== undefined) {
+    const d = data.description.trim()
+    if (!d) throw new Error('Income needs a name')
+    update.description = d
+  }
+  if (data.amount !== undefined) {
+    if (!Number.isFinite(data.amount) || data.amount < 0) throw new Error('Amount must be zero or more')
+    update.amount = round2(data.amount)
+  }
+  if (!Object.keys(update).length) return
+
+  const { data: row, error } = await supabase
+    .from('period_manual_income')
+    .update(update)
+    .eq('id', id)
+    .eq('team_id', teamId)
+    .select('period_id')
+    .single()
+  if (error) throw new Error(`Failed to update income: ${error.message}`)
+
+  await recalculatePeriodIncome(row.period_id)
+}
+
 export async function removeManualIncome(id: string) {
   const supabase = await createClient()
 

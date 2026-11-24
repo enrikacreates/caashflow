@@ -13,6 +13,7 @@ import {
   unlinkInvoiceFromPeriod,
   addManualIncome,
   removeManualIncome,
+  updateManualIncome,
   setIncomeType,
   setIncomeDeduction,
   toggleExpenseSplit,
@@ -674,6 +675,13 @@ export default function PeriodDetailClient({
     })
   }
 
+  const handleEditManualIncome = (id: string, data: { description?: string; amount?: number }) =>
+    startTransition(async () => {
+      applyManualOpt({ id, ...data })
+      try { await updateManualIncome(id, data) }
+      catch { notifyError('Could not save that income. Please try again.') }
+    })
+
   const handleRemoveManualIncome = (id: string) =>
     startTransition(async () => {
       applyManualOpt({ kind: 'remove', id })
@@ -1316,8 +1324,14 @@ export default function PeriodDetailClient({
       )}
 
       {/* ─── Sticky Summary Bar (visible when scrolled past cards) ── */}
-      {showStickyBar && (
-        <div className="under-chrome sticky z-40 -mx-6 px-6 -mt-4">
+      {/* Always in the page at zero height and only faded in or out: if showing it took up
+          room, the page would shift, the details box would scroll back into view, the bar
+          would hide again, and it would blink on and off while you scroll */}
+      <div className="under-chrome sticky z-40 h-0 !my-0 -mx-6 px-6">
+        <div
+          aria-hidden={!showStickyBar}
+          className={`-mt-4 transition-opacity duration-150 ${showStickyBar ? 'opacity-100' : 'opacity-0 invisible pointer-events-none'}`}
+        >
           <div className="bg-[#ebf0f0] rounded-b-lg shadow-card px-4 py-2 flex items-center justify-between gap-4">
             <div className="flex items-center gap-4 text-caption">
               <span className="text-text-muted">{period.kind === 'event' ? 'Contributions' : 'Income'} <span className="font-bold text-text-heading">{formatCurrency(sessionIncome)}</span></span>
@@ -1331,7 +1345,7 @@ export default function PeriodDetailClient({
             </div>
           </div>
         </div>
-      )}
+      </div>
 
       {/* ─── Budget details: the numbers in one line; open for everything behind them ── */}
       <div ref={summaryCardsRef} className="rounded-lg border border-text-muted/25 bg-bg-white/50 px-6 py-3">
@@ -1531,6 +1545,8 @@ export default function PeriodDetailClient({
                         onToggleDeduction={(k) => handleToggleIncomeDeduction('manual', mi.id, mi.skip_deductions ?? [], k)}
                         removeLabel="Remove"
                         onRemove={() => handleRemoveManualIncome(mi.id)}
+                        onRename={(description) => handleEditManualIncome(mi.id, { description })}
+                        onAmount={(amount) => handleEditManualIncome(mi.id, { amount })}
                       />
                     ))}
                   </div>
@@ -2301,6 +2317,8 @@ function IncomeRow({
   onToggleDeduction,
   removeLabel,
   onRemove,
+  onRename,
+  onAmount,
 }: {
   name: string
   detail?: string | null
@@ -2314,12 +2332,29 @@ function IncomeRow({
   onToggleDeduction: (key: DeductionKey) => void
   removeLabel: string
   onRemove: () => void
+  // Manual income can be fixed in place; linked income is edited on Incoming Caashflow
+  onRename?: (name: string) => void
+  onAmount?: (amount: number) => void
 }) {
+  const editable = !disabled && !saving
   return (
     <div className="bg-[#ebf0f0] rounded-sm px-4 py-2.5">
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-caption font-bold text-text-heading truncate">{name}</span>
+          {onRename && editable ? (
+            <input
+              key={name}
+              defaultValue={name}
+              aria-label="Income name"
+              title="Tap to edit"
+              maxLength={140}
+              onBlur={(e) => { const t = e.target.value.trim(); if (t && t !== name) onRename(t); else e.target.value = name }}
+              onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { e.currentTarget.value = name; e.currentTarget.blur() } }}
+              className="min-w-0 w-48 max-w-full bg-transparent border-b border-dotted border-text-muted/50 hover:border-text-heading focus:bg-bg-white focus:border-solid focus:border-primary rounded-none px-0.5 text-caption font-bold text-text-heading focus:outline-none"
+            />
+          ) : (
+            <span className="text-caption font-bold text-text-heading truncate">{name}</span>
+          )}
           {detail && <span className="text-caption text-text-muted truncate">– {detail}</span>}
         </div>
         <div className="flex items-center gap-3 ml-auto">
@@ -2332,7 +2367,22 @@ function IncomeRow({
           >
             {INCOME_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
-          <span className="text-caption font-bold text-text-heading">{formatCurrency(amount)}</span>
+          {onAmount && editable ? (
+            <span className="inline-flex items-center text-caption font-bold text-text-heading">
+              $
+              <MathInput
+                key={amount}
+                defaultValue={amount.toFixed(2)}
+                aria-label="Income amount"
+                title="Tap to edit"
+                inputMode="decimal"
+                onChange={(v) => { if (Math.abs(v - amount) > 0.001 && v >= 0) onAmount(v) }}
+                className="w-24 bg-transparent border-b border-dotted border-text-muted/50 hover:border-text-heading focus:bg-bg-white focus:border-solid focus:border-primary rounded-none px-0.5 text-right text-caption font-bold text-text-heading tabular-nums focus:outline-none"
+              />
+            </span>
+          ) : (
+            <span className="text-caption font-bold text-text-heading">{formatCurrency(amount)}</span>
+          )}
           {saving ? (
             <span className="text-caption text-text-muted italic">Saving…</span>
           ) : !disabled && (
