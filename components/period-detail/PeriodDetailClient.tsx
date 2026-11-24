@@ -2954,8 +2954,9 @@ function ExpenseRow({
 
       {/* Sub-payment rows */}
       {expense.is_split &&
-        payments.map((p) => (
+        payments.map((p, i) => (
           <SubPaymentRow
+            position={i + 1}
             key={p.id}
             payment={p}
             parentExpenseId={expense.id}
@@ -3035,6 +3036,7 @@ function ExpenseRow({
 // ─── Sub-Payment Row ─────────────────────────────────────────────
 function SubPaymentRow({
   payment,
+  position,
   parentExpenseId,
   billTotal,
   parentAccount,
@@ -3051,6 +3053,8 @@ function SubPaymentRow({
   inputClass,
 }: {
   payment: PeriodExpensePayment
+  // Place in this session's list: automatic labels count from 1 in every session
+  position: number
   parentExpenseId: string
   // The whole bill, so typing 50% in the amount means half of it
   billTotal: number
@@ -3095,7 +3099,8 @@ function SubPaymentRow({
           <span className="text-[10px]">↳</span>
           <input
             type="text"
-            defaultValue={payment.label ?? ''}
+            key={`${payment.id}-${position}`}
+            defaultValue={!payment.label || /^Payment \d+$/.test(payment.label) ? `Payment ${position}` : payment.label}
             placeholder="Payment"
             disabled={locked}
             onChange={(e) => onPaymentField(payment.id, 'label', e.target.value)}
