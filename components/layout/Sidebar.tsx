@@ -68,7 +68,7 @@ export default function Sidebar({
           bg-white rounded-r-3xl shadow-md
 
           /* Desktop: floating cards below the header */
-          md:top-[120px] md:left-6 md:h-auto md:w-[184px]
+          md:top-[120px] md:left-6 md:h-auto md:w-max
           md:max-h-[calc(100vh-140px)]
           md:bg-transparent md:shadow-none md:rounded-none
 
@@ -139,7 +139,7 @@ export default function Sidebar({
           </li>
         </ul>
       </nav>
-      <HouseRules className="px-2 pb-4 border-t border-divider pt-3 mx-2 md:mx-0 md:border-t-0 md:py-3 md:bg-white md:rounded-3xl md:shadow-md" />
+      <HouseRules className="px-2 pb-4 border-t border-divider pt-3 mx-2 md:mx-0 md:w-0 md:min-w-full md:border-t-0 md:py-3 md:bg-white md:rounded-3xl md:shadow-md" />
       </div>
     </>
   )

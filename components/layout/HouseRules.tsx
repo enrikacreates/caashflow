@@ -16,8 +16,8 @@ export default function HouseRules({ className = '' }: { className?: string }) {
   const [draft, setDraft] = useState('')
   const [dragId, setDragId] = useState<string | null>(null)
   const listRef = useRef<HTMLOListElement>(null)
-  // Order when the drag started, so the save only happens when something moved
-  const dragStart = useRef<string[]>([])
+  // Saves run one after another, so two quick drags can't land out of order
+  const queue = useRef<Promise<unknown>>(Promise.resolve())
 
   useEffect(() => {
     let live = true
@@ -30,7 +30,9 @@ export default function HouseRules({ className = '' }: { className?: string }) {
   if (!rules) return null
 
   const save = async (work: () => Promise<unknown>, undo: HouseRule[]) => {
-    try { await work() }
+    const run = queue.current.then(work, work)
+    queue.current = run.catch(() => {})
+    try { await run }
     catch {
       setRules(undo)
       notifyError('Could not save that rule. Please try again.')
@@ -67,43 +69,48 @@ export default function HouseRules({ className = '' }: { className?: string }) {
     }
   }
 
-  // Pointer-based drag so it works with a mouse and a finger alike
+  // Pointer-based drag so it works with a mouse and a finger alike. The window follows the
+  // pointer rather than the grip: dragging down moves the grip's own element in the page,
+  // which would drop pointer capture and lose the release.
   const onGripDown = (e: React.PointerEvent, id: string) => {
-    if (id.startsWith('tmp-')) return
+    if (id.startsWith('tmp-') || dragId) return
     e.preventDefault()
-    e.currentTarget.setPointerCapture(e.pointerId)
-    dragStart.current = rules.map((r) => r.id)
+    const byId = new Map(rules.map((r) => [r.id, r]))
+    const startOrder = rules.map((r) => r.id)
+    let order = startOrder
     setDragId(id)
-  }
 
-  const onGripMove = (e: React.PointerEvent) => {
-    if (!dragId || !listRef.current) return
-    const items = [...listRef.current.querySelectorAll<HTMLElement>('[data-rule-id]')]
-    const over = items.findIndex((el) => {
-      const box = el.getBoundingClientRect()
-      return e.clientY < box.top + box.height / 2
-    })
-    // Insertion point in the current list; past the last midpoint means the very end
-    const target = over === -1 ? items.length : over
-    setRules((rs) => {
-      if (!rs) return rs
-      const from = rs.findIndex((r) => r.id === dragId)
+    const move = (ev: PointerEvent) => {
+      if (!listRef.current) return
+      const items = [...listRef.current.querySelectorAll<HTMLElement>('[data-rule-id]')]
+      const over = items.findIndex((el) => {
+        const box = el.getBoundingClientRect()
+        return ev.clientY < box.top + box.height / 2
+      })
+      // Insertion point in the current list; past the last midpoint means the very end
+      const target = over === -1 ? items.length : over
+      const from = order.indexOf(id)
       const to = target > from ? target - 1 : target
-      if (from === -1 || from === to) return rs
-      const next = [...rs]
-      const [moved] = next.splice(from, 1)
-      next.splice(to, 0, moved)
-      return next
-    })
-  }
+      if (from === -1 || from === to) return
+      const next = [...order]
+      next.splice(from, 1)
+      next.splice(to, 0, id)
+      order = next
+      setRules(next.map((rid) => byId.get(rid)!))
+    }
 
-  const onGripUp = () => {
-    if (!dragId) return
-    setDragId(null)
-    const ids = rules.map((r) => r.id)
-    if (ids.join() === dragStart.current.join()) return
-    const before = dragStart.current.map((id) => rules.find((r) => r.id === id)!).filter(Boolean)
-    save(() => reorderHouseRules(ids), before)
+    const up = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', up)
+      setDragId(null)
+      if (order.join() === startOrder.join()) return
+      save(() => reorderHouseRules(order), startOrder.map((rid) => byId.get(rid)!))
+    }
+
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', up)
   }
 
   return (
@@ -133,9 +140,6 @@ export default function HouseRules({ className = '' }: { className?: string }) {
               aria-label={`Drag to reorder ${rule.text}`}
               title="Drag to reorder"
               onPointerDown={(e) => onGripDown(e, rule.id)}
-              onPointerMove={onGripMove}
-              onPointerUp={onGripUp}
-              onPointerCancel={onGripUp}
               className="touch-none shrink-0 w-6 h-7 inline-flex items-center justify-center text-text-muted/40 hover:text-text-heading cursor-grab active:cursor-grabbing"
             >
               <GripVertical size={14} aria-hidden="true" />

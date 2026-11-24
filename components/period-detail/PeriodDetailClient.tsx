@@ -2320,15 +2320,31 @@ function ExpenseRow({
   return (
     <>
       <tr className={`transition-colors ${rowBg} ${settled ? 'opacity-60' : ''}`}>
-        {/* PayNow */}
-        <td className="text-center px-1.5 py-3">
-          <input
-            type="checkbox"
-            checked={expense.is_split ? splitPayNow : expense.pay_now}
-            onChange={(e) => onCheckboxChange(expense.id, 'pay_now', e.target.checked)}
-            disabled={expense.is_split || rowDisabled}
-            className="rounded"
-          />
+        {/* !! priority + PayNow: the leftmost, easiest spot to tap */}
+        <td className="px-1 py-3">
+          <div className="flex items-center justify-center gap-0.5">
+            {!rowDisabled && (
+              <button
+                type="button"
+                onClick={() => onToggleUrgent(expense.id, !isUrgent(expense))}
+                aria-pressed={isUrgent(expense)}
+                aria-label={isUrgent(expense) ? 'Remove priority' : 'Make this a priority'}
+                title={isUrgent(expense) ? 'Priority: stays at the top until paid. Tap to remove.' : 'Make this a priority: pins it to the top until paid'}
+                className={`w-7 h-7 shrink-0 inline-flex items-center justify-center rounded-full text-[13px] font-black leading-none tracking-tighter transition-colors ${
+                  isUrgent(expense) ? 'text-urgent bg-urgent/10' : 'text-text-muted/35 hover:text-urgent hover:bg-urgent/10'
+                }`}
+              >
+                !!
+              </button>
+            )}
+            <input
+              type="checkbox"
+              checked={expense.is_split ? splitPayNow : expense.pay_now}
+              onChange={(e) => onCheckboxChange(expense.id, 'pay_now', e.target.checked)}
+              disabled={expense.is_split || rowDisabled}
+              className="rounded"
+            />
+          </div>
         </td>
 
         {/* Name */}
@@ -2346,20 +2362,6 @@ function ExpenseRow({
             </button>
           )}
           <span className="inline-flex items-center gap-1 flex-wrap">
-            {!rowDisabled && (
-              <button
-                type="button"
-                onClick={() => onToggleUrgent(expense.id, !isUrgent(expense))}
-                aria-pressed={isUrgent(expense)}
-                aria-label={isUrgent(expense) ? 'Remove priority' : 'Make this a priority'}
-                title={isUrgent(expense) ? 'Priority: stays at the top until paid. Tap to remove.' : 'Make this a priority: pins it to the top until paid'}
-                className={`-my-1 -ml-1 w-7 h-7 shrink-0 inline-flex items-center justify-center rounded-full text-[13px] font-black leading-none tracking-tighter transition-colors ${
-                  isUrgent(expense) ? 'text-urgent bg-urgent/10' : 'text-text-muted/35 hover:text-urgent hover:bg-urgent/10'
-                }`}
-              >
-                !!
-              </button>
-            )}
             {expense.is_overdue && <span title="Overdue — carried from a prior period">🚩</span>}
             {onEdit && !rowDisabled ? (
               <button
