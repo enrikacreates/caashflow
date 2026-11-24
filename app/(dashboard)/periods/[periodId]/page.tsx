@@ -29,11 +29,11 @@ export default async function PeriodDetailPage({
       <div className="flex items-start justify-between gap-4">
         <div>
           <PeriodPicker current={detail.period} periods={allPeriods ?? []} />
-          <p className="text-caption text-text-muted mt-1">
-            {detail.period.kind === 'event'
-              ? 'Track contributions and expenses for this event — isolated from your monthly budget rollups.'
-              : 'Manage income, deductions, and expenses for this period'}
-          </p>
+          {detail.period.kind === 'event' && (
+            <p className="text-caption text-text-muted mt-1">
+              Track contributions and expenses for this event, kept apart from your monthly budget totals.
+            </p>
+          )}
         </div>
         <NewBudgetButton />
       </div>

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { formatCurrency } from '@/lib/utils'
 
 /**
@@ -22,6 +23,8 @@ export default function BudgetSummaryBar({
   bare = false,
   isEvent = false,
   showToBudget,
+  amountLeftAction,
+  quiet = false,
 }: {
   income: number
   toBudget: number
@@ -37,6 +40,10 @@ export default function BudgetSummaryBar({
   // Whether to show the "To Budget" (after-deductions) column. Defaults to !isEvent,
   // but an event with deductions opted in passes true to surface it.
   showToBudget?: boolean
+  // Shown under Amount Left: the budget page puts Auto Fill here, since that's the money it spends
+  amountLeftAction?: ReactNode
+  // Still-to-fund as one plain line instead of a tinted band
+  quiet?: boolean
 }) {
   const leftToPay = Math.max(0, payNow - paid)
   const showTB = showToBudget ?? !isEvent
@@ -71,9 +78,17 @@ export default function BudgetSummaryBar({
           <div className={`font-bold whitespace-nowrap leading-tight text-[clamp(0.78rem,15cqi,1.5rem)] ${amountLeft >= 0 ? 'text-success' : 'text-warning'}`}>
             {formatCurrency(amountLeft)}
           </div>
+          {amountLeftAction && <div className="mt-2">{amountLeftAction}</div>}
         </div>
       </div>
-      {totalExpenses > 0 && (
+      {totalExpenses > 0 && quiet && (
+        <p className="mt-3 pt-3 border-t border-border/60 text-caption text-text-muted">
+          {stillToFund > 0
+            ? <>Still to fund <span className="font-bold text-warning">{formatCurrency(stillToFund)}</span> of {formatCurrency(totalExpenses)} expenses</>
+            : <span className="font-bold text-success">All expenses funded</span>}
+        </p>
+      )}
+      {totalExpenses > 0 && !quiet && (
         <div className={`mt-4 rounded-md px-3 py-2.5 flex items-center justify-between ${stillToFund > 0 ? 'bg-warning/10' : 'bg-success/10'}`}>
           <div>
             <span className="text-caption font-bold uppercase tracking-wide text-text-muted">

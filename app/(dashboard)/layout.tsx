@@ -2,12 +2,13 @@
 
 import { useRef, useState } from 'react'
 import Link from 'next/link'
-import { Menu, Settings2, LogOut } from 'lucide-react'
+import { Menu, Settings2, LogOut, PanelLeftOpen } from 'lucide-react'
 import Sidebar from '@/components/layout/Sidebar'
 import HeaderAvatar from '@/components/layout/HeaderAvatar'
 import HeaderStats from '@/components/layout/HeaderStats'
 import ToastHost from '@/components/ui/ToastHost'
 import RoundUpPill from '@/components/ui/RoundUpPill'
+import UndoButton from '@/components/ui/UndoButton'
 import Breadcrumbs from '@/components/layout/Breadcrumbs'
 import { RESTORE_CHROME_SCRIPT, resetChromeAway, useAutoHideChrome } from '@/components/layout/useAutoHideChrome'
 import { signOut } from '@/app/actions/auth'
@@ -29,9 +30,19 @@ export default function DashboardLayout({
   const rootRef = useRef<HTMLDivElement>(null)
   useAutoHideChrome(rootRef)
 
+  // Hide or show the desktop side menu; remembered on this device and restored before paint
+  const setSideHidden = (hidden: boolean) => {
+    const root = rootRef.current
+    if (!root) return
+    if (hidden) root.dataset.side = 'collapsed'
+    else delete root.dataset.side
+    try { localStorage.setItem('caashflow:side', hidden ? 'collapsed' : 'open') } catch {}
+  }
+
   return (
     <div ref={rootRef} suppressHydrationWarning className="min-h-screen bg-bg-cream flex flex-col overflow-clip">
       <script dangerouslySetInnerHTML={{ __html: RESTORE_CHROME_SCRIPT }} />
+      <script dangerouslySetInnerHTML={{ __html: `try{if(localStorage.getItem('caashflow:side')==='collapsed')document.currentScript.parentElement.dataset.side='collapsed'}catch(e){}` }} />
       {/* ── Header band — off-white bg ────────────────── */}
       <header className="chrome-top sticky top-0 z-30 bg-white flex items-center justify-between px-6 md:px-10 h-[72px] md:h-[84px]">
         {/* Big logo */}
@@ -120,7 +131,19 @@ export default function DashboardLayout({
       <Sidebar
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        onHide={() => setSideHidden(true)}
       />
+
+      {/* Brings the hidden side menu back (desktop) */}
+      <button
+        type="button"
+        onClick={() => setSideHidden(false)}
+        aria-label="Show menu"
+        title="Show menu"
+        className="side-open fixed left-6 z-30 w-10 h-10 items-center justify-center rounded-full bg-white shadow-card text-text-muted hover:text-text-heading transition-colors"
+      >
+        <PanelLeftOpen size={18} strokeWidth={1.75} aria-hidden="true" />
+      </button>
 
       {/* Main content — offset for floating nav on desktop; grows to push footer flush to bottom */}
       <main className="chrome-main flex-1 px-6 pt-10 pb-[136px] md:pl-[220px] md:pr-10 md:pt-14 md:pb-[152px]">
@@ -187,6 +210,7 @@ export default function DashboardLayout({
           </div>
         </footer>
       </div>
+      <UndoButton />
       <ToastHost />
       <RoundUpPill />
     </div>

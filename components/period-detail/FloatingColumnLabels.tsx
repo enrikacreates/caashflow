@@ -42,7 +42,9 @@ export default function FloatingColumnLabels({ boxRef }: { boxRef: React.RefObje
       const bar = document.querySelector('.under-chrome')
       const top = bar ? Math.max(0, bar.getBoundingClientRect().bottom) : 0
       const boxRect = box.getBoundingClientRect()
-      const headRect = thead.getBoundingClientRect()
+      // Measure a title cell, not the header row: the cells stick to the top of the table's
+      // own scroll box, while the row itself scrolls away inside it
+      const headRect = ths[0].getBoundingClientRect()
       const hidden = headRect.top < top - 1
       // Only while some of the table's rows are still on screen below the bar
       const rowsShowing = boxRect.bottom > top + headRect.height + 24
@@ -71,14 +73,14 @@ export default function FloatingColumnLabels({ boxRef }: { boxRef: React.RefObje
     const schedule = () => { if (!frame) frame = requestAnimationFrame(measure) }
 
     schedule()
-    window.addEventListener('scroll', schedule, { passive: true })
+    window.addEventListener('scroll', schedule, { passive: true, capture: true })
     window.addEventListener('resize', schedule)
     box.addEventListener('scroll', schedule, { passive: true })
     const observer = new ResizeObserver(schedule)
     observer.observe(box)
     return () => {
       if (frame) cancelAnimationFrame(frame)
-      window.removeEventListener('scroll', schedule)
+      window.removeEventListener('scroll', schedule, { capture: true })
       window.removeEventListener('resize', schedule)
       box.removeEventListener('scroll', schedule)
       observer.disconnect()
@@ -96,7 +98,7 @@ export default function FloatingColumnLabels({ boxRef }: { boxRef: React.RefObje
     <div
       aria-hidden="true"
       className="fixed z-30 overflow-hidden bg-bg-white border-b border-[#e9e9e9] shadow-[0_2px_4px_rgba(0,0,0,0.05)] rounded-b-lg"
-      style={{ top: layout.top, left: layout.left, width: layout.width, height: 40 }}
+      style={{ top: layout.top, left: layout.left, width: layout.width, height: 30 }}
     >
       <div className="relative h-full" style={{ transform: `translateX(${-layout.scrollLeft}px)` }}>
         {layout.labels.map((label, i) => (
@@ -106,7 +108,7 @@ export default function FloatingColumnLabels({ boxRef }: { boxRef: React.RefObje
             tabIndex={-1}
             title={label.title ?? undefined}
             onClick={() => sortBy(i)}
-            className="absolute top-0 h-full px-1.5 flex items-center text-caption font-bold uppercase text-text-muted whitespace-nowrap hover:text-text-heading"
+            className="absolute top-0 h-full px-1.5 flex items-center text-[11px] font-bold uppercase text-text-muted whitespace-nowrap hover:text-text-heading"
             style={{
               left: label.left,
               width: label.width,

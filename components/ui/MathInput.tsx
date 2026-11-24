@@ -21,10 +21,12 @@ export interface MathInputProps extends Omit<React.InputHTMLAttributes<HTMLInput
   onRawChange?: (raw: string) => void
   /** Max decimal places kept after eval (default 2). */
   decimals?: number
+  /** When set, typing "50%" resolves to that share of this total. */
+  percentOf?: number
 }
 
 const MathInput = forwardRef<HTMLInputElement, MathInputProps>(function MathInput(
-  { value, defaultValue, onChange, onRawChange, decimals = 2, onBlur, onKeyDown, ...rest },
+  { value, defaultValue, onChange, onRawChange, decimals = 2, percentOf, onBlur, onKeyDown, ...rest },
   ref,
 ) {
   // Local display string — what the user is typing right now.
@@ -47,7 +49,8 @@ const MathInput = forwardRef<HTMLInputElement, MathInputProps>(function MathInpu
 
   const id = useId()
   const commit = () => {
-    const n = evalMath(raw)
+    const pct = percentOf != null ? /^\s*(\d+(?:\.\d+)?)\s*%\s*$/.exec(raw) : null
+    const n = pct ? (percentOf! * parseFloat(pct[1])) / 100 : evalMath(raw)
     if (n == null) {
       // Restore last committed value if the field is empty or malformed
       setRaw(lastCommittedRef.current)

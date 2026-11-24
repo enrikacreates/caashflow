@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useTransition } from 'react'
+import { useEffect, useState, useRef, useTransition } from 'react'
 import { upsertSavingsAllocation, applySavingsAllocations, removeSavingsAllocation } from '@/app/actions/period-savings'
 import { smallConfetti, bigConfetti } from '@/lib/confetti'
 import { formatCurrency } from '@/lib/utils'
@@ -85,6 +85,21 @@ export default function SavingsAllocationSection({
   const { totalAllocated, hasPendingDeltas } = calculateAllocationTotals(localAllocations)
   const unallocated = savingsPool - totalAllocated
   const isOverAllocated = totalAllocated > savingsPool
+  const fullyAllocated = savingsPool > 0 && Math.abs(unallocated) < 0.005
+
+  // Once the pool is fully allocated there's nothing to do here: open the budget with it closed
+  const autoClosed = useRef(false)
+  useEffect(() => {
+    if (autoClosed.current) return
+    autoClosed.current = true
+    if (fullyAllocated && open) onToggleOpen()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Closed card: a plain text list of what each goal is getting
+  const allocatedGoals = orderedGoals
+    .map((g) => ({ name: g.name, amount: localAmounts[g.id] ?? 0 }))
+    .filter((g) => g.amount > 0)
 
   // Pool bar color
   const poolRatio = savingsPool > 0 ? totalAllocated / savingsPool : 0
@@ -176,10 +191,10 @@ export default function SavingsAllocationSection({
   // ─── Render ──────────────────────────────────────────────────
 
   return (
-    <div className="bg-bg-white rounded-lg shadow-card p-6">
+    <div className={`${open ? 'bg-bg-white rounded-lg shadow-card p-6' : 'px-1 py-2.5 border-b border-text-muted/25 section-closed [&:has(+.section-closed)]:!mb-0'}`}>
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-h3 font-bold text-text-heading">
+      <div className={`flex items-center justify-between gap-x-4 gap-y-1 flex-wrap ${open ? 'mb-4' : ''}`}>
+        <h2 className={`${open ? 'text-h3' : 'text-label'} font-bold text-text-heading shrink-0`}>
           <button type="button" onClick={onToggleOpen} className="inline-flex items-center gap-2 hover:text-primary transition-colors">
             <span className="text-text-muted text-base leading-none">{open ? '▾' : '▸'}</span>
             Savings Allocation
@@ -194,7 +209,16 @@ export default function SavingsAllocationSection({
           Contribute
         </button>
         ) : (
-          <span className="text-caption text-text-muted">{formatCurrency(totalAllocated)} allocated of {formatCurrency(savingsPool)}</span>
+          <p className="flex-1 min-w-0 flex flex-wrap items-center justify-end gap-x-3 gap-y-0.5 text-caption text-text-muted">
+            {allocatedGoals.map((g) => (
+              <span key={g.name} className="whitespace-nowrap">
+                {g.name} <span className="font-bold text-text-heading">{formatCurrency(g.amount)}</span>
+              </span>
+            ))}
+            <span className={`whitespace-nowrap ${fullyAllocated ? 'text-success' : ''}`}>
+              {fullyAllocated ? '✓ ' : ''}{formatCurrency(totalAllocated)} of {formatCurrency(savingsPool)}
+            </span>
+          </p>
         )}
       </div>
       {open && (<>

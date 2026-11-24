@@ -12,6 +12,7 @@ import {
   X,
   Settings2,
   LogOut,
+  PanelLeftClose,
 } from 'lucide-react'
 import { signOut } from '@/app/actions/auth'
 import { resetChromeAway } from '@/components/layout/useAutoHideChrome'
@@ -35,9 +36,12 @@ const NAV_ITEMS = [
 export default function Sidebar({
   open,
   onClose,
+  onHide,
 }: {
   open: boolean
   onClose: () => void
+  // Desktop: tuck the menu and House Rules away for more room
+  onHide?: () => void
 }) {
   const pathname = usePathname()
 
@@ -60,7 +64,7 @@ export default function Sidebar({
           Desktop: two separate cards on the ground, the rules under the menu. */}
       <div
         className={`
-          fixed z-50 flex flex-col gap-4
+          chrome-side fixed z-50 flex flex-col gap-4
           transition-all duration-200
 
           /* Mobile: full slide-in panel */
@@ -76,7 +80,18 @@ export default function Sidebar({
           ${open ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
         `}
       >
-      <nav className="px-2 py-3 md:bg-white md:rounded-3xl md:shadow-md">
+      <nav className="relative px-2 py-3 md:bg-white md:rounded-3xl md:shadow-md">
+        {onHide && (
+          <button
+            type="button"
+            onClick={onHide}
+            aria-label="Hide menu"
+            title="Hide menu for more room"
+            className="hidden md:flex absolute -bottom-3.5 right-3 z-10 w-7 h-7 items-center justify-center rounded-full bg-white shadow-card text-text-muted hover:text-text-heading transition-colors"
+          >
+            <PanelLeftClose size={14} strokeWidth={1.75} aria-hidden="true" />
+          </button>
+        )}
         {/* Mobile close button */}
         <div className="flex justify-end px-2 pb-2 md:hidden">
           <button

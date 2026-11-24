@@ -412,6 +412,32 @@ body:has(input:is([type="number"], [inputmode="decimal"]):focus) .footer-art {
   padding-top: 8px;
   padding-bottom: 32px;
 }
+/* Side menu hidden (desktop): the menu and House Rules tuck away, the page takes the width,
+   and a small Menu button stays in their place to bring them back. Phones keep the drawer. */
+.side-open {
+  display: none;
+  top: 120px;
+  transition: top 300ms ease;
+}
+/* Once the header slides away it sits just under the home mark */
+[data-chrome="hidden"] .side-open {
+  top: 64px;
+}
+@media (min-width: 768px) {
+  [data-side="collapsed"] .chrome-side {
+    display: none;
+  }
+  [data-side="collapsed"] .chrome-main {
+    padding-left: 88px;
+  }
+  [data-side="collapsed"] .chrome-main > div {
+    max-width: 64rem;
+  }
+  [data-side="collapsed"] .side-open {
+    display: inline-flex;
+  }
+}
+
 /* The phone menu button loses the header it sat on, so it moves up beside the breadcrumb */
 [data-chrome="hidden"] .chrome-menu {
   top: 8px;
@@ -443,12 +469,26 @@ body:has(input:is([type="number"], [inputmode="decimal"]):focus) .footer-art {
 [data-chrome="hidden"] .under-chrome {
   top: 57px;
 }
+/* Corner Undo: under the header while it shows, then up in the corner like the home mark */
+.chrome-undo {
+  top: 96px;
+  transition: top 300ms ease;
+}
+@media (min-width: 768px) {
+  .chrome-undo {
+    top: 108px;
+  }
+}
+[data-chrome="hidden"] .chrome-undo {
+  top: 12px;
+}
 @media (prefers-reduced-motion: reduce) {
   .chrome-top,
   .chrome-main,
   .chrome-bottom,
   .footer-art,
-  .under-chrome {
+  .under-chrome,
+  .chrome-undo {
     transition: none;
   }
 }

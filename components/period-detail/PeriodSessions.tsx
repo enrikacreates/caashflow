@@ -1,7 +1,7 @@
 'use client'
 
-import { useOptimistic, useState, useTransition } from 'react'
-import { CheckCheck, Pencil, Plus } from 'lucide-react'
+import { useEffect, useOptimistic, useRef, useState, useTransition } from 'react'
+import { CalendarDays, CheckCheck, ChevronDown, Pencil, Plus, Trash2 } from 'lucide-react'
 import PeriodDetailClient from '@/components/period-detail/PeriodDetailClient'
 import MonthOverview from '@/components/period-detail/MonthOverview'
 import { closeOutAndStartSession, startNewSession, updateSession, removeEmptySession } from '@/app/actions/sessions'
@@ -83,6 +83,18 @@ export default function PeriodSessions(props: Props) {
 
 
   const [editing, setEditing] = useState(false)
+  // Session actions live in one small menu at the end of the tab row
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!menuOpen) return
+    const close = (e: PointerEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent ? e.key === 'Escape' : !menuRef.current?.contains(e.target as Node)) setMenuOpen(false)
+    }
+    window.addEventListener('pointerdown', close)
+    window.addEventListener('keydown', close)
+    return () => { window.removeEventListener('pointerdown', close); window.removeEventListener('keydown', close) }
+  }, [menuOpen])
   const [draftName, setDraftName] = useState('')
   const [draftDate, setDraftDate] = useState('')
 
@@ -175,7 +187,9 @@ export default function PeriodSessions(props: Props) {
     <div className="space-y-6">
       {/* ─── Session tabs ─────────────────────────────────────── */}
       <div className="space-y-2">
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1" role="tablist" aria-label="Budget sessions">
+        <div className="flex items-center gap-2">
+        {/* Tabs scroll sideways on narrow screens; the Session menu stays put beside them */}
+        <div className="flex flex-1 min-w-0 items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1" role="tablist" aria-label="Budget sessions">
           {sessions.map((s) => (
             <button
               key={s.id}
@@ -188,67 +202,56 @@ export default function PeriodSessions(props: Props) {
               {sessionLabel(s)}
             </button>
           ))}
+          <span className="w-px h-5 bg-border shrink-0 mx-1" aria-hidden="true" />
           <button
             type="button"
             role="tab"
             aria-selected={tab === 'month'}
             onClick={() => { setTab('month'); setEditing(false) }}
-            className={tabClass(tab === 'month')}
+            title="The whole month: every session, every bill, and what was set aside"
+            className={`${tabClass(tab === 'month')} inline-flex items-center gap-1.5`}
           >
-            Month
+            <CalendarDays size={14} aria-hidden="true" /> Month total
           </button>
+        </div>
           {!isLocked && (
-            <button
-              type="button"
-              onClick={() => handleStartSession(true)}
-              disabled={isSaving(newest)}
-              title="Mark every bill checked to Pay as paid and cleared, then start a new $0 session"
-              className="shrink-0 inline-flex items-center gap-1 rounded-full bg-primary-teal text-white px-3 py-1.5 text-caption font-bold hover:bg-primary-teal/90 disabled:opacity-50 transition-colors"
-            >
-              <CheckCheck size={14} /> Close out &amp; start fresh
-            </button>
-          )}
-          {!isLocked && (
-            <button
-              type="button"
-              onClick={() => handleStartSession()}
-              disabled={isSaving(newest)}
-              title="Start a new session when new money lands, without settling anything"
-              className="shrink-0 inline-flex items-center gap-1 rounded-full border border-dashed border-primary-teal text-primary-teal px-3 py-1.5 text-caption font-bold hover:bg-primary-teal/10 disabled:opacity-50 transition-colors"
-            >
-              <Plus size={14} /> New session
-            </button>
+            <div ref={menuRef} className="relative shrink-0 pb-1">
+              <button
+                type="button"
+                onClick={() => setMenuOpen((o) => !o)}
+                disabled={isSaving(newest)}
+                aria-expanded={menuOpen}
+                aria-haspopup="menu"
+                title={active ? (active.id === newest.id ? 'Newest session: bills you check to Pay are funded from this income' : 'Earlier session: clear its bills here as they go through') : 'Session actions'}
+                className="inline-flex items-center gap-1 rounded-full bg-bg-white shadow-card px-3.5 py-1.5 text-caption font-bold text-text-heading hover:text-primary disabled:opacity-50 transition-colors"
+              >
+                Session <ChevronDown size={14} className={`transition-transform ${menuOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
+              </button>
+              {menuOpen && (
+                <div role="menu" className="absolute right-0 top-full mt-2 z-40 w-72 bg-bg-white rounded-lg shadow-lg p-1.5">
+                  {([
+                    { key: 'close', icon: <CheckCheck size={14} className="text-primary-teal" />, label: 'Close out & start fresh', note: 'Mark bills checked to Pay as paid and cleared, then start a new $0 session', run: () => handleStartSession(true) },
+                    { key: 'new', icon: <Plus size={14} className="text-primary-teal" />, label: 'New session', note: 'Start a new session for new money, without settling anything', run: () => handleStartSession() },
+                    active && { key: 'rename', icon: <Pencil size={13} className="text-text-muted" />, label: `Rename ${sessionLabel(active)}`, note: 'Change its name or date', run: () => openEditor(active) },
+                    active && active.id === newest.id && newestIsEmpty && { key: 'remove', icon: <Trash2 size={13} className="text-warning" />, label: 'Remove this session', note: 'Only while it has no income or funded bills', run: () => handleRemoveSession(active) },
+                  ].filter(Boolean) as { key: string; icon: React.ReactNode; label: string; note: string; run: () => void }[]).map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      role="menuitem"
+                      onClick={() => { setMenuOpen(false); item.run() }}
+                      className="w-full text-left rounded-md px-3 py-2 hover:bg-surface-beige/60 transition-colors"
+                    >
+                      <span className="flex items-center gap-1.5 text-caption font-bold text-text-heading">{item.icon}{item.label}</span>
+                      <span className="block text-[11px] text-text-muted leading-snug">{item.note}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </div>
 
-        {/* Active session: name/date editor */}
-        {active && !editing && !isSaving(active) && (
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-text-muted">
-            <span>
-              {active.id === newest.id
-                ? 'Newest session. Bills you check to Pay are funded from this income.'
-                : 'Earlier session. Clear its bills here as they go through.'}
-            </span>
-            {!isLocked && (
-              <button
-                type="button"
-                onClick={() => openEditor(active)}
-                className="inline-flex items-center gap-1 font-semibold text-primary hover:underline"
-              >
-                <Pencil size={12} /> Rename
-              </button>
-            )}
-            {!isLocked && active.id === newest.id && newestIsEmpty && (
-              <button
-                type="button"
-                onClick={() => handleRemoveSession(active)}
-                className="font-semibold text-warning hover:underline"
-              >
-                Remove session
-              </button>
-            )}
-          </div>
-        )}
         {active && editing && (
           <form
             onSubmit={(e) => { e.preventDefault(); handleSaveSession(active) }}

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { subscribeToasts, type Toast } from '@/lib/toast'
+import { dismissToast, subscribeToasts, type Toast } from '@/lib/toast'
 
 /**
  * Renders the toast stack in the bottom-right of the viewport. Mount once,
@@ -27,6 +27,15 @@ export default function ToastHost() {
           }`}
         >
           {t.message}
+          {t.action && (
+            <button
+              type="button"
+              onClick={() => { t.action!.run(); dismissToast(t.id) }}
+              className="ml-3 underline underline-offset-2 font-bold hover:text-white/80"
+            >
+              {t.action.label}
+            </button>
+          )}
         </div>
       ))}
     </div>

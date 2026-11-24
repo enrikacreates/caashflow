@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useCallback, useRef, useEffect, useOptimistic } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronsDownUp, ChevronsUpDown, Pencil, Camera, Eye, EyeOff } from 'lucide-react'
+import { ChevronsDownUp, ChevronsUpDown, Pencil, Camera, Eye, EyeOff, Search, X, ChevronDown } from 'lucide-react'
 import {
   updateExpenseField,
   setPayNowMany,
@@ -40,7 +40,7 @@ import {
   setDeductionCash,
 } from '@/app/actions/period-expenses'
 import { smallConfetti, bigConfetti } from '@/lib/confetti'
-import { notifyError } from '@/lib/toast'
+import { notifyError, notifyUndo } from '@/lib/toast'
 import { formatCurrency, formatDate, getOwedAmount, getPriorityPill } from '@/lib/utils'
 import BudgetSummaryBar from '@/components/dashboard/BudgetSummaryBar'
 import { calculateDeductions, getDeductionBases, DEDUCTION_KEYS, calculatePayNowTotal, calculateAccountTransferDetail, getDeductionAccountAllocations, getBudgetedAmount, isFullyPaid, calculatePeriodPaymentSummary, getSpentSoFar } from '@/lib/calculations'
@@ -102,7 +102,7 @@ function priorityCode(name: string): string {
 }
 
 // Collapsible period sections, in render order — drives the Expand/Collapse-all toggle
-const SECTION_KEYS = ['transfers', 'income', 'deductions', 'savings', 'expenses', 'extra'] as const
+const SECTION_KEYS = ['summary', 'transfers', 'income', 'deductions', 'savings', 'expenses', 'extra'] as const
 
 const DEDUCTION_LABELS: Record<DeductionKey, string> = {
   tithe: 'Tithe', savings: 'Savings', tax: 'Tax', profit: 'Profit', fun_money: 'Giving',
@@ -166,6 +166,20 @@ export default function PeriodDetailClient({
   const [sortKey, setSortKey] = useState<SortKey>('priority_category')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [expenseSearch, setExpenseSearch] = useState('')
+  // Search sits behind an icon until it's in use, to give the table more room
+  const [searchOpen, setSearchOpen] = useState(false)
+  // Fill / Fund all / Clear all live in one small menu
+  const [actionsOpen, setActionsOpen] = useState(false)
+  const actionsRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!actionsOpen) return
+    const close = (e: PointerEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent ? e.key === 'Escape' : !actionsRef.current?.contains(e.target as Node)) setActionsOpen(false)
+    }
+    window.addEventListener('pointerdown', close)
+    window.addEventListener('keydown', close)
+    return () => { window.removeEventListener('pointerdown', close); window.removeEventListener('keydown', close) }
+  }, [actionsOpen])
   // Fill: order to fill by (remembered on this device), and what the last fill did
   const [fillBy, setFillBy] = useState<FillBy>('mine')
   // Read the saved choice after load, so the server and first paint agree
@@ -189,7 +203,15 @@ export default function PeriodDetailClient({
   // Open an expense's editor jumped straight to the Move funds section (used by the overage prompt).
   const openMoveFunds = (expense: PeriodExpense) => { setEditFocusMove(true); setEditExpense(expense) }
   // Collapsible sections — open by default; a key set true means collapsed.
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  const extraCount = expenses.filter((e) => e.base_item_id === null).length
+  // Everything but Expenses starts closed: land on the numbers and the bills
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => ({ summary: true, transfers: true, income: true, deductions: true, savings: true, extra: true }))
+  // …and opens on its own when the first one arrives
+  const hadExtra = useRef(extraCount > 0)
+  useEffect(() => {
+    if (extraCount > 0 && !hadExtra.current) setCollapsed((c) => ({ ...c, extra: false }))
+    hadExtra.current = extraCount > 0
+  }, [extraCount])
   // Event focus mode: hide the inherited baseline Expenses table by default. Click
   // the eye to reveal it (useful when an event was converted from a monthly budget
   // and you still want occasional access to the baseline bills).
@@ -218,7 +240,7 @@ export default function PeriodDetailClient({
       u:
         | { kind: 'field'; id: string; field: string; value: boolean | number | null }
         | { kind: 'patch'; id: string; patch: Partial<PeriodExpense> }
-        | { kind: 'payment'; id: string; field: string; value: boolean }
+        | { kind: 'payment'; id: string; field: string; value: boolean | number }
         | { kind: 'remove'; id: string }
         | { kind: 'add'; expense: PeriodExpense }
         | { kind: 'addPayment'; expenseId: string; payment: PeriodExpensePayment }
@@ -561,7 +583,12 @@ export default function PeriodDetailClient({
 
   // Paid = "funded" (money set aside → enters the spend-tracking phase). It no longer books the
   // full amount; spend is booked as it's logged, and Clear is what counts as paid in the roundup.
-  const handleCheckboxChange = (expenseId: string, field: string, value: boolean) => {
+  const handleCheckboxChange = (expenseId: string, field: string, value: boolean, offerUndo = true) => {
+    const name = optExpenses.find((e) => e.id === expenseId)?.name ?? 'Bill'
+    if (offerUndo && (field === 'pay_now' || field === 'paid')) {
+      const what = field === 'pay_now' ? (value ? 'checked to Pay' : 'unchecked from Pay') : (value ? 'marked funded' : 'unmarked funded')
+      notifyUndo(`${name} ${what}.`, () => handleCheckboxChange(expenseId, field, !value, false))
+    }
     startTransition(async () => {
       applyExpenseOpt({ kind: 'field', id: expenseId, field, value })
       if (field === 'paid') {
@@ -855,8 +882,14 @@ export default function PeriodDetailClient({
   }
 
   // ─── Split / sub-payments / complete ─────────────────────────
-  const handleToggleSplit = (id: string, value: boolean) =>
-    startTransition(async () => {
+  const handleToggleSplit = (id: string, value: boolean, offerUndo = true) => {
+    const target = optExpenses.find((e) => e.id === id)
+    if (!value && offerUndo && target) {
+      const moved = (target.payments ?? []).filter((p) => p.paid || p.cleared || p.pay_now)
+      if (moved.length > 0 && !confirm(`Unsplit ${target.name}?\n\n${moved.length === 1 ? 'One payment is' : `${moved.length} payments are`} already funded or paid. Unsplitting treats it as one bill again, which can change what this check has funded.`)) return
+    }
+    if (offerUndo && target) notifyUndo(`${target.name} ${value ? 'split' : 'unsplit'}.`, () => handleToggleSplit(id, !value, false))
+    return startTransition(async () => {
       // Show the split the server will make right away: Payment 1 keeps this line's amount and
       // funded state, Payment 2 holds the rest of a trimmed bill. Otherwise the line would read
       // as $0 budgeted until the save lands, briefly freeing its money.
@@ -890,11 +923,19 @@ export default function PeriodDetailClient({
       try { await toggleExpenseSplit(id, period.id, value) }
       catch { notifyError() }
     })
+  }
 
   // "Clear" is the terminal settle: the money has cleared the account → counts as paid in the
   // roundup, tops the line up to its funded amount, drops it from the live balance + seals it.
-  const handleToggleCleared = (id: string, value: boolean) => {
+  const handleToggleCleared = (id: string, value: boolean, offerUndo = true) => {
     const exp = optExpenses.find((e) => e.id === id)
+    if (offerUndo && exp) {
+      const wasPayNow = exp.pay_now
+      notifyUndo(`${exp.name} ${value ? 'cleared' : 'reopened'}.`, () => {
+        handleToggleCleared(id, !value, false)
+        if (value && wasPayNow) handleCheckboxChange(id, 'pay_now', true, false)
+      })
+    }
     const funded = exp ? (exp.amount_override ?? exp.default_amount) : 0
     const ledger = (exp?.adjustments ?? []).reduce((s, a) => s + (a.amount || 0), 0)
     startTransition(async () => {
@@ -969,6 +1010,43 @@ export default function PeriodDetailClient({
     })
   }
 
+  // Split a bill evenly into n payments. Payments already funded, paid or cleared keep their
+  // amounts; the rest of the bill is shared across the others, adding or trimming open ones.
+  const handleSplitEvenly = (id: string, n: number) => {
+    const line = optExpenses.find((e) => e.id === id)
+    if (!line) return
+    const total = Math.max(line.default_amount, line.amount_override ?? 0)
+    const payments = [...(line.payments ?? [])].sort((a, b) => a.sort_order - b.sort_order)
+    const locked = payments.filter((p) => p.paid || p.cleared || p.pay_now)
+    const open = payments.filter((p) => !(p.paid || p.cleared || p.pay_now))
+    const slots = Math.max(1, n - locked.length)
+    const rest = Math.max(0, total - locked.reduce((sum, p) => sum + p.amount, 0))
+    const each = Math.floor((rest / slots) * 100) / 100
+    const amounts = Array.from({ length: slots }, (_, i) => (i === slots - 1 ? Math.round((rest - each * (slots - 1)) * 100) / 100 : each))
+    const keep = open.slice(0, slots)
+    const extra = open.slice(slots).filter((p) => (p.paid_amount ?? 0) === 0)
+    const now = new Date(0).toISOString()
+    startTransition(async () => {
+      keep.forEach((p, i) => applyExpenseOpt({ kind: 'payment', id: p.id, field: 'amount', value: amounts[i] }))
+      extra.forEach((p) => applyExpenseOpt({ kind: 'removePayment', paymentId: p.id }))
+      const toAdd = amounts.slice(keep.length)
+      toAdd.forEach((amount, i) => applyExpenseOpt({
+        kind: 'addPayment',
+        expenseId: id,
+        payment: {
+          id: `tmp-even-${id}-${i}`, team_id: period.team_id, period_expense_id: id, session_id: null,
+          label: `Payment ${payments.length + i + 1}`, amount, due_day: null, pay_now: false, transferred: false,
+          paid: false, cleared: false, paid_amount: 0, sort_order: payments.length + i, created_at: now, updated_at: now, adjustments: [],
+        },
+      }))
+      try {
+        await Promise.all(keep.map((p, i) => updateExpensePayment(p.id, period.id, { amount: amounts[i] })))
+        for (const p of extra) await removeExpensePayment(p.id, period.id)
+        for (const amount of toAdd) await addExpensePayment(id, period.id, amount)
+      } catch { notifyError('Could not split that evenly. Please try again.') }
+    })
+  }
+
   const handleRemovePayment = (paymentId: string) =>
     startTransition(async () => {
       applyExpenseOpt({ kind: 'removePayment', paymentId })
@@ -1038,7 +1116,17 @@ export default function PeriodDetailClient({
     [period.id]
   )
 
-  const handlePaymentToggle = (paymentId: string, field: string, value: boolean) => {
+  const paymentName = (paymentId: string) => {
+    const line = optExpenses.find((e) => (e.payments ?? []).some((p) => p.id === paymentId))
+    const p = line?.payments?.find((x) => x.id === paymentId)
+    return line ? `${line.name} ${p?.label || 'payment'}` : 'Payment'
+  }
+
+  const handlePaymentToggle = (paymentId: string, field: string, value: boolean, offerUndo = true) => {
+    if (offerUndo && (field === 'pay_now' || field === 'paid')) {
+      const what = field === 'pay_now' ? (value ? 'checked to Pay' : 'unchecked from Pay') : (value ? 'marked funded' : 'unmarked funded')
+      notifyUndo(`${paymentName(paymentId)} ${what}.`, () => handlePaymentToggle(paymentId, field, !value, false))
+    }
     startTransition(async () => {
       applyExpenseOpt({ kind: 'payment', id: paymentId, field, value })
       const res = await updateExpensePayment(paymentId, period.id, { [field]: value })
@@ -1050,12 +1138,14 @@ export default function PeriodDetailClient({
   }
 
   // Clearing a partial settles just that installment — drops it from the live balance (like Clear on a single bill).
-  const handlePaymentCleared = (paymentId: string, value: boolean) =>
-    startTransition(async () => {
+  const handlePaymentCleared = (paymentId: string, value: boolean, offerUndo = true) => {
+    if (offerUndo) notifyUndo(`${paymentName(paymentId)} ${value ? 'cleared' : 'reopened'}.`, () => handlePaymentCleared(paymentId, !value, false))
+    return startTransition(async () => {
       applyExpenseOpt({ kind: 'payment', id: paymentId, field: 'cleared', value })
       applyExpenseOpt({ kind: 'payment', id: paymentId, field: 'pay_now', value: !value })
       await updateExpensePayment(paymentId, period.id, { cleared: value, pay_now: !value })
     })
+  }
 
   // ─── Bulk header actions (scoped to to-pay items) ───────────
   const handleBulkPaid = () => {
@@ -1225,70 +1315,6 @@ export default function PeriodDetailClient({
         </div>
       )}
 
-      {/* Auto Fill + expand / collapse all sections */}
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        {canFill && (
-          <>
-            <button
-              type="button"
-              onClick={() => handleFill('top')}
-              title="Check Pay on bills in priority order (!! first) until the money left runs out"
-              className="inline-flex items-center gap-2 rounded-full bg-income text-white pl-3.5 pr-4 py-2 text-caption font-bold shadow-card hover:bg-income/90 transition-colors"
-            >
-              <PourIcon size={18} />
-              Auto Fill {formatCurrency(Math.max(0, amountLeft))}
-            </button>
-            <div role="group" aria-label="Fill order" className="inline-flex items-center gap-1 text-caption mr-auto sm:mr-2">
-              <span className="text-text-muted">by</span>
-              {([['mine', 'My order'], ['due', 'Due date']] as const).map(([key, label]) => (
-                <button
-                  key={key}
-                  type="button"
-                  aria-pressed={fillBy === key}
-                  onClick={() => chooseFillBy(key)}
-                  className={`rounded-full px-3 py-1 font-semibold shadow-card transition-colors ${fillBy === key ? 'bg-text-heading text-white' : 'bg-bg-white text-text-muted hover:text-text-heading'}`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-        <button
-          type="button"
-          onClick={() => setAllSections(!allCollapsed)}
-          title={allCollapsed ? 'Expand all sections' : 'Collapse all sections'}
-          className="inline-flex items-center gap-1.5 bg-bg-white shadow-card rounded-full px-3.5 py-1.5 text-caption font-semibold text-text-muted hover:text-text-heading transition-colors"
-        >
-          {allCollapsed ? <ChevronsUpDown size={14} /> : <ChevronsDownUp size={14} />}
-          {allCollapsed ? 'Expand all' : 'Collapse all'}
-        </button>
-        {canFill && fillResult?.from === 'top' && fillNote('basis-full text-right')}
-      </div>
-
-      {/* ─── Summary Cards ─────────────────────────────────── */}
-      <div ref={summaryCardsRef}>
-        <BudgetSummaryBar
-          income={sessionIncome}
-          toBudget={deductions.incomeAfterDeductions}
-          payNow={payNowTotal}
-          paid={paymentSummary.paid}
-          amountLeft={amountLeft}
-          totalExpenses={totalExpenses}
-          stillToFund={stillToFund}
-          stillProjected={stillProjectedIncome}
-          isEvent={period.kind === 'event'}
-          showToBudget={showDeductions}
-        />
-        <RecentActivity
-          expenses={optExpenses}
-          adjustments={optAdjustments}
-          manualIncome={optManual}
-          linkedInvoices={optLinked}
-          expenseTransfers={expenseTransfers}
-        />
-      </div>
-
       {/* ─── Sticky Summary Bar (visible when scrolled past cards) ── */}
       {showStickyBar && (
         <div className="under-chrome sticky z-40 -mx-6 px-6 -mt-4">
@@ -1307,477 +1333,519 @@ export default function PeriodDetailClient({
         </div>
       )}
 
-      {/* ─── Account Transfers (overview — stays visible as it draws down) ── */}
-      {/* Shown for monthly budgets and for events with deductions opted in. */}
-      {showDeductions && Object.keys(accountTransfers).length > 0 && (
-        <div className="bg-bg-white rounded-lg shadow-card p-4 sm:p-5">
-          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-            <h2 className="text-h3 font-bold text-text-heading">
-              <button
-                type="button"
-                onClick={() => toggleSection('transfers')}
-                className="inline-flex items-center gap-2 hover:text-primary transition-colors"
-              >
-                <span className="text-text-muted text-base leading-none">{isOpen('transfers') ? '▾' : '▸'}</span>
-                Account Transfers
-              </button>
-            </h2>
-            {!isOpen('transfers') && (
-              <span className="text-caption text-text-muted">
-                {Object.entries(accountTransfers).map(([account, d]) => `${account} ${formatCurrency(d.remaining)}`).join('  ·  ')}
-              </span>
-            )}
-          </div>
-          {isOpen('transfers') && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-3 gap-y-4 mt-4 sm:divide-x sm:divide-border/60">
-              {Object.entries(accountTransfers).map(([account, detail]) => {
-                const done = doneTransfers.has(account)
-                // Keep the zero-based starting amount visible until this account's expenses all clear
-                const showStarted = detail.expenseRemaining > 0
-                return (
-                  <div key={account} className="@container sm:px-3 first:pl-0">
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <button
-                        type="button"
-                        onClick={() => handleToggleTransfer(account, !done)}
-                        disabled={isLocked}
-                        title={done ? 'Transfer completed — tap to undo' : 'Mark this transfer as completed'}
-                        className={`shrink-0 w-4 h-4 rounded-full border flex items-center justify-center text-[9px] leading-none transition-colors disabled:opacity-50 ${
-                          done ? 'bg-success border-success text-text-inverse' : 'border-border text-transparent hover:border-primary'
-                        }`}
-                      >
-                        ✓
-                      </button>
-                      <span className="text-caption font-bold uppercase text-text-muted truncate">{account}</span>
-                    </div>
-                    <div className={`font-bold whitespace-nowrap leading-tight text-[clamp(0.78rem,15cqi,1.5rem)] ${done ? 'text-success' : 'text-text-heading'}`}>
-                      {formatCurrency(detail.remaining)}
-                    </div>
-                    {showStarted && (
-                      <div className="text-[10px] text-text-muted/80 whitespace-nowrap">started {formatCurrency(detail.original)}</div>
-                    )}
-                    {cashByAccount[account] > 0 && (
-                      <div className="flex items-center gap-1.5 mt-0.5">
+      {/* ─── Budget details: the numbers in one line; open for everything behind them ── */}
+      <div ref={summaryCardsRef} className="bg-bg-white rounded-lg shadow-card px-6 py-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <button
+            type="button"
+            onClick={() => toggleSection('summary')}
+            aria-expanded={isOpen('summary')}
+            title={isOpen('summary') ? 'Close budget details' : 'Open budget details: transfers, income, deductions, savings'}
+            className="inline-flex items-center gap-2 text-caption text-text-muted hover:text-primary transition-colors"
+          >
+            <span className="text-base leading-none">{isOpen('summary') ? '▾' : '▸'}</span>
+            {isOpen('summary')
+              ? <span className="text-label font-bold text-text-heading">Budget details</span>
+              : <span>{period.kind === 'event' ? 'Contributions' : 'Income'} <span className="font-bold text-text-heading">{formatCurrency(sessionIncome)}</span></span>}
+          </button>
+          {!isOpen('summary') && (
+            <>
+              {showDeductions && <span className="text-caption text-text-muted">To Budget <span className="font-bold text-text-heading">{formatCurrency(deductions.incomeAfterDeductions)}</span></span>}
+              <span className="text-caption text-text-muted">Pay Now <span className="font-bold text-text-heading">{formatCurrency(payNowTotal)}</span></span>
+              {stillToFund > 0 && <span className="text-caption text-text-muted hidden sm:inline">Still to fund <span className="font-bold text-warning">{formatCurrency(stillToFund)}</span></span>}
+            </>
+          )}
+          <span className="ml-auto inline-flex items-center gap-3">
+            <span className={`text-label font-bold ${amountLeft >= 0 ? 'text-success' : 'text-warning'}`}>{formatCurrency(amountLeft)} left</span>
+            {canFill ? (
                         <button
                           type="button"
-                          onClick={() => handleToggleCashDone(account, !cashDone.has(account))}
+                          onClick={() => handleFill('top')}
+                          title={`Check Pay on bills in priority order (!! first, then ${fillBy === 'due' ? 'soonest due' : 'your order'}) until this runs out`}
+                          className="inline-flex items-center gap-1.5 rounded-full bg-income text-white pl-2.5 pr-3 py-1 text-caption font-bold shadow-card hover:bg-income/90 transition-colors"
+                        >
+                          <PourIcon size={15} /> Auto Fill
+                        </button>
+                      ) : undefined}
+          </span>
+        </div>
+        {canFill && fillResult?.from === 'top' && fillNote('mt-2')}
+
+        {isOpen('summary') && (
+          <div className="mt-3 pt-4 border-t border-border/60 space-y-4">
+              <BudgetSummaryBar
+                income={sessionIncome}
+                toBudget={deductions.incomeAfterDeductions}
+                payNow={payNowTotal}
+                paid={paymentSummary.paid}
+                amountLeft={amountLeft}
+                totalExpenses={totalExpenses}
+                stillToFund={stillToFund}
+                stillProjected={stillProjectedIncome}
+                isEvent={period.kind === 'event'}
+                showToBudget={showDeductions}
+                quiet
+                bare
+              />
+            <div className="flex items-start justify-between gap-3">
+              <RecentActivity
+                expenses={optExpenses}
+                adjustments={optAdjustments}
+                manualIncome={optManual}
+                linkedInvoices={optLinked}
+                expenseTransfers={expenseTransfers}
+              />
+              <button
+                type="button"
+                onClick={() => setAllSections(!allCollapsed)}
+                title={allCollapsed ? 'Open all sections' : 'Close all sections'}
+                aria-label={allCollapsed ? 'Open all sections' : 'Close all sections'}
+                className="mt-2 w-7 h-7 shrink-0 inline-flex items-center justify-center rounded-full text-text-muted hover:text-text-heading hover:bg-bg-white transition-colors"
+              >
+                {allCollapsed ? <ChevronsUpDown size={15} /> : <ChevronsDownUp size={15} />}
+              </button>
+            </div>
+            {/* ─── Account Transfers (overview — stays visible as it draws down) ── */}
+            {/* Shown for monthly budgets and for events with deductions opted in. */}
+            {showDeductions && Object.keys(accountTransfers).length > 0 && (
+              <div className="px-1 py-2.5 border-b border-text-muted/25 section-closed [&:has(+.section-closed)]:!mb-0">
+                {/* One line: each account's transfer, tick it off when it's done */}
+                <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+                  <h2 className="text-label font-bold text-text-heading shrink-0">Account Transfers</h2>
+                  {Object.entries(accountTransfers).map(([account, detail]) => {
+                    const done = doneTransfers.has(account)
+                    // Keep the zero-based starting amount visible until this account's expenses all clear
+                    const showStarted = detail.expenseRemaining > 0 && Math.abs(detail.original - detail.remaining) > 0.005
+                    return (
+                      <div key={account} className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleTransfer(account, !done)}
                           disabled={isLocked}
-                          title={cashDone.has(account) ? 'Cash withdrawn — tap to undo' : 'Mark cash as withdrawn'}
-                          className={`shrink-0 w-3.5 h-3.5 rounded-full border flex items-center justify-center text-[8px] leading-none transition-colors disabled:opacity-50 ${
-                            cashDone.has(account) ? 'bg-success border-success text-text-inverse' : 'border-border text-transparent hover:border-primary'
+                          title={done ? 'Transfer completed: tap to undo' : 'Mark this transfer as completed'}
+                          className={`shrink-0 w-4 h-4 rounded-full border flex items-center justify-center text-[9px] leading-none transition-colors disabled:opacity-50 ${
+                            done ? 'bg-success border-success text-text-inverse' : 'border-border text-transparent hover:border-primary'
                           }`}
                         >
                           ✓
                         </button>
-                        <span className={`text-[10px] whitespace-nowrap ${cashDone.has(account) ? 'text-success line-through' : 'text-text-heading/80'}`}>
-                          💵 {formatCurrency(cashByAccount[account])} cash
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          )}
-          {isOpen('transfers') && totalCash > 0 && (
-            <div className="mt-4 flex items-center text-caption">
-              <span className="font-bold uppercase text-text-muted">💵 Total cash to pull</span>
-              <span className="font-bold text-text-heading ml-auto">{formatCurrency(totalCash)}</span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ─── Income Section ────────────────────────────────── */}
-      <div className="bg-bg-white rounded-lg shadow-card p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-h3 font-bold text-text-heading">
-            <button type="button" onClick={() => toggleSection('income')} className="inline-flex items-center gap-2 hover:text-primary transition-colors">
-              <span className="text-text-muted text-base leading-none">{isOpen('income') ? '▾' : '▸'}</span>
-              Income
-            </button>
-          </h2>
-          {isOpen('income') && (
-          <div className="flex gap-2">
-            <button
-              onClick={() => setShowInvoiceSelector(!showInvoiceSelector)}
-              disabled={isLocked}
-              className="bg-primary-teal text-text-inverse rounded-full px-4 py-1.5 text-caption font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
-            >
-              Link Invoice
-            </button>
-            <button
-              onClick={() => setShowManualIncomeForm(!showManualIncomeForm)}
-              disabled={isLocked}
-              className="bg-bg-white text-text-heading border border-border rounded-full px-4 py-1.5 text-caption font-bold hover:border-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              + Manual
-            </button>
-          </div>
-          )}
-          {!isOpen('income') && (
-            <span className="text-caption text-text-muted">
-              {formatCurrency(sessionIncome)} this session{stillProjectedIncome > 0 && ` · ${formatCurrency(stillProjectedIncome)} still projected`}
-            </span>
-          )}
-        </div>
-        {isOpen('income') && (<>
-
-        {/* Linked Invoices */}
-        {optLinked.length > 0 && (
-          <div className="mb-4">
-            <div className="text-caption font-bold text-text-muted uppercase mb-2">Linked Invoices</div>
-            <div className="space-y-2">
-              {optLinked.map((li) => (
-                <IncomeRow
-                  key={li.id}
-                  name={li.invoices.client_name}
-                  detail={li.invoices.project_name}
-                  amount={li.invoices.amount}
-                  type={li.income_type}
-                  skip={li.skip_deductions ?? []}
-                  disabled={isLocked}
-                  saving={li.id.startsWith('tmp-')}
-                  onType={(t) => handleSetIncomeType('invoice', li.id, t)}
-                  onToggleDeduction={(k) => handleToggleIncomeDeduction('invoice', li.id, li.skip_deductions ?? [], k)}
-                  removeLabel="Unlink"
-                  onRemove={() => handleUnlinkInvoice(li.id, li.invoice_id)}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Manual Income */}
-        {optManual.length > 0 && (
-          <div className="mb-4">
-            <div className="text-caption font-bold text-text-muted uppercase mb-2">Manual Income</div>
-            <div className="space-y-2">
-              {optManual.map((mi) => (
-                <IncomeRow
-                  key={mi.id}
-                  name={mi.description}
-                  amount={mi.amount}
-                  type={mi.income_type}
-                  skip={mi.skip_deductions ?? []}
-                  disabled={isLocked}
-                  saving={mi.id.startsWith('tmp-')}
-                  onType={(t) => handleSetIncomeType('manual', mi.id, t)}
-                  onToggleDeduction={(k) => handleToggleIncomeDeduction('manual', mi.id, mi.skip_deductions ?? [], k)}
-                  removeLabel="Remove"
-                  onRemove={() => handleRemoveManualIncome(mi.id)}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Invoice Selector Dropdown */}
-        {showInvoiceSelector && (
-          <div className="bg-surface-beige rounded-sm p-4 mb-4">
-            <div className="text-caption font-bold text-text-muted uppercase mb-2">Select Income to Link</div>
-            {linkableInvoices.filter((inv) => !linkedInvoiceIds.has(inv.id)).length === 0 ? (
-              <p className="text-caption text-text-muted">No unlinked income available.</p>
-            ) : (
-              <div className="space-y-2 max-h-48 overflow-y-auto">
-                {linkableInvoices
-                  .filter((inv) => !linkedInvoiceIds.has(inv.id))
-                  .map((inv) => (
-                    <div key={inv.id} className="flex items-center justify-between py-1">
-                      <label className="flex items-center gap-2 text-caption cursor-pointer">
-                        <input
-                          type="checkbox"
-                          onChange={(e) => {
-                            if (e.target.checked) handleLinkInvoice(inv.id)
-                          }}
-                          className="rounded"
-                        />
-                        <span className="font-medium text-text-heading">{inv.client_name}</span>
-                        {inv.project_name && <span className="text-text-muted">– {inv.project_name}</span>}
-                        {inv.status !== 'received' && (
-                          <span className="text-[10px] uppercase font-bold text-text-muted bg-bg-white px-1.5 py-0.5 rounded-full">{inv.status}</span>
+                        <span className="text-caption text-text-muted">{account}</span>
+                        <span className={`text-label font-bold ${done ? 'text-success' : 'text-text-heading'}`}>{formatCurrency(detail.remaining)}</span>
+                        {showStarted && <span className="text-[10px] text-text-muted/80">of {formatCurrency(detail.original)}</span>}
+                        {cashByAccount[account] > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => handleToggleCashDone(account, !cashDone.has(account))}
+                            disabled={isLocked}
+                            title={cashDone.has(account) ? 'Cash withdrawn: tap to undo' : 'Mark cash as withdrawn'}
+                            className={`text-[10px] rounded-full px-1.5 py-0.5 transition-colors disabled:opacity-50 ${cashDone.has(account) ? 'bg-success/15 text-success line-through' : 'bg-surface-beige text-text-heading/80 hover:text-text-heading'}`}
+                          >
+                            💵 {formatCurrency(cashByAccount[account])}
+                          </button>
                         )}
-                      </label>
-                      <span className="text-caption font-bold text-text-heading">{formatCurrency(inv.amount)}</span>
-                    </div>
-                  ))}
+                      </div>
+                    )
+                  })}
+                  {totalCash > 0 && (
+                    <span className="text-caption text-text-muted whitespace-nowrap ml-auto">💵 <span className="font-bold text-text-heading">{formatCurrency(totalCash)}</span> cash to pull</span>
+                  )}
+                </div>
               </div>
             )}
-          </div>
-        )}
 
-        {/* Manual Income Form */}
-        {showManualIncomeForm && (
-          <form onSubmit={handleAddManualIncome} className="flex gap-2 items-end bg-surface-beige rounded-sm p-4">
-            <div className="flex-1">
-              <label className="block text-caption font-bold text-text-muted mb-1">Description</label>
-              <input type="text" name="description" required placeholder="e.g., Side project" className={inputClass + ' w-full'} />
-            </div>
-            <div className="w-32">
-              <label className="block text-caption font-bold text-text-muted mb-1">Amount</label>
-              <input type="number" name="amount" step="0.01" required placeholder="0.00" className={inputClass + ' w-full'} />
-            </div>
-            <button
-              type="submit"
-              className="bg-primary-teal text-text-inverse rounded-full px-4 py-1.5 text-caption font-bold hover:opacity-90 transition-opacity"
-            >
-              Add
-            </button>
-          </form>
-        )}
-
-        <div className="text-right mt-3 pt-3 border-t border-border">
-          <span className="text-caption text-text-muted">Session income: </span>
-          <span className="text-h3 font-bold text-text-heading">{formatCurrency(sessionIncome)}</span>
-        </div>
-        </>)}
-      </div>
-
-      {/* ─── Deductions Grid ───────────────────────────────── */}
-      {/* Shown for monthly budgets and for events with deductions opted in. */}
-      {showDeductions && (
-      <div className="bg-bg-white rounded-lg shadow-card p-6">
-        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 mb-4">
-          <h2 className="text-h3 font-bold text-text-heading">
-            <button type="button" onClick={() => toggleSection('deductions')} className="inline-flex items-center gap-2 hover:text-primary transition-colors">
-              <span className="text-text-muted text-base leading-none">{isOpen('deductions') ? '▾' : '▸'}</span>
-              Deductions
-            </button>
-          </h2>
-          {!isOpen('deductions') && (
-            <span className="text-caption text-text-muted">
-              {formatCurrency(totalDeductions)} deducted · {formatCurrency(deductions.incomeAfterDeductions)} to budget
-            </span>
-          )}
-        </div>
-        {isOpen('deductions') && (<>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mb-4">
-          {([
-            { pctKey: 'tithe_percentage', amtKey: 'tithe_amount', label: 'Tithe', detail: deductions.details.titheD, accountKey: 'tithe_account' },
-            { pctKey: 'savings_percentage', amtKey: 'savings_amount', label: 'Savings', detail: deductions.details.savingsD, accountKey: 'savings_account' },
-            { pctKey: 'tax_percentage', amtKey: 'tax_amount', label: 'Tax', detail: deductions.details.taxD, accountKey: 'tax_account' },
-            { pctKey: 'profit_percentage', amtKey: 'profit_amount', label: 'Profit', detail: deductions.details.profitD, accountKey: 'profit_account' },
-            { pctKey: 'fun_money_percentage', amtKey: 'fun_money_amount', label: 'Giving', detail: deductions.details.funMoneyD, accountKey: 'fun_money_account' },
-          ] as const).map(({ pctKey, amtKey, label, detail, accountKey }) => {
-            const hasOverride =
-              overridesLocal?.[pctKey as keyof DeductionOverrides] !== undefined ||
-              overridesLocal?.[amtKey as keyof DeductionOverrides] !== undefined
-            const dkey = pctKey.replace('_percentage', '')
-            const paid = deductionPaid.has(dkey)
-            const dollars = detail.mode === '$' ? detail.value : detail.amount
-            return (
-              <div key={pctKey} className="text-center">
-                <div className="text-caption font-bold text-text-muted uppercase mb-1">{label}</div>
-                {/* % | $ toggle + paid checkmark */}
-                <div className="flex justify-center items-center gap-2 mb-1">
-                  {dkey === 'fun_money' && (
-                    <button
-                      type="button"
-                      onClick={() => handleToggleDeductionCash(dkey, !deductionCash.has(dkey))}
-                      disabled={isLocked}
-                      title={deductionCash.has(dkey) ? 'Taking as cash — tap to leave in account' : 'Take this as cash'}
-                      className={`text-base leading-none transition-opacity disabled:opacity-40 ${deductionCash.has(dkey) ? 'opacity-100' : 'opacity-25 hover:opacity-70'}`}
-                    >
-                      💵
-                    </button>
-                  )}
-                  <div className="flex rounded-full overflow-hidden bg-surface-beige">
-                    <button
-                      onClick={() => handleDeductionModeToggle(pctKey, amtKey, detail, '%')}
-                      disabled={isLocked}
-                      className={`px-2 py-0.5 text-[10px] font-bold transition-colors disabled:opacity-50 ${
-                        detail.mode === '%' ? 'bg-text-heading text-white' : 'text-text-muted hover:text-text-heading'
-                      }`}
-                    >
-                      %
-                    </button>
-                    <button
-                      onClick={() => handleDeductionModeToggle(pctKey, amtKey, detail, '$')}
-                      disabled={isLocked}
-                      className={`px-2 py-0.5 text-[10px] font-bold transition-colors disabled:opacity-50 ${
-                        detail.mode === '$' ? 'bg-text-heading text-white' : 'text-text-muted hover:text-text-heading'
-                      }`}
-                    >
-                      $
-                    </button>
-                  </div>
+            {/* ─── Income Section ────────────────────────────────── */}
+            <div className={`${isOpen('income') ? 'bg-bg-white rounded-lg shadow-card p-6' : 'px-1 py-2.5 border-b border-text-muted/25 section-closed [&:has(+.section-closed)]:!mb-0'}`}>
+              <div className={`flex items-center justify-between ${isOpen('income') ? 'mb-4' : ''}`}>
+                <h2 className={`${isOpen('income') ? 'text-h3' : 'text-label'} font-bold text-text-heading`}>
+                  <button type="button" onClick={() => toggleSection('income')} className="inline-flex items-center gap-2 hover:text-primary transition-colors">
+                    <span className="text-text-muted text-base leading-none">{isOpen('income') ? '▾' : '▸'}</span>
+                    Income
+                  </button>
+                </h2>
+                {isOpen('income') && (
+                <div className="flex gap-2">
                   <button
-                    type="button"
-                    onClick={() => handleToggleDeductionPaid(dkey, !paid)}
+                    onClick={() => setShowInvoiceSelector(!showInvoiceSelector)}
                     disabled={isLocked}
-                    title={paid ? 'Marked set aside — tap to undo' : 'Mark this deduction as set aside / paid'}
-                    className={`shrink-0 w-4 h-4 rounded-full border flex items-center justify-center text-[9px] leading-none transition-colors disabled:opacity-50 ${
-                      paid ? 'bg-success border-success text-text-inverse' : 'border-border text-transparent hover:border-primary'
-                    }`}
+                    className="bg-primary-teal text-text-inverse rounded-full px-4 py-1.5 text-caption font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
                   >
-                    ✓
+                    Link Invoice
+                  </button>
+                  <button
+                    onClick={() => setShowManualIncomeForm(!showManualIncomeForm)}
+                    disabled={isLocked}
+                    className="bg-bg-white text-text-heading border border-border rounded-full px-4 py-1.5 text-caption font-bold hover:border-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    + Manual
                   </button>
                 </div>
-                <div className="flex items-center justify-center gap-1 mb-1">
-                  <MathInput
-                    key={`${pctKey}-${detail.mode}`}
-                    value={detail.value}
-                    data-no-round
-                    disabled={isLocked}
-                    onChange={(value) => handleDeductionChange(
-                      detail.mode === '%' ? pctKey : amtKey,
-                      String(value),
-                    )}
-                    title="Type a number or a quick calc — e.g. 435-18"
-                    className={`w-20 text-center text-caption font-bold rounded-sm border px-2 py-1 focus:outline-none focus:border-primary disabled:opacity-60 ${
-                      hasOverride ? 'border-primary bg-primary/5' : 'border-border'
-                    } data-[math=pending]:border-primary data-[math=pending]:bg-primary/10`}
-                  />
-                  <span className="text-caption text-text-muted">{detail.mode === '%' ? '%' : '$'}</span>
-                </div>
-                {detail.mode === '%' ? (
-                  <div className={`text-caption font-bold ${paid ? 'text-success' : 'text-text-heading'}`}>{formatCurrency(detail.amount)}</div>
-                ) : (
-                  <div className="text-[10px] text-text-muted">= {detail.percentage.toFixed(1)}%</div>
                 )}
-                {/* Round up — the slot is always reserved so the cards stay lined up */}
-                <div className="h-6 flex items-center justify-center">
-                  {!isLocked && hasCents(dollars) && (
-                    <button
-                      type="button"
-                      onClick={() => handleDeductionRoundUp(pctKey, amtKey, dollars)}
-                      title={`Round up to ${formatCurrency(roundUpToDollar(dollars))}`}
-                      className="text-[11px] font-bold text-primary hover:text-primary-teal transition-colors"
-                    >
-                      ↑ ${roundUpToDollar(dollars).toLocaleString('en-US')}
-                    </button>
-                  )}
-                </div>
-                {/* Destination account — set in Settings, feeds Account Transfers */}
-                <div className="mt-1.5 text-[10px] text-text-muted truncate" title={settings[accountKey] ?? 'No account set'}>
-                  {settings[accountKey] ? `→ ${settings[accountKey]}` : '→ no account'}
-                </div>
-              </div>
-            )
-          })}
-
-          {/* Adjustment capture — one at a time; captured list lives in the ledger below */}
-          <div className="text-center">
-            <div className="text-caption font-bold text-text-muted uppercase mb-1">Adjustment</div>
-            {/* flat (±) | target (set desired left) toggle */}
-            <div className="flex justify-center mb-1">
-              <div className="flex rounded-full overflow-hidden bg-surface-beige">
-                <button
-                  onClick={() => handleAdjModeToggle('flat')}
-                  disabled={isLocked}
-                  title="Flat: enter a +/− amount"
-                  className={`px-2 py-0.5 text-[10px] font-bold transition-colors disabled:opacity-50 ${capMode === 'flat' ? 'bg-text-heading text-white' : 'text-text-muted hover:text-text-heading'}`}
-                >
-                  ±
-                </button>
-                <button
-                  onClick={() => handleAdjModeToggle('target')}
-                  disabled={isLocked}
-                  title="Target: enter the amount you want left and it calculates the adjustment"
-                  className={`px-2 py-0.5 text-[10px] font-bold transition-colors disabled:opacity-50 ${capMode === 'target' ? 'bg-text-heading text-white' : 'text-text-muted hover:text-text-heading'}`}
-                >
-                  left=
-                </button>
-              </div>
-            </div>
-            <input
-              type="number"
-              step="0.01"
-              value={capAmount}
-              placeholder={capMode === 'flat' ? '-20' : String(Math.round(availableToBudget))}
-              disabled={isLocked}
-              onChange={(e) => { setCapAmount(e.target.value); setJustCaptured(false) }}
-              className="block mx-auto w-20 text-center text-caption font-bold rounded-sm border border-border px-2 py-1 focus:outline-none focus:border-primary disabled:opacity-60"
-            />
-            <input
-              type="text"
-              value={capNote}
-              placeholder="note"
-              disabled={isLocked}
-              onChange={(e) => { setCapNote(e.target.value); setJustCaptured(false) }}
-              className="block mx-auto w-20 text-[10px] text-center rounded-sm border border-border px-1.5 py-1 mt-1 focus:outline-none focus:border-primary disabled:opacity-60"
-            />
-            {capMode === 'target' && resolvedAdjAmount !== null && (
-              <div className="text-[10px] text-text-muted mt-1">adj {formatCurrency(resolvedAdjAmount)}</div>
-            )}
-            {!isLocked && (
-              <div className="flex items-center justify-center gap-1.5 mt-1.5">
-                <button
-                  onClick={handleCaptureAdjustment}
-                  disabled={!canCapture}
-                  className="text-[10px] text-primary font-bold hover:underline disabled:opacity-40 disabled:cursor-default"
-                >
-                  + Add
-                </button>
-                {justCaptured && (
-                  <span className="text-success text-[10px] font-bold" title="Captured to the ledger below">✓</span>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-        <div className="flex justify-between items-start pt-4 border-t border-border gap-2 flex-wrap">
-          <div>
-            <span className="text-caption text-text-muted">Total Deductions: </span>
-            <span className="font-bold text-text-heading">{formatCurrency(deductions.total)}</span>
-          </div>
-          <div className="text-right">
-            <span className="text-caption text-text-muted">After Deductions: </span>
-            <span className="font-bold text-text-heading">{formatCurrency(deductions.incomeAfterDeductions)}</span>
-            {adjustment !== 0 && (
-              <div className="text-caption text-text-muted mt-0.5">
-                Available to budget: <span className="font-bold text-text-heading">{formatCurrency(availableToBudget)}</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Adjustments ledger — captured fees / pre-budget spends (shows when there's one) */}
-        {optAdjustments.length > 0 && (
-          <div className="mt-6 pt-4 border-t border-border">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-caption font-bold uppercase text-text-muted tracking-wide">Adjustments</h3>
-              <span className="text-caption text-text-muted">
-                Net <span className={`font-bold ${adjustment < 0 ? 'text-warning' : 'text-text-heading'}`}>{formatCurrency(adjustment)}</span>
-              </span>
-            </div>
-            <div className="space-y-1.5">
-              {optAdjustments.map((a) => (
-                <div key={a.id} className="flex items-center justify-between text-caption">
-                  <span className="text-text-heading truncate pr-2">
-                    {a.note || <span className="text-text-muted italic">no note</span>}
+                {!isOpen('income') && (
+                  <span className="text-caption text-text-muted">
+                    {formatCurrency(sessionIncome)} this session{stillProjectedIncome > 0 && ` · ${formatCurrency(stillProjectedIncome)} still projected`}
                   </span>
-                  <div className="flex items-center gap-3 shrink-0">
-                    <span className={`font-bold ${a.amount < 0 ? 'text-warning' : 'text-text-heading'}`}>{formatCurrency(a.amount)}</span>
-                    {!isLocked && (
-                      <button onClick={() => handleRemoveAdjustment(a.id)} className="text-text-muted hover:text-warning text-[10px] disabled:opacity-50">✕</button>
-                    )}
+                )}
+              </div>
+              {isOpen('income') && (<>
+
+              {/* Linked Invoices */}
+              {optLinked.length > 0 && (
+                <div className="mb-4">
+                  <div className="text-caption font-bold text-text-muted uppercase mb-2">Linked Invoices</div>
+                  <div className="space-y-2">
+                    {optLinked.map((li) => (
+                      <IncomeRow
+                        key={li.id}
+                        name={li.invoices.client_name}
+                        detail={li.invoices.project_name}
+                        amount={li.invoices.amount}
+                        type={li.income_type}
+                        skip={li.skip_deductions ?? []}
+                        disabled={isLocked}
+                        saving={li.id.startsWith('tmp-')}
+                        onType={(t) => handleSetIncomeType('invoice', li.id, t)}
+                        onToggleDeduction={(k) => handleToggleIncomeDeduction('invoice', li.id, li.skip_deductions ?? [], k)}
+                        removeLabel="Unlink"
+                        onRemove={() => handleUnlinkInvoice(li.id, li.invoice_id)}
+                      />
+                    ))}
                   </div>
                 </div>
-              ))}
+              )}
+
+              {/* Manual Income */}
+              {optManual.length > 0 && (
+                <div className="mb-4">
+                  <div className="text-caption font-bold text-text-muted uppercase mb-2">Manual Income</div>
+                  <div className="space-y-2">
+                    {optManual.map((mi) => (
+                      <IncomeRow
+                        key={mi.id}
+                        name={mi.description}
+                        amount={mi.amount}
+                        type={mi.income_type}
+                        skip={mi.skip_deductions ?? []}
+                        disabled={isLocked}
+                        saving={mi.id.startsWith('tmp-')}
+                        onType={(t) => handleSetIncomeType('manual', mi.id, t)}
+                        onToggleDeduction={(k) => handleToggleIncomeDeduction('manual', mi.id, mi.skip_deductions ?? [], k)}
+                        removeLabel="Remove"
+                        onRemove={() => handleRemoveManualIncome(mi.id)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Invoice Selector Dropdown */}
+              {showInvoiceSelector && (
+                <div className="bg-surface-beige rounded-sm p-4 mb-4">
+                  <div className="text-caption font-bold text-text-muted uppercase mb-2">Select Income to Link</div>
+                  {linkableInvoices.filter((inv) => !linkedInvoiceIds.has(inv.id)).length === 0 ? (
+                    <p className="text-caption text-text-muted">No unlinked income available.</p>
+                  ) : (
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {linkableInvoices
+                        .filter((inv) => !linkedInvoiceIds.has(inv.id))
+                        .map((inv) => (
+                          <div key={inv.id} className="flex items-center justify-between py-1">
+                            <label className="flex items-center gap-2 text-caption cursor-pointer">
+                              <input
+                                type="checkbox"
+                                onChange={(e) => {
+                                  if (e.target.checked) handleLinkInvoice(inv.id)
+                                }}
+                                className="rounded"
+                              />
+                              <span className="font-medium text-text-heading">{inv.client_name}</span>
+                              {inv.project_name && <span className="text-text-muted">– {inv.project_name}</span>}
+                              {inv.status !== 'received' && (
+                                <span className="text-[10px] uppercase font-bold text-text-muted bg-bg-white px-1.5 py-0.5 rounded-full">{inv.status}</span>
+                              )}
+                            </label>
+                            <span className="text-caption font-bold text-text-heading">{formatCurrency(inv.amount)}</span>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Manual Income Form */}
+              {showManualIncomeForm && (
+                <form onSubmit={handleAddManualIncome} className="flex gap-2 items-end bg-surface-beige rounded-sm p-4">
+                  <div className="flex-1">
+                    <label className="block text-caption font-bold text-text-muted mb-1">Description</label>
+                    <input type="text" name="description" required placeholder="e.g., Side project" className={inputClass + ' w-full'} />
+                  </div>
+                  <div className="w-32">
+                    <label className="block text-caption font-bold text-text-muted mb-1">Amount</label>
+                    <input type="number" name="amount" step="0.01" required placeholder="0.00" className={inputClass + ' w-full'} />
+                  </div>
+                  <button
+                    type="submit"
+                    className="bg-primary-teal text-text-inverse rounded-full px-4 py-1.5 text-caption font-bold hover:opacity-90 transition-opacity"
+                  >
+                    Add
+                  </button>
+                </form>
+              )}
+
+              <div className="text-right mt-3 pt-3 border-t border-border">
+                <span className="text-caption text-text-muted">Session income: </span>
+                <span className="text-h3 font-bold text-text-heading">{formatCurrency(sessionIncome)}</span>
+              </div>
+              </>)}
             </div>
+
+            {/* ─── Deductions Grid ───────────────────────────────── */}
+            {/* Shown for monthly budgets and for events with deductions opted in. */}
+            {showDeductions && (
+            <div className={`${isOpen('deductions') ? 'bg-bg-white rounded-lg shadow-card p-6' : 'px-1 py-2.5 border-b border-text-muted/25 section-closed [&:has(+.section-closed)]:!mb-0'}`}>
+              <div className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-1 ${isOpen('deductions') ? 'mb-4' : ''}`}>
+                <h2 className={`${isOpen('deductions') ? 'text-h3' : 'text-label'} font-bold text-text-heading`}>
+                  <button type="button" onClick={() => toggleSection('deductions')} className="inline-flex items-center gap-2 hover:text-primary transition-colors">
+                    <span className="text-text-muted text-base leading-none">{isOpen('deductions') ? '▾' : '▸'}</span>
+                    Deductions
+                  </button>
+                </h2>
+                {!isOpen('deductions') && (
+                  <span className="text-caption text-text-muted">
+                    {formatCurrency(totalDeductions)} deducted · {formatCurrency(deductions.incomeAfterDeductions)} to budget
+                  </span>
+                )}
+              </div>
+              {isOpen('deductions') && (<>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mb-4">
+                {([
+                  { pctKey: 'tithe_percentage', amtKey: 'tithe_amount', label: 'Tithe', detail: deductions.details.titheD, accountKey: 'tithe_account' },
+                  { pctKey: 'savings_percentage', amtKey: 'savings_amount', label: 'Savings', detail: deductions.details.savingsD, accountKey: 'savings_account' },
+                  { pctKey: 'tax_percentage', amtKey: 'tax_amount', label: 'Tax', detail: deductions.details.taxD, accountKey: 'tax_account' },
+                  { pctKey: 'profit_percentage', amtKey: 'profit_amount', label: 'Profit', detail: deductions.details.profitD, accountKey: 'profit_account' },
+                  { pctKey: 'fun_money_percentage', amtKey: 'fun_money_amount', label: 'Giving', detail: deductions.details.funMoneyD, accountKey: 'fun_money_account' },
+                ] as const).map(({ pctKey, amtKey, label, detail, accountKey }) => {
+                  const hasOverride =
+                    overridesLocal?.[pctKey as keyof DeductionOverrides] !== undefined ||
+                    overridesLocal?.[amtKey as keyof DeductionOverrides] !== undefined
+                  const dkey = pctKey.replace('_percentage', '')
+                  const paid = deductionPaid.has(dkey)
+                  const dollars = detail.mode === '$' ? detail.value : detail.amount
+                  return (
+                    <div key={pctKey} className="text-center">
+                      <div className="text-caption font-bold text-text-muted uppercase mb-1">{label}</div>
+                      {/* % | $ toggle + paid checkmark */}
+                      <div className="flex justify-center items-center gap-2 mb-1">
+                        {dkey === 'fun_money' && (
+                          <button
+                            type="button"
+                            onClick={() => handleToggleDeductionCash(dkey, !deductionCash.has(dkey))}
+                            disabled={isLocked}
+                            title={deductionCash.has(dkey) ? 'Taking as cash — tap to leave in account' : 'Take this as cash'}
+                            className={`text-base leading-none transition-opacity disabled:opacity-40 ${deductionCash.has(dkey) ? 'opacity-100' : 'opacity-25 hover:opacity-70'}`}
+                          >
+                            💵
+                          </button>
+                        )}
+                        <div className="flex rounded-full overflow-hidden bg-surface-beige">
+                          <button
+                            onClick={() => handleDeductionModeToggle(pctKey, amtKey, detail, '%')}
+                            disabled={isLocked}
+                            className={`px-2 py-0.5 text-[10px] font-bold transition-colors disabled:opacity-50 ${
+                              detail.mode === '%' ? 'bg-text-heading text-white' : 'text-text-muted hover:text-text-heading'
+                            }`}
+                          >
+                            %
+                          </button>
+                          <button
+                            onClick={() => handleDeductionModeToggle(pctKey, amtKey, detail, '$')}
+                            disabled={isLocked}
+                            className={`px-2 py-0.5 text-[10px] font-bold transition-colors disabled:opacity-50 ${
+                              detail.mode === '$' ? 'bg-text-heading text-white' : 'text-text-muted hover:text-text-heading'
+                            }`}
+                          >
+                            $
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleDeductionPaid(dkey, !paid)}
+                          disabled={isLocked}
+                          title={paid ? 'Marked set aside — tap to undo' : 'Mark this deduction as set aside / paid'}
+                          className={`shrink-0 w-4 h-4 rounded-full border flex items-center justify-center text-[9px] leading-none transition-colors disabled:opacity-50 ${
+                            paid ? 'bg-success border-success text-text-inverse' : 'border-border text-transparent hover:border-primary'
+                          }`}
+                        >
+                          ✓
+                        </button>
+                      </div>
+                      <div className="flex items-center justify-center gap-1 mb-1">
+                        <MathInput
+                          key={`${pctKey}-${detail.mode}`}
+                          value={detail.value}
+                          data-no-round
+                          disabled={isLocked}
+                          onChange={(value) => handleDeductionChange(
+                            detail.mode === '%' ? pctKey : amtKey,
+                            String(value),
+                          )}
+                          title="Type a number or a quick calc — e.g. 435-18"
+                          className={`w-20 text-center text-caption font-bold rounded-sm border px-2 py-1 focus:outline-none focus:border-primary disabled:opacity-60 ${
+                            hasOverride ? 'border-primary bg-primary/5' : 'border-border'
+                          } data-[math=pending]:border-primary data-[math=pending]:bg-primary/10`}
+                        />
+                        <span className="text-caption text-text-muted">{detail.mode === '%' ? '%' : '$'}</span>
+                      </div>
+                      {detail.mode === '%' ? (
+                        <div className={`text-caption font-bold ${paid ? 'text-success' : 'text-text-heading'}`}>{formatCurrency(detail.amount)}</div>
+                      ) : (
+                        <div className="text-[10px] text-text-muted">= {detail.percentage.toFixed(1)}%</div>
+                      )}
+                      {/* Round up — the slot is always reserved so the cards stay lined up */}
+                      <div className="h-6 flex items-center justify-center">
+                        {!isLocked && hasCents(dollars) && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeductionRoundUp(pctKey, amtKey, dollars)}
+                            title={`Round up to ${formatCurrency(roundUpToDollar(dollars))}`}
+                            className="text-[11px] font-bold text-primary hover:text-primary-teal transition-colors"
+                          >
+                            ↑ ${roundUpToDollar(dollars).toLocaleString('en-US')}
+                          </button>
+                        )}
+                      </div>
+                      {/* Destination account — set in Settings, feeds Account Transfers */}
+                      <div className="mt-1.5 text-[10px] text-text-muted truncate" title={settings[accountKey] ?? 'No account set'}>
+                        {settings[accountKey] ? `→ ${settings[accountKey]}` : '→ no account'}
+                      </div>
+                    </div>
+                  )
+                })}
+
+                {/* Adjustment capture — one at a time; captured list lives in the ledger below */}
+                <div className="text-center">
+                  <div className="text-caption font-bold text-text-muted uppercase mb-1">Adjustment</div>
+                  {/* flat (±) | target (set desired left) toggle */}
+                  <div className="flex justify-center mb-1">
+                    <div className="flex rounded-full overflow-hidden bg-surface-beige">
+                      <button
+                        onClick={() => handleAdjModeToggle('flat')}
+                        disabled={isLocked}
+                        title="Flat: enter a +/− amount"
+                        className={`px-2 py-0.5 text-[10px] font-bold transition-colors disabled:opacity-50 ${capMode === 'flat' ? 'bg-text-heading text-white' : 'text-text-muted hover:text-text-heading'}`}
+                      >
+                        ±
+                      </button>
+                      <button
+                        onClick={() => handleAdjModeToggle('target')}
+                        disabled={isLocked}
+                        title="Target: enter the amount you want left and it calculates the adjustment"
+                        className={`px-2 py-0.5 text-[10px] font-bold transition-colors disabled:opacity-50 ${capMode === 'target' ? 'bg-text-heading text-white' : 'text-text-muted hover:text-text-heading'}`}
+                      >
+                        left=
+                      </button>
+                    </div>
+                  </div>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={capAmount}
+                    placeholder={capMode === 'flat' ? '-20' : String(Math.round(availableToBudget))}
+                    disabled={isLocked}
+                    onChange={(e) => { setCapAmount(e.target.value); setJustCaptured(false) }}
+                    className="block mx-auto w-20 text-center text-caption font-bold rounded-sm border border-border px-2 py-1 focus:outline-none focus:border-primary disabled:opacity-60"
+                  />
+                  <input
+                    type="text"
+                    value={capNote}
+                    placeholder="note"
+                    disabled={isLocked}
+                    onChange={(e) => { setCapNote(e.target.value); setJustCaptured(false) }}
+                    className="block mx-auto w-20 text-[10px] text-center rounded-sm border border-border px-1.5 py-1 mt-1 focus:outline-none focus:border-primary disabled:opacity-60"
+                  />
+                  {capMode === 'target' && resolvedAdjAmount !== null && (
+                    <div className="text-[10px] text-text-muted mt-1">adj {formatCurrency(resolvedAdjAmount)}</div>
+                  )}
+                  {!isLocked && (
+                    <div className="flex items-center justify-center gap-1.5 mt-1.5">
+                      <button
+                        onClick={handleCaptureAdjustment}
+                        disabled={!canCapture}
+                        className="text-[10px] text-primary font-bold hover:underline disabled:opacity-40 disabled:cursor-default"
+                      >
+                        + Add
+                      </button>
+                      {justCaptured && (
+                        <span className="text-success text-[10px] font-bold" title="Captured to the ledger below">✓</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="flex justify-between items-start pt-4 border-t border-border gap-2 flex-wrap">
+                <div>
+                  <span className="text-caption text-text-muted">Total Deductions: </span>
+                  <span className="font-bold text-text-heading">{formatCurrency(deductions.total)}</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-caption text-text-muted">After Deductions: </span>
+                  <span className="font-bold text-text-heading">{formatCurrency(deductions.incomeAfterDeductions)}</span>
+                  {adjustment !== 0 && (
+                    <div className="text-caption text-text-muted mt-0.5">
+                      Available to budget: <span className="font-bold text-text-heading">{formatCurrency(availableToBudget)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Adjustments ledger — captured fees / pre-budget spends (shows when there's one) */}
+              {optAdjustments.length > 0 && (
+                <div className="mt-6 pt-4 border-t border-border">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-caption font-bold uppercase text-text-muted tracking-wide">Adjustments</h3>
+                    <span className="text-caption text-text-muted">
+                      Net <span className={`font-bold ${adjustment < 0 ? 'text-warning' : 'text-text-heading'}`}>{formatCurrency(adjustment)}</span>
+                    </span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {optAdjustments.map((a) => (
+                      <div key={a.id} className="flex items-center justify-between text-caption">
+                        <span className="text-text-heading truncate pr-2">
+                          {a.note || <span className="text-text-muted italic">no note</span>}
+                        </span>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <span className={`font-bold ${a.amount < 0 ? 'text-warning' : 'text-text-heading'}`}>{formatCurrency(a.amount)}</span>
+                          {!isLocked && (
+                            <button onClick={() => handleRemoveAdjustment(a.id)} className="text-text-muted hover:text-warning text-[10px] disabled:opacity-50">✕</button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              </>)}
+            </div>
+            )}
+
+            {/* ─── Savings Allocation ────────────────────────────── */}
+            {/* Hidden in event focus mode — event budgets shouldn't fund long-term goals. */}
+            {isNewestSession && period.kind !== 'event' && savingsGoals.length > 0 && (
+              <SavingsAllocationSection
+                periodId={period.id}
+                savingsPool={deductions.savings}
+                leftoverBudget={amountLeft}
+                savingsGoals={savingsGoals}
+                savingsAllocations={savingsAllocations}
+                lastPeriodAllocations={lastPeriodAllocations}
+                locked={isLocked}
+                open={isOpen('savings')}
+                onToggleOpen={() => toggleSection('savings')}
+              />
+            )}
           </div>
         )}
-
-        </>)}
       </div>
-      )}
-
-      {/* ─── Savings Allocation ────────────────────────────── */}
-      {/* Hidden in event focus mode — event budgets shouldn't fund long-term goals. */}
-      {isNewestSession && period.kind !== 'event' && savingsGoals.length > 0 && (
-        <SavingsAllocationSection
-          periodId={period.id}
-          savingsPool={deductions.savings}
-          leftoverBudget={amountLeft}
-          savingsGoals={savingsGoals}
-          savingsAllocations={savingsAllocations}
-          lastPeriodAllocations={lastPeriodAllocations}
-          locked={isLocked}
-          open={isOpen('savings')}
-          onToggleOpen={() => toggleSection('savings')}
-        />
-      )}
 
       {/* ─── Expenses Table ────────────────────────────────── */}
       {/* In event focus mode the baseline expenses table is hidden by default —
@@ -1793,9 +1861,9 @@ export default function PeriodDetailClient({
           Show baseline expenses ({baselineExpenses.length})
         </button>
       ) : (
-      <div className="bg-bg-white rounded-lg shadow-card p-6">
-        <div className="flex flex-wrap items-end justify-between gap-2 mb-4">
-          <h2 className="text-h3 font-bold text-text-heading flex items-center gap-2">
+      <div className={`${isOpen('expenses') ? 'bg-bg-white rounded-lg shadow-card p-6' : 'px-1 py-2.5 border-b border-text-muted/25 section-closed [&:has(+.section-closed)]:!mb-0'}`}>
+        <div className={`flex flex-wrap items-center justify-between gap-x-4 gap-y-2 ${isOpen('expenses') ? 'mb-4' : ''}`}>
+          <h2 className={`${isOpen('expenses') ? 'text-h3' : 'text-label'} font-bold text-text-heading flex items-center gap-2 shrink-0 whitespace-nowrap`}>
             <button
               type="button"
               onClick={() => toggleSection('expenses')}
@@ -1805,9 +1873,20 @@ export default function PeriodDetailClient({
               <span className="text-text-muted text-base leading-none">{isOpen('expenses') ? '▾' : '▸'}</span>
               Expenses
             </button>
-            <span className="text-caption font-medium text-text-muted">
-              ({baselineExpenses.filter((e) => getBudgetedAmount(e) > 0).length} marked pay now)
+            <span className="text-caption font-medium text-text-muted" title="Bills checked to Pay this session">
+              {baselineExpenses.filter((e) => getBudgetedAmount(e) > 0).length} to pay
             </span>
+            {isOpen('expenses') && !searchOpen && (
+              <button
+                type="button"
+                onClick={() => setSearchOpen(true)}
+                aria-label="Search expenses"
+                title="Search expenses"
+                className="w-8 h-8 inline-flex items-center justify-center rounded-full text-text-muted hover:text-text-heading hover:bg-surface-beige/60 transition-colors"
+              >
+                <Search size={16} aria-hidden="true" />
+              </button>
+            )}
             {period.kind === 'event' && (
               <button
                 type="button"
@@ -1820,7 +1899,7 @@ export default function PeriodDetailClient({
             )}
           </h2>
           {/* Payment rollup — funnel: budgeted → funded(Paid) → spent → cleared, plus total */}
-          <div className="flex items-center gap-3 text-caption flex-wrap">
+          <div className="flex items-center gap-x-2 gap-y-1 text-[12px] flex-wrap whitespace-nowrap">
             <span className="text-text-muted">Budgeted <span className="font-bold text-text-heading">{formatCurrency(sectionPaymentSummary.budgeted)}</span></span>
             <span className="text-text-muted">·</span>
             <span className="text-text-muted">Paid <span className="font-bold text-text-heading">{formatCurrency(fundedTotal)}</span></span>
@@ -1828,54 +1907,86 @@ export default function PeriodDetailClient({
             <span className="text-text-muted">Cleared <span className="font-bold text-primary-teal">{formatCurrency(clearedTotal)}</span></span>
             <span className="text-text-muted">·</span>
             <span className="text-text-muted">Total <span className="font-bold text-text-heading">{formatCurrency(optExpenses.reduce((s, e) => s + expenseOwed(e), 0))}</span></span>
+            {isOpen('expenses') && !isLocked && (
+              <div ref={actionsRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setActionsOpen((o) => !o)}
+                  aria-expanded={actionsOpen}
+                  aria-haspopup="menu"
+                  className="inline-flex items-center gap-1.5 rounded-full bg-income text-white pl-2.5 pr-2 py-1.5 text-[11px] font-bold uppercase hover:bg-income/90 transition-colors"
+                >
+                  <PourIcon size={14} /> Fill &amp; fund <ChevronDown size={13} className={`transition-transform ${actionsOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
+                </button>
+                {actionsOpen && (
+                  <div role="menu" className="absolute right-0 top-full mt-2 z-40 w-64 bg-bg-white rounded-lg shadow-lg p-1.5">
+                    {([
+                      canFill && { key: 'fill', label: 'Auto Fill', note: `Check Pay in priority order with ${formatCurrency(Math.max(0, amountLeft))} left`, run: () => handleFill('expenses') },
+                      { key: 'fund', label: 'Fund all', note: 'Mark every bill checked to Pay as funded', run: handleBulkPaid },
+                      { key: 'clear', label: 'Clear all', note: 'Settle every bill checked to Pay', run: handleClearAllPayNow },
+                    ].filter(Boolean) as { key: string; label: string; note: string; run: () => void }[]).map((item) => (
+                      <button
+                        key={item.key}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => { setActionsOpen(false); item.run() }}
+                        className="w-full text-left rounded-md px-3 py-2 hover:bg-surface-beige/60 transition-colors"
+                      >
+                        <span className="flex items-center gap-1.5 text-caption font-bold text-text-heading">
+                          {item.key === 'fill' && <PourIcon size={14} className="text-income" />}
+                          {item.label}
+                        </span>
+                        <span className="block text-[11px] text-text-muted leading-snug">{item.note}</span>
+                      </button>
+                    ))}
+                    {canFill && (
+                      <div className="flex items-center gap-1 px-3 pt-2 pb-1.5 mt-1 border-t border-divider text-[11px]">
+                        <span className="text-text-muted mr-auto">Fill by</span>
+                        {([['mine', 'My order'], ['due', 'Due date']] as const).map(([key, label]) => (
+                          <button
+                            key={key}
+                            type="button"
+                            aria-pressed={fillBy === key}
+                            onClick={() => chooseFillBy(key)}
+                            className={`rounded-full px-2.5 py-0.5 font-semibold transition-colors ${fillBy === key ? 'bg-text-heading text-white' : 'bg-surface-beige/70 text-text-muted hover:text-text-heading'}`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
         {isOpen('expenses') && (
         <>
-        {/* Search — filters the rows below; totals above still reflect every expense */}
-        <div className="mb-3 flex items-center gap-2">
-          <input
-            type="text"
-            value={expenseSearch}
-            onChange={(e) => setExpenseSearch(e.target.value)}
-            placeholder="Search expenses — name, amount, account, priority…"
-            className={`${inputClass} flex-1 sm:max-w-sm`}
-          />
-          {expenseSearch && (
-            <button type="button" onClick={() => setExpenseSearch('')} title="Clear search" className="text-caption text-text-muted hover:text-warning font-semibold shrink-0">✕</button>
-          )}
-          <div className="ml-auto flex items-center gap-1.5 shrink-0">
-            {canFill && (
-              <button
-                type="button"
-                onClick={() => handleFill('expenses')}
-                title="Auto Fill: check Pay on bills in priority order (!! first) until the money left runs out"
-                className="inline-flex items-center gap-1 text-[10px] font-bold uppercase bg-income text-white rounded-full pl-2 pr-3 py-1.5 hover:bg-income/90 transition-colors"
-              >
-                <PourIcon size={13} /> Fill
-              </button>
-            )}
+        {/* Search — opens from the icon; filters the rows below, totals above still count every expense */}
+        {(searchOpen || expenseSearch) && (
+          <div className="mb-3 flex items-center gap-2">
+            <input
+              type="text"
+              autoFocus
+              value={expenseSearch}
+              onChange={(e) => setExpenseSearch(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Escape') { setExpenseSearch(''); setSearchOpen(false) } }}
+              placeholder="Search expenses: name, amount, account, priority"
+              className={`${inputClass} flex-1 sm:max-w-sm`}
+            />
             <button
               type="button"
-              onClick={handleBulkPaid}
-              disabled={isLocked}
-              title="Fund all pay-now items — marks every row checked to Pay as Funded (rows not set to Pay are untouched)"
-              className="text-[10px] font-bold uppercase bg-primary-teal/10 text-primary rounded-full px-3 py-1.5 hover:bg-primary-teal/20 transition-colors disabled:opacity-50"
+              onClick={() => { setExpenseSearch(''); setSearchOpen(false) }}
+              aria-label="Close search"
+              title="Close search"
+              className="w-8 h-8 inline-flex items-center justify-center rounded-full text-text-muted hover:text-warning transition-colors shrink-0"
             >
-              Fund all
-            </button>
-            <button
-              type="button"
-              onClick={handleClearAllPayNow}
-              disabled={isLocked}
-              title="Clear all pay-now items — settles every row checked to Pay (rows not set to Pay are untouched)"
-              className="text-[10px] font-bold uppercase bg-primary-teal/10 text-primary rounded-full px-3 py-1.5 hover:bg-primary-teal/20 transition-colors disabled:opacity-50"
-            >
-              Clear all
+              <X size={16} aria-hidden="true" />
             </button>
           </div>
-        </div>
+        )}
         {canFill && fillResult?.from === 'expenses' && fillNote('-mt-1 mb-3')}
         <FloatingColumnLabels boxRef={expensesBoxRef} />
         <div ref={expensesBoxRef} className="rounded-lg overflow-auto max-h-[70vh]">
@@ -1931,6 +2042,7 @@ export default function PeriodDetailClient({
                     onToggleUrgent={handleToggleUrgent}
                     onToggleCleared={handleToggleCleared}
                     onAddPayment={handleAddPayment}
+                    onSplitEvenly={handleSplitEvenly}
                     onPaymentField={debouncedPaymentUpdate}
                     onPaymentToggle={handlePaymentToggle}
                     onPaymentCleared={handlePaymentCleared}
@@ -1963,18 +2075,22 @@ export default function PeriodDetailClient({
       )}
 
       {/* ─── One-Time Expenses (ad-hoc, this budget only) ──── */}
-      <div className="bg-bg-white rounded-lg shadow-card p-6">
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-          <h2 className="text-h3 font-bold text-text-heading">
+      <div className={`${isOpen('extra') ? 'bg-bg-white rounded-lg shadow-card p-6' : 'px-1 py-2.5 border-b border-text-muted/25 section-closed [&:has(+.section-closed)]:!mb-0'}`}>
+        <div className={`flex flex-wrap items-center justify-between gap-2 ${isOpen('extra') ? 'mb-4' : ''}`}>
+          <h2 className={`${isOpen('extra') ? 'text-h3' : 'text-label'} font-bold text-text-heading`}>
             <button type="button" onClick={() => toggleSection('extra')} className="inline-flex items-center gap-2 hover:text-primary transition-colors">
               <span className="text-text-muted text-base leading-none">{isOpen('extra') ? '▾' : '▸'}</span>
               Extra Expenses
             </button>
             <span className="text-caption font-medium text-text-muted ml-2">(this budget only)</span>
           </h2>
-          {isOpen('extra') && !isLocked && (
+          {!isLocked && (
             <button
-              onClick={() => setShowOneTimeForm(!showOneTimeForm)}
+              onClick={() => {
+                // Closed: open the section straight to the form
+                if (!isOpen('extra')) { setCollapsed((c) => ({ ...c, extra: false })); setShowOneTimeForm(true) }
+                else setShowOneTimeForm(!showOneTimeForm)
+              }}
               className="bg-primary-teal text-text-inverse rounded-full px-4 py-1.5 text-caption font-bold hover:opacity-90 transition-opacity"
             >
               + Add extra expense
@@ -2066,6 +2182,7 @@ export default function PeriodDetailClient({
                       onToggleUrgent={handleToggleUrgent}
                       onToggleCleared={handleToggleCleared}
                       onAddPayment={handleAddPayment}
+                      onSplitEvenly={handleSplitEvenly}
                       onPaymentField={debouncedPaymentUpdate}
                       onPaymentToggle={handlePaymentToggle}
                       onPaymentCleared={handlePaymentCleared}
@@ -2454,6 +2571,7 @@ function ExpenseRow({
   onToggleUrgent,
   onToggleCleared,
   onAddPayment,
+  onSplitEvenly,
   onPaymentField,
   onPaymentToggle,
   onPaymentCleared,
@@ -2481,6 +2599,7 @@ function ExpenseRow({
   onToggleUrgent: (id: string, value: boolean) => void
   onToggleCleared: (id: string, value: boolean) => void
   onAddPayment: (id: string) => void
+  onSplitEvenly?: (id: string, n: number) => void
   onPaymentField: (paymentId: string, field: string, value: string | number | boolean | null) => void
   onPaymentToggle: (paymentId: string, field: string, value: boolean) => void
   onPaymentCleared: (paymentId: string, value: boolean) => void
@@ -2504,6 +2623,8 @@ function ExpenseRow({
 
   const payments = expense.payments ?? []
   const budgeted = getBudgetedAmount(expense)
+  // Split bills: payments in this view still waiting for money
+  const splitToFund = (expense.payments ?? []).filter((p) => !p.pay_now && !p.paid && !p.cleared).reduce((sum, p) => sum + p.amount, 0)
   const owed = getOwedAmount(expense)
 
   // When split, the parent's Pay/Paid/Clear are derived (read-only) from its sub-payments
@@ -2695,9 +2816,11 @@ function ExpenseRow({
               )}
               {expense.is_split && (
                 <div className="text-[10px] mt-0.5 whitespace-nowrap">
+                  {/* Only this session's payments are here (one paid in an earlier session isn't), so
+                      count what's in view rather than the whole bill */}
                   <span className="text-text-muted">{formatCurrency(budgeted)} budgeted</span>
-                  {owed - budgeted > 0.005 ? (
-                    <span className="text-warning font-bold ml-1">{formatCurrency(owed - budgeted)} left</span>
+                  {splitToFund > 0.005 ? (
+                    <span className="text-warning font-bold ml-1">{formatCurrency(splitToFund)} to fund</span>
                   ) : (
                     <span className="text-success font-bold ml-1">fully budgeted</span>
                   )}
@@ -2836,6 +2959,7 @@ function ExpenseRow({
             key={p.id}
             payment={p}
             parentExpenseId={expense.id}
+            billTotal={Math.max(expense.default_amount, expense.amount_override ?? 0)}
             parentAccount={expense.account}
             parentTracked={isDrawDown}
             hasRemove={!!onRemove}
@@ -2854,12 +2978,31 @@ function ExpenseRow({
         <tr className="bg-[#ebf0f0]">
           <td />
           <td className="px-3 py-2 pl-8" colSpan={onRemove ? 10 : 9}>
-            <button
-              onClick={() => onAddPayment(expense.id)}
-              className="text-caption text-primary font-semibold hover:underline disabled:opacity-50"
-            >
-              + Add payment
-            </button>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              <button
+                onClick={() => onAddPayment(expense.id)}
+                className="text-caption text-primary font-semibold hover:underline disabled:opacity-50"
+              >
+                + Add payment
+              </button>
+              {onSplitEvenly && (
+                <span className="inline-flex items-center gap-1.5 text-caption text-text-muted">
+                  Split evenly
+                  {([[2, '50 / 50'], [3, 'Thirds']] as const).map(([n, label]) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => onSplitEvenly(expense.id, n)}
+                      title={`Share what's left of ${formatCurrency(Math.max(expense.default_amount, expense.amount_override ?? 0))} across ${n} payments. Payments already funded or paid keep their amounts.`}
+                      className="rounded-full bg-bg-white shadow-card px-2.5 py-0.5 font-semibold text-text-heading hover:text-primary transition-colors"
+                    >
+                      {label}
+                    </button>
+                  ))}
+                  <span className="hidden sm:inline">· or type 50% in an amount</span>
+                </span>
+              )}
+            </div>
           </td>
         </tr>
       )}
@@ -2893,6 +3036,7 @@ function ExpenseRow({
 function SubPaymentRow({
   payment,
   parentExpenseId,
+  billTotal,
   parentAccount,
   parentTracked,
   hasRemove,
@@ -2908,6 +3052,8 @@ function SubPaymentRow({
 }: {
   payment: PeriodExpensePayment
   parentExpenseId: string
+  // The whole bill, so typing 50% in the amount means half of it
+  billTotal: number
   parentAccount: string | null
   parentTracked: boolean
   // Parent table has a trailing Remove column (extra expenses) — render a spacer to match.
@@ -2965,8 +3111,11 @@ function SubPaymentRow({
       {/* Amount (+ per-installment draw-down when the parent line is tracked) */}
       <td className="px-3 py-2">
         <MathInput
+          key={`${payment.id}-${payment.amount}`}
           defaultValue={payment.amount > 0 ? payment.amount : ''}
-          placeholder="0.00"
+          placeholder="0.00 or 50%"
+          title={`Type an amount, or a percent of the ${formatCurrency(billTotal)} bill (50%)`}
+          percentOf={billTotal}
           disabled={locked}
           onChange={(value) => onPaymentField(payment.id, 'amount', value)}
           className={`w-24 text-right ${inputClass}`}
